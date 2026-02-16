@@ -1,0 +1,111 @@
+import { useMaintenanceRequests, useUpdateMaintenanceRequest, useAnalyzeMaintenance } from "@/hooks/use-maintenance";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Bot, CheckCircle, Clock, AlertCircle } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { format } from "date-fns";
+
+export default function Maintenance() {
+  const { data: requests, isLoading } = useMaintenanceRequests();
+  const { mutate: updateStatus } = useUpdateMaintenanceRequest();
+  const { mutate: analyze, isPending: isAnalyzing } = useAnalyzeMaintenance();
+
+  const getPriorityColor = (priority: string) => {
+    switch (priority) {
+      case 'high': return 'bg-red-100 text-red-700 border-red-200';
+      case 'emergency': return 'bg-red-500 text-white border-red-600 animate-pulse';
+      case 'medium': return 'bg-orange-100 text-orange-700 border-orange-200';
+      default: return 'bg-blue-100 text-blue-700 border-blue-200';
+    }
+  };
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'completed': return <CheckCircle className="w-4 h-4 text-green-500" />;
+      case 'in_progress': return <Clock className="w-4 h-4 text-orange-500" />;
+      default: return <AlertCircle className="w-4 h-4 text-slate-400" />;
+    }
+  };
+
+  return (
+    <div className="space-y-8 animate-in">
+      <div>
+        <h1 className="text-3xl font-bold font-display text-slate-900">Maintenance Requests</h1>
+        <p className="text-slate-500 mt-1">Track and manage property repairs.</p>
+      </div>
+
+      <div className="grid gap-4">
+        {isLoading ? (
+          <div className="text-center py-10">Loading requests...</div>
+        ) : requests?.length === 0 ? (
+          <div className="text-center py-20 bg-slate-50 rounded-xl border border-dashed border-slate-300">
+            <p className="text-slate-500">No active maintenance requests.</p>
+          </div>
+        ) : (
+          requests?.map((req) => (
+            <Card key={req.id} className="border-slate-200 shadow-sm hover:shadow-md transition-all">
+              <CardContent className="p-6">
+                <div className="flex flex-col md:flex-row gap-6">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-2">
+                      <Badge variant="outline" className={getPriorityColor(req.priority)}>
+                        {req.priority}
+                      </Badge>
+                      <span className="text-sm text-slate-400">
+                        {format(new Date(req.createdAt || new Date()), 'MMM d, yyyy')}
+                      </span>
+                    </div>
+                    <h3 className="text-lg font-bold text-slate-900 mb-2">{req.title}</h3>
+                    <p className="text-slate-600 text-sm mb-4">{req.description}</p>
+                    
+                    {req.aiAnalysis && (
+                      <div className="bg-blue-50 border border-blue-100 p-3 rounded-lg flex gap-3 text-sm text-blue-800">
+                        <Bot className="w-5 h-5 flex-shrink-0" />
+                        <div>
+                          <span className="font-semibold">AI Analysis:</span> {req.aiAnalysis}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex flex-col gap-3 min-w-[200px]">
+                    <div className="flex items-center gap-2 text-sm font-medium text-slate-700">
+                      Status:
+                      <Select 
+                        defaultValue={req.status} 
+                        onValueChange={(val) => updateStatus({ id: req.id, status: val })}
+                      >
+                        <SelectTrigger className="w-[140px] h-8">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="open">Open</SelectItem>
+                          <SelectItem value="in_progress">In Progress</SelectItem>
+                          <SelectItem value="completed">Completed</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {!req.aiAnalysis && (
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="w-full gap-2 border-blue-200 text-blue-600 hover:bg-blue-50"
+                        onClick={() => analyze(req.id)}
+                        disabled={isAnalyzing}
+                      >
+                        <Bot className="w-4 h-4" />
+                        {isAnalyzing ? "Analyzing..." : "Analyze with AI"}
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
