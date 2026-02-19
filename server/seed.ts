@@ -12,6 +12,7 @@ export async function seedDatabase() {
   const manager = await authStorage.upsertUser({
     id: "user_manager_1",
     email: "manager@propman.ai",
+    role: "manager",
     firstName: "John",
     lastName: "Manager",
     profileImageUrl: "https://placehold.co/100x100",
@@ -20,6 +21,7 @@ export async function seedDatabase() {
   const tenant1 = await authStorage.upsertUser({
     id: "user_tenant_1",
     email: "tenant1@propman.ai",
+    role: "tenant",
     firstName: "Alice",
     lastName: "Tenant",
     profileImageUrl: "https://placehold.co/100x100",

@@ -16,9 +16,13 @@ class AuthStorage implements IAuthStorage {
   }
 
   async upsertUser(userData: UpsertUser): Promise<User> {
+    // Check if it's the first user - make them a manager
+    const allUsers = await db.select().from(users).limit(1);
+    const role = allUsers.length === 0 ? "manager" : (userData.role || "tenant");
+
     const [user] = await db
       .insert(users)
-      .values(userData)
+      .values({ ...userData, role })
       .onConflictDoUpdate({
         target: users.id,
         set: {

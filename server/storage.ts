@@ -8,33 +8,54 @@ import {
 import { eq, desc } from "drizzle-orm";
 
 export interface IStorage {
+  // Users
+  getUser(id: string): Promise<User | undefined>;
+  getTenants(): Promise<User[]>;
+
   // Properties
-  getProperties(): Promise<typeof properties.$inferSelect[]>;
-  getProperty(id: number): Promise<typeof properties.$inferSelect | undefined>;
-  createProperty(property: InsertProperty): Promise<typeof properties.$inferSelect>;
-  updateProperty(id: number, property: Partial<InsertProperty>): Promise<typeof properties.$inferSelect>;
+  getProperties(): Promise<Property[]>;
+  getProperty(id: number): Promise<Property | undefined>;
+  getPropertiesByManager(managerId: string): Promise<Property[]>;
+  createProperty(property: InsertProperty): Promise<Property>;
+  updateProperty(id: number, property: Partial<InsertProperty>): Promise<Property>;
   deleteProperty(id: number): Promise<void>;
 
   // Leases
-  getLeases(): Promise<typeof leases.$inferSelect[]>;
-  createLease(lease: InsertLease): Promise<typeof leases.$inferSelect>;
-  getLease(id: number): Promise<typeof leases.$inferSelect | undefined>;
+  getLeases(): Promise<Lease[]>;
+  getLeasesByManager(managerId: string): Promise<Lease[]>;
+  getLeasesByTenant(tenantId: string): Promise<Lease[]>;
+  createLease(lease: InsertLease): Promise<Lease>;
+  updateLease(id: number, lease: Partial<Lease>): Promise<Lease>;
+  getLease(id: number): Promise<Lease | undefined>;
 
   // Maintenance
-  getMaintenanceRequests(): Promise<typeof maintenanceRequests.$inferSelect[]>;
-  createMaintenanceRequest(request: InsertMaintenanceRequest): Promise<typeof maintenanceRequests.$inferSelect>;
-  getMaintenanceRequest(id: number): Promise<typeof maintenanceRequests.$inferSelect | undefined>;
-  updateMaintenanceRequest(id: number, request: Partial<InsertMaintenanceRequest>): Promise<typeof maintenanceRequests.$inferSelect>;
+  getMaintenanceRequests(): Promise<MaintenanceRequest[]>;
+  getMaintenanceRequestsByTenant(tenantId: string): Promise<MaintenanceRequest[]>;
+  getMaintenanceRequestsByProperty(propertyId: number): Promise<MaintenanceRequest[]>;
+  createMaintenanceRequest(request: InsertMaintenanceRequest): Promise<MaintenanceRequest>;
+  getMaintenanceRequest(id: number): Promise<MaintenanceRequest | undefined>;
+  updateMaintenanceRequest(id: number, request: Partial<MaintenanceRequest>): Promise<MaintenanceRequest>;
 
   // Payments
-  getPayments(): Promise<typeof payments.$inferSelect[]>;
-  createPayment(payment: InsertPayment): Promise<typeof payments.$inferSelect>;
+  getPayments(): Promise<Payment[]>;
+  getPaymentsByLease(leaseId: number): Promise<Payment[]>;
+  createPayment(payment: InsertPayment): Promise<Payment>;
 
   // Screenings
-  createScreening(screening: InsertScreening): Promise<typeof screenings.$inferSelect>;
+  createScreening(screening: InsertScreening): Promise<Screening>;
+  getScreeningsByTenant(tenantId: string): Promise<Screening[]>;
 }
 
 export class DatabaseStorage implements IStorage {
+  // Users
+  async getUser(id: string) {
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user;
+  }
+  async getTenants() {
+    return await db.select().from(users).where(eq(users.role, "tenant"));
+  }
+
   // Properties
   async getProperties() {
     return await db.select().from(properties).orderBy(desc(properties.createdAt));
@@ -42,6 +63,9 @@ export class DatabaseStorage implements IStorage {
   async getProperty(id: number) {
     const [property] = await db.select().from(properties).where(eq(properties.id, id));
     return property;
+  }
+  async getPropertiesByManager(managerId: string) {
+    return await db.select().from(properties).where(eq(properties.managerId, managerId)).orderBy(desc(properties.createdAt));
   }
   async createProperty(insertProperty: InsertProperty) {
     const [property] = await db.insert(properties).values(insertProperty).returning();
@@ -59,8 +83,22 @@ export class DatabaseStorage implements IStorage {
   async getLeases() {
     return await db.select().from(leases).orderBy(desc(leases.createdAt));
   }
+  async getLeasesByManager(managerId: string) {
+    return await db.select(leases)
+      .from(leases)
+      .innerJoin(properties, eq(leases.propertyId, properties.id))
+      .where(eq(properties.managerId, managerId))
+      .orderBy(desc(leases.createdAt));
+  }
+  async getLeasesByTenant(tenantId: string) {
+    return await db.select().from(leases).where(eq(leases.tenantId, tenantId)).orderBy(desc(leases.createdAt));
+  }
   async createLease(insertLease: InsertLease) {
     const [lease] = await db.insert(leases).values(insertLease).returning();
+    return lease;
+  }
+  async updateLease(id: number, update: Partial<Lease>) {
+    const [lease] = await db.update(leases).set(update).where(eq(leases.id, id)).returning();
     return lease;
   }
   async getLease(id: number) {
@@ -72,6 +110,12 @@ export class DatabaseStorage implements IStorage {
   async getMaintenanceRequests() {
     return await db.select().from(maintenanceRequests).orderBy(desc(maintenanceRequests.createdAt));
   }
+  async getMaintenanceRequestsByTenant(tenantId: string) {
+    return await db.select().from(maintenanceRequests).where(eq(maintenanceRequests.tenantId, tenantId)).orderBy(desc(maintenanceRequests.createdAt));
+  }
+  async getMaintenanceRequestsByProperty(propertyId: number) {
+    return await db.select().from(maintenanceRequests).where(eq(maintenanceRequests.propertyId, propertyId)).orderBy(desc(maintenanceRequests.createdAt));
+  }
   async createMaintenanceRequest(insertRequest: InsertMaintenanceRequest) {
     const [request] = await db.insert(maintenanceRequests).values(insertRequest).returning();
     return request;
@@ -80,7 +124,7 @@ export class DatabaseStorage implements IStorage {
     const [request] = await db.select().from(maintenanceRequests).where(eq(maintenanceRequests.id, id));
     return request;
   }
-  async updateMaintenanceRequest(id: number, update: Partial<InsertMaintenanceRequest>) {
+  async updateMaintenanceRequest(id: number, update: Partial<MaintenanceRequest>) {
     const [request] = await db.update(maintenanceRequests).set(update).where(eq(maintenanceRequests.id, id)).returning();
     return request;
   }
@@ -88,6 +132,9 @@ export class DatabaseStorage implements IStorage {
   // Payments
   async getPayments() {
     return await db.select().from(payments).orderBy(desc(payments.date));
+  }
+  async getPaymentsByLease(leaseId: number) {
+    return await db.select().from(payments).where(eq(payments.leaseId, leaseId)).orderBy(desc(payments.date));
   }
   async createPayment(insertPayment: InsertPayment) {
     const [payment] = await db.insert(payments).values(insertPayment).returning();
@@ -98,6 +145,9 @@ export class DatabaseStorage implements IStorage {
   async createScreening(insertScreening: InsertScreening) {
     const [screening] = await db.insert(screenings).values(insertScreening).returning();
     return screening;
+  }
+  async getScreeningsByTenant(tenantId: string) {
+    return await db.select().from(screenings).where(eq(screenings.tenantId, tenantId)).orderBy(desc(screenings.createdAt));
   }
 }
 

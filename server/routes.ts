@@ -79,9 +79,18 @@ export async function registerRoutes(
   });
 
   // === Leases ===
-  app.get(api.leases.list.path, async (req, res) => {
-    const leases = await storage.getLeases();
-    res.json(leases);
+  app.get(api.leases.list.path, async (req: any, res) => {
+    const user = req.user as any;
+    const userId = user.claims.sub;
+    const dbUser = await storage.getUser(userId);
+
+    let leaseList;
+    if (dbUser?.role === "manager") {
+      leaseList = await storage.getLeases();
+    } else {
+      leaseList = await storage.getLeasesByTenant(userId);
+    }
+    res.json(leaseList);
   });
 
   app.post(api.leases.create.path, async (req, res) => {
@@ -92,6 +101,16 @@ export async function registerRoutes(
     } catch (err) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.message });
       throw err;
+    }
+  });
+
+  app.patch("/api/leases/:id", async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const lease = await storage.updateLease(id, req.body);
+      res.json(lease);
+    } catch (err) {
+      res.status(400).json({ message: "Failed to update lease" });
     }
   });
 
@@ -109,14 +128,19 @@ export async function registerRoutes(
       Start Date: ${lease.startDate}. 
       End Date: ${lease.endDate}. 
       Tenant ID: ${lease.tenantId}.
-      Include standard clauses for maintenance, security deposit, and utilities.`;
+      Include standard clauses for maintenance, security deposit, and utilities. Output as clear professional text.`;
 
       const response = await openai.chat.completions.create({
         model: "gpt-5.1",
         messages: [{ role: "user", content: prompt }],
       });
 
-      res.json({ documentText: response.choices[0]?.message?.content || "Failed to generate." });
+      const draftText = response.choices[0]?.message?.content || "Failed to generate.";
+      
+      // Update lease with draft text
+      await storage.updateLease(leaseId, { draftText });
+
+      res.json({ documentText: draftText });
     } catch (error) {
       console.error("AI Generation Error:", error);
       res.status(500).json({ message: "AI generation failed" });
@@ -180,10 +204,34 @@ export async function registerRoutes(
     }
   });
 
-  // === Payments ===
-  app.get(api.payments.list.path, async (req, res) => {
-    const payments = await storage.getPayments();
-    res.json(payments);
+  // === Accounting / Payments ===
+  app.get(api.payments.list.path, async (req: any, res) => {
+    const user = req.user as any;
+    const dbUser = await storage.getUser(user.claims.sub);
+    
+    let paymentList;
+    if (dbUser?.role === "manager") {
+      paymentList = await storage.getPayments();
+    } else {
+      // Find active leases for this tenant
+      const tenantLeases = await storage.getLeasesByTenant(user.claims.sub);
+      const leaseIds = tenantLeases.map(l => l.id);
+      const allPayments = await storage.getPayments();
+      paymentList = allPayments.filter(p => leaseIds.includes(p.leaseId));
+    }
+    res.json(paymentList);
+  });
+
+  app.get("/api/accounting/summary", async (req: any, res) => {
+    const allPayments = await storage.getPayments();
+    const totalCollected = allPayments
+      .filter(p => p.status === "paid")
+      .reduce((sum, p) => sum + Number(p.amount), 0);
+    const pending = allPayments
+      .filter(p => p.status === "pending")
+      .reduce((sum, p) => sum + Number(p.amount), 0);
+    
+    res.json({ totalCollected, pending });
   });
 
   app.post(api.payments.create.path, async (req, res) => {
