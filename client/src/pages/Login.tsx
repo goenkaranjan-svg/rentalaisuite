@@ -58,7 +58,7 @@ export default function Login() {
               className="w-full h-12 text-base bg-blue-600 hover:bg-blue-700 shadow-xl shadow-blue-900/10 transition-all hover:-translate-y-0.5"
               onClick={() => window.location.href = "/api/login"}
             >
-              Sign In with Replit
+              Sign In
             </Button>
           </div>
 

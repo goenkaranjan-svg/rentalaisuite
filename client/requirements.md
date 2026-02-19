@@ -10,5 +10,5 @@ tailwind-merge | For merging tailwind classes
 ## Notes
 - Theme: Professional Enterprise Blue/Indigo
 - Fonts: 'Inter' for UI, 'Outfit' for headings
-- Using Replit Auth for user management
+- Using OIDC authentication for user management
 - AI integrations for maintenance analysis and lease generation
