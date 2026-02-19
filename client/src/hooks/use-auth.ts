@@ -21,6 +21,17 @@ async function logout(): Promise<void> {
   window.location.href = "/api/logout";
 }
 
+export function useTenants() {
+  return useQuery<User[]>({
+    queryKey: ["/api/auth/tenants"],
+    queryFn: async () => {
+      const res = await fetch("/api/auth/tenants", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch tenants");
+      return await res.json();
+    },
+  });
+}
+
 export function useAuth() {
   const queryClient = useQueryClient();
   const { data: user, isLoading } = useQuery<User | null>({

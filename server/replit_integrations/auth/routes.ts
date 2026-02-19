@@ -15,4 +15,13 @@ export function registerAuthRoutes(app: Express): void {
       res.status(500).json({ message: "Failed to fetch user" });
     }
   });
+
+  app.get("/api/auth/tenants", isAuthenticated, async (req, res) => {
+    try {
+      const tenants = await authStorage.getTenants(); // We need to add this to authStorage
+      res.json(tenants);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch tenants" });
+    }
+  });
 }

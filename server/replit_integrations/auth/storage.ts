@@ -15,6 +15,10 @@ class AuthStorage implements IAuthStorage {
     return user;
   }
 
+  async getTenants(): Promise<User[]> {
+    return await db.select().from(users).where(eq(users.role, "tenant"));
+  }
+
   async upsertUser(userData: UpsertUser): Promise<User> {
     // Check if it's the first user - make them a manager
     const allUsers = await db.select().from(users).limit(1);
