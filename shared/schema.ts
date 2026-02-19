@@ -14,7 +14,7 @@ import { users } from "./models/auth";
 
 export const properties = pgTable("properties", {
   id: serial("id").primaryKey(),
-  managerId: text("manager_id").notNull(), // Links to users.id
+  managerId: varchar("manager_id").notNull().references(() => users.id), // Links to users.id
   address: text("address").notNull(),
   city: text("city").notNull(),
   state: text("state").notNull(),
@@ -32,19 +32,20 @@ export const properties = pgTable("properties", {
 export const leases = pgTable("leases", {
   id: serial("id").primaryKey(),
   propertyId: integer("property_id").notNull().references(() => properties.id),
-  tenantId: text("tenant_id").notNull(), // Links to users.id
+  tenantId: varchar("tenant_id").notNull().references(() => users.id), // Links to users.id
   startDate: timestamp("start_date").notNull(),
   endDate: timestamp("end_date").notNull(),
   rentAmount: decimal("rent_amount", { precision: 10, scale: 2 }).notNull(),
   status: text("status").notNull().default("active"), // active, terminated, expired
   documentUrl: text("document_url"), // Link to generated/signed doc
+  draftText: text("draft_text"), // AI generated draft
   createdAt: timestamp("created_at").defaultNow(),
 });
 
 export const maintenanceRequests = pgTable("maintenance_requests", {
   id: serial("id").primaryKey(),
   propertyId: integer("property_id").notNull().references(() => properties.id),
-  tenantId: text("tenant_id").notNull(), // Links to users.id
+  tenantId: varchar("tenant_id").notNull().references(() => users.id), // Links to users.id
   title: text("title").notNull(),
   description: text("description").notNull(),
   priority: text("priority").notNull().default("medium"), // low, medium, high, emergency
@@ -66,7 +67,7 @@ export const payments = pgTable("payments", {
 // Tenant Screening (Mock for now)
 export const screenings = pgTable("screenings", {
   id: serial("id").primaryKey(),
-  tenantId: text("tenant_id").notNull(), // Links to users.id
+  tenantId: varchar("tenant_id").notNull().references(() => users.id), // Links to users.id
   status: text("status").notNull().default("pending"), // pending, approved, rejected
   creditScore: integer("credit_score"),
   backgroundCheck: text("background_check"), // "clear", "flagged"
