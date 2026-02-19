@@ -1,6 +1,6 @@
 
 import { storage } from "./storage";
-import { authStorage } from "./replit_integrations/auth/storage";
+import { authStorage } from "./integrations/auth/storage";
 
 export async function seedDatabase() {
   const existingProperties = await storage.getProperties();

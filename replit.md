@@ -2,7 +2,7 @@
 
 ## Overview
 
-PropMan.ai is a full-stack property management application that helps landlords and property managers handle properties, leases, maintenance requests, payments, and tenant screening. It features AI integrations for lease document generation, maintenance request analysis, chat assistance, and image generation. The app uses Replit Auth for authentication with role-based access (manager vs tenant).
+PropMan.ai is a full-stack property management application that helps landlords and property managers handle properties, leases, maintenance requests, payments, and tenant screening. It features AI integrations for lease document generation, maintenance request analysis, chat assistance, and image generation. The app uses OIDC authentication for authentication with role-based access (manager vs tenant).
 
 ## User Preferences
 
@@ -43,13 +43,13 @@ Preferred communication style: Simple, everyday language.
 - Sessions stored in PostgreSQL via `connect-pg-simple`
 
 ### Authentication
-- **Replit Auth** via OpenID Connect (OIDC)
+- **OIDC Authentication** via OpenID Connect (OIDC)
 - Session management with `express-session` and PostgreSQL session store
-- Auth files in `server/replit_integrations/auth/`
+- Auth files in `server/integrations/auth/`
 - First user to sign up automatically becomes a "manager"; subsequent users default to "tenant"
-- The `users` and `sessions` tables are mandatory for Replit Auth — do not drop them
+- The `users` and `sessions` tables are mandatory for OIDC authentication — do not drop them
 
-### AI Integrations (`server/replit_integrations/`)
+### AI Integrations (`server/integrations/`)
 - **OpenAI** client configured with `AI_INTEGRATIONS_OPENAI_API_KEY` and `AI_INTEGRATIONS_OPENAI_BASE_URL` environment variables
 - **Chat** (`chat/`): Conversation and message storage with streaming chat completions
 - **Image** (`image/`): Image generation using `gpt-image-1` model
@@ -78,9 +78,9 @@ Preferred communication style: Simple, everyday language.
 - `DATABASE_URL` — PostgreSQL connection string (required, database must be provisioned)
 - `SESSION_SECRET` — Secret for Express session encryption
 - `AI_INTEGRATIONS_OPENAI_API_KEY` — API key for OpenAI-compatible AI services
-- `AI_INTEGRATIONS_OPENAI_BASE_URL` — Base URL for OpenAI API (Replit AI proxy)
-- `ISSUER_URL` — OIDC issuer URL for Replit Auth (defaults to `https://replit.com/oidc`)
-- `REPL_ID` — Replit environment identifier (set automatically by Replit)
+- `AI_INTEGRATIONS_OPENAI_BASE_URL` — Base URL for OpenAI API
+- `ISSUER_URL` or `OIDC_ISSUER_URL` — OIDC issuer URL for authentication
+- `CLIENT_ID` — OIDC client identifier
 
 ### Key NPM Packages
 - **drizzle-orm** + **drizzle-kit** — ORM and migration tooling for PostgreSQL
