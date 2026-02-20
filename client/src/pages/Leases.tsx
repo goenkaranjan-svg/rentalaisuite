@@ -29,14 +29,16 @@ export default function Leases() {
     defaultValues: {
       propertyId: 0,
       tenantId: "",
-      startDate: new Date().toISOString(),
-      endDate: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString(),
+      startDate: new Date().toISOString().split('T')[0],
+      endDate: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0],
       rentAmount: "0.00",
       status: "active",
     },
   });
 
   const onSubmit = (data: any) => {
+    // The shared schema handles the transform from string to Date
+    // and from number/string to string for rentAmount.
     createLease(data, {
       onSuccess: () => {
         setOpen(false);
@@ -127,7 +129,7 @@ export default function Leases() {
                       <FormItem>
                         <FormLabel>Start Date</FormLabel>
                         <FormControl>
-                          <Input type="date" {...field} value={field.value?.split('T')[0]} onChange={(e) => field.onChange(new Date(e.target.value).toISOString())} />
+                          <Input type="date" {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -140,7 +142,7 @@ export default function Leases() {
                       <FormItem>
                         <FormLabel>End Date</FormLabel>
                         <FormControl>
-                          <Input type="date" {...field} value={field.value?.split('T')[0]} onChange={(e) => field.onChange(new Date(e.target.value).toISOString())} />
+                          <Input type="date" {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>

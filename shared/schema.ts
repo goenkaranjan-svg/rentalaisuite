@@ -98,7 +98,11 @@ export const maintenanceRequestsRelations = relations(maintenanceRequests, ({ on
 
 // === ZOD SCHEMAS ===
 export const insertPropertySchema = createInsertSchema(properties).omit({ id: true, createdAt: true });
-export const insertLeaseSchema = createInsertSchema(leases).omit({ id: true, createdAt: true });
+export const insertLeaseSchema = createInsertSchema(leases, {
+  startDate: z.coerce.date(),
+  endDate: z.coerce.date(),
+  rentAmount: z.union([z.string(), z.number()]).transform((v) => v.toString()),
+}).omit({ id: true, createdAt: true });
 export const insertMaintenanceRequestSchema = createInsertSchema(maintenanceRequests).omit({ id: true, createdAt: true, aiAnalysis: true });
 export const insertPaymentSchema = createInsertSchema(payments).omit({ id: true, date: true });
 export const insertScreeningSchema = createInsertSchema(screenings).omit({ id: true, createdAt: true });
