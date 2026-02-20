@@ -1,9 +1,10 @@
 
 import { db } from "./db";
 import { 
-  properties, leases, maintenanceRequests, payments, screenings,
-  type InsertProperty, type InsertLease, type InsertMaintenanceRequest, 
-  type InsertPayment, type InsertScreening
+  users, properties, leases, maintenanceRequests, payments, screenings,
+  type User, type Property, type Lease, type MaintenanceRequest, 
+  type Payment, type Screening, type InsertProperty, type InsertLease, 
+  type InsertMaintenanceRequest, type InsertPayment, type InsertScreening
 } from "@shared/schema";
 import { eq, desc } from "drizzle-orm";
 
@@ -83,12 +84,24 @@ export class DatabaseStorage implements IStorage {
   async getLeases() {
     return await db.select().from(leases).orderBy(desc(leases.createdAt));
   }
-  async getLeasesByManager(managerId: string) {
-    return await db.select(leases)
+  async getLeasesByManager(managerId: string): Promise<Lease[]> {
+    const results = await db.select({
+      id: leases.id,
+      propertyId: leases.propertyId,
+      tenantId: leases.tenantId,
+      startDate: leases.startDate,
+      endDate: leases.endDate,
+      rentAmount: leases.rentAmount,
+      status: leases.status,
+      documentUrl: leases.documentUrl,
+      draftText: leases.draftText,
+      createdAt: leases.createdAt,
+    })
       .from(leases)
       .innerJoin(properties, eq(leases.propertyId, properties.id))
       .where(eq(properties.managerId, managerId))
       .orderBy(desc(leases.createdAt));
+    return results;
   }
   async getLeasesByTenant(tenantId: string) {
     return await db.select().from(leases).where(eq(leases.tenantId, tenantId)).orderBy(desc(leases.createdAt));
