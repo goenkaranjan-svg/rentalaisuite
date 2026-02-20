@@ -22,7 +22,13 @@ class AuthStorage implements IAuthStorage {
   async upsertUser(userData: UpsertUser): Promise<User> {
     // Check if it's the first user - make them a manager
     const allUsers = await db.select().from(users).limit(1);
-    const role = allUsers.length === 0 ? "manager" : (userData.role || "tenant");
+    
+    // Default to tenant, but first user is manager. 
+    // If userData.role is provided (e.g. from seed), use it.
+    let role = userData.role || "tenant";
+    if (allUsers.length === 0) {
+      role = "manager";
+    }
 
     const [user] = await db
       .insert(users)
@@ -31,6 +37,7 @@ class AuthStorage implements IAuthStorage {
         target: users.id,
         set: {
           ...userData,
+          role, // Ensure role is updated/set
           updatedAt: new Date(),
         },
       })
