@@ -10,7 +10,12 @@
 1. In Auth0 Dashboard, go to **Applications** → **Applications**
 2. Click **Create Application**
 3. Name: `Rental AI Suite`
-4. Type: **Regular Web Application**
+4. **Application Type:** Choose one of these options:
+   - **Native** (if available) - Works for server-side apps
+   - **Single Page Application** (if Native not available) - Also works
+   - **Machine to Machine** - NOT this one
+   - If you see **"Web Application"** or **"Regular Web Application"** - choose that
+   - If you only see **"API"** and **"Single Page Application"**, choose **"Single Page Application"**
 5. Click **Create**
 
 ### Step 3: Configure Application
