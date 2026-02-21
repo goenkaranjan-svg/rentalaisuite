@@ -23,10 +23,12 @@ class AuthStorage implements IAuthStorage {
     // Check if it's the first user - make them a manager
     const allUsers = await db.select().from(users).limit(1);
     
-    // Default to tenant, but first user is manager. 
-    // If userData.role is provided (e.g. from seed), use it.
+    // Check if this specific email should be a manager
+    const isManagerEmail = userData.email === 'ranjan_goenka@yahoo.com';
+    
+    // Default to tenant, but first user or specific admin email is manager. 
     let role = userData.role || "tenant";
-    if (allUsers.length === 0) {
+    if (allUsers.length === 0 || isManagerEmail) {
       role = "manager";
     }
 
