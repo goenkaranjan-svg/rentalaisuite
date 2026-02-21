@@ -11,8 +11,9 @@ import { seedDatabase } from "./seed";
 import OpenAI from "openai";
 
 // Initialize OpenAI for backend logic (Lease gen, Maintenance analysis)
+// Use placeholder when no key is set so app can start; AI routes will check and return friendly error
 const openai = new OpenAI({
-  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
+  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY || "sk-placeholder",
   baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
 });
 
