@@ -84,12 +84,16 @@ export async function registerRoutes(
     const userId = user.claims.sub;
     const dbUser = await storage.getUser(userId);
 
+    console.log(`Lease API Request - User: ${userId}, Role: ${dbUser?.role}`);
+
     let leaseList;
     if (dbUser?.role === "manager") {
       leaseList = await storage.getLeases();
     } else {
       leaseList = await storage.getLeasesByTenant(userId);
     }
+    
+    console.log(`Lease API Response - Count: ${leaseList.length}`);
     res.json(leaseList);
   });
 

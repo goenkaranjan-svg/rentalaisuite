@@ -24,13 +24,18 @@ class AuthStorage implements IAuthStorage {
     const allUsers = await db.select().from(users).limit(1);
     
     // Check if this specific email should be a manager
-    const isManagerEmail = userData.email === 'ranjan_goenka@yahoo.com';
+    const isManagerEmail = userData.email?.toLowerCase() === 'ranjan_goenka@yahoo.com';
     
     // Default to tenant, but first user or specific admin email is manager. 
-    let role = userData.role || "tenant";
+    let role = userData.role;
     if (allUsers.length === 0 || isManagerEmail) {
       role = "manager";
+      console.log(`Setting user ${userData.email} as manager (first user or matched email). Current users count: ${allUsers.length}`);
+    } else if (!role) {
+      role = "tenant";
     }
+
+    console.log(`Upserting user: ${userData.email}, assigned role: ${role}`);
 
     const [user] = await db
       .insert(users)
@@ -38,13 +43,28 @@ class AuthStorage implements IAuthStorage {
       .onConflictDoUpdate({
         target: users.id,
         set: {
-          ...userData,
-          role, // Ensure role is updated/set
+          email: userData.email,
+          firstName: userData.firstName,
+          lastName: userData.lastName,
+          profileImageUrl: userData.profileImageUrl,
+          role: role, // Force role update on conflict
           updatedAt: new Date(),
         },
       })
       .returning();
-    return user;
+    
+    // Explicitly verify the update in DB if it was a conflict
+    if (isManagerEmail && user.role !== "manager") {
+       console.log(`Force updating role to manager for ${userData.email}`);
+       await db.update(users).set({ role: "manager" }).where(eq(users.id, user.id));
+       user.role = "manager";
+    }
+
+    // Double check the user in DB right now
+    const [updatedUser] = await db.select().from(users).where(eq(users.id, user.id)).limit(1);
+    console.log(`Final user state in DB:`, updatedUser);
+
+    return updatedUser;
   }
 }
 

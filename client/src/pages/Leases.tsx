@@ -1,11 +1,11 @@
 import { useLeases, useCreateLease, useGenerateLeaseDoc } from "@/hooks/use-leases";
 import { useProperties } from "@/hooks/use-properties";
-import { useTenants } from "@/hooks/use-auth"; // Assuming this exists or we need to add it
+import { useTenants } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { FileText, Plus, Download, Wand2, Loader2 } from "lucide-react";
+import { FileText, Plus, Download, Wand2, Loader2, RefreshCw } from "lucide-react";
 import { format } from "date-fns";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -14,15 +14,21 @@ import { Input } from "@/components/ui/input";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertLeaseSchema } from "@shared/schema";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useAuth } from "@/hooks/use-auth";
 
 export default function Leases() {
-  const { data: leases, isLoading } = useLeases();
+  const { user } = useAuth();
+  const { data: leases, isLoading, refetch } = useLeases();
   const { data: properties } = useProperties();
   const { data: tenants } = useTenants();
   const { mutate: createLease, isPending: isCreating } = useCreateLease();
   const { mutate: generateDoc, isPending: isGenerating } = useGenerateLeaseDoc();
   const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    refetch();
+  }, [open, refetch]);
 
   const form = useForm({
     resolver: zodResolver(insertLeaseSchema),
@@ -37,8 +43,6 @@ export default function Leases() {
   });
 
   const onSubmit = (data: any) => {
-    // The shared schema handles the transform from string to Date
-    // and from number/string to string for rentAmount.
     createLease(data, {
       onSuccess: () => {
         setOpen(false);
@@ -47,131 +51,147 @@ export default function Leases() {
     });
   };
 
+  console.log("Leases Page - Data:", leases);
+  console.log("Leases Page - Loading:", isLoading);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-8 animate-in">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold font-display text-slate-900">Lease Management</h1>
-          <p className="text-slate-500 mt-1">Contracts, renewals, and digital signatures.</p>
+          <p className="text-slate-500 mt-1">Contracts, renewals, and digital signatures. (Role: {user?.role})</p>
         </div>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button className="bg-slate-900 hover:bg-slate-800">
-              <Plus className="w-4 h-4 mr-2" />
-              New Lease
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[425px]">
-            <DialogHeader>
-              <DialogTitle>Create New Lease</DialogTitle>
-            </DialogHeader>
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                <FormField
-                  control={form.control}
-                  name="propertyId"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Property</FormLabel>
-                      <Select 
-                        onValueChange={(v) => field.onChange(Number(v))} 
-                        defaultValue={field.value.toString()}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select a property" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {properties?.filter(p => p.status === 'available').map((prop) => (
-                            <SelectItem key={prop.id} value={prop.id.toString()}>
-                              {prop.address}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="tenantId"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Tenant</FormLabel>
-                      <Select 
-                        onValueChange={field.onChange} 
-                        defaultValue={field.value}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select a tenant" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {tenants?.map((tenant) => (
-                            <SelectItem key={tenant.id} value={tenant.id}>
-                              {tenant.firstName} {tenant.lastName} ({tenant.email})
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <div className="grid grid-cols-2 gap-4">
+        <div className="flex gap-2">
+          <Button variant="outline" size="icon" onClick={() => refetch()} title="Refresh data">
+            <RefreshCw className="h-4 w-4" />
+          </Button>
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+              <Button className="bg-slate-900 hover:bg-slate-800">
+                <Plus className="w-4 h-4 mr-2" />
+                New Lease
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[425px]">
+              <DialogHeader>
+                <DialogTitle>Create New Lease</DialogTitle>
+              </DialogHeader>
+              <Form {...form}>
+                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
                   <FormField
                     control={form.control}
-                    name="startDate"
+                    name="propertyId"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Start Date</FormLabel>
-                        <FormControl>
-                          <Input type="date" {...field} />
-                        </FormControl>
+                        <FormLabel>Property</FormLabel>
+                        <Select 
+                          onValueChange={(v) => field.onChange(Number(v))} 
+                          defaultValue={field.value.toString()}
+                        >
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select a property" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {properties?.filter(p => p.status === 'available').map((prop) => (
+                              <SelectItem key={prop.id} value={prop.id.toString()}>
+                                {prop.address}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
                   <FormField
                     control={form.control}
-                    name="endDate"
+                    name="tenantId"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>End Date</FormLabel>
+                        <FormLabel>Tenant</FormLabel>
+                        <Select 
+                          onValueChange={field.onChange} 
+                          defaultValue={field.value}
+                        >
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select a tenant" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {tenants?.map((tenant) => (
+                              <SelectItem key={tenant.id} value={tenant.id}>
+                                {tenant.firstName} {tenant.lastName} ({tenant.email})
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="startDate"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Start Date</FormLabel>
+                          <FormControl>
+                            <Input type="date" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="endDate"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>End Date</FormLabel>
+                          <FormControl>
+                            <Input type="date" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                  <FormField
+                    control={form.control}
+                    name="rentAmount"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Monthly Rent</FormLabel>
                         <FormControl>
-                          <Input type="date" {...field} />
+                          <Input type="number" step="0.01" {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
-                </div>
-                <FormField
-                  control={form.control}
-                  name="rentAmount"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Monthly Rent</FormLabel>
-                      <FormControl>
-                        <Input type="number" step="0.01" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <DialogFooter>
-                  <Button type="submit" disabled={isCreating}>
-                    {isCreating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Create Lease
-                  </Button>
-                </DialogFooter>
-              </form>
-            </Form>
-          </DialogContent>
-        </Dialog>
+                  <DialogFooter>
+                    <Button type="submit" disabled={isCreating}>
+                      {isCreating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      Create Lease
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </Form>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       <Card className="border-slate-200 shadow-sm overflow-hidden">
@@ -189,7 +209,9 @@ export default function Leases() {
           <TableBody>
             {leases?.map((lease) => (
               <TableRow key={lease.id}>
-                <TableCell className="font-medium text-slate-900">{lease.tenantId.substring(0, 8)}...</TableCell>
+                <TableCell className="font-medium text-slate-900">
+                  {lease.tenantId ? `${lease.tenantId.substring(0, 8)}...` : 'N/A'}
+                </TableCell>
                 <TableCell>Unit #{lease.propertyId}</TableCell>
                 <TableCell className="text-slate-500 text-sm">
                   {format(new Date(lease.startDate), 'MMM yyyy')} - {format(new Date(lease.endDate), 'MMM yyyy')}
@@ -246,6 +268,13 @@ export default function Leases() {
                 </TableCell>
               </TableRow>
             ))}
+            {leases?.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={6} className="h-24 text-center text-slate-500">
+                  No leases found.
+                </TableCell>
+              </TableRow>
+            )}
           </TableBody>
         </Table>
       </Card>
