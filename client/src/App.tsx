@@ -11,6 +11,7 @@ import NotFound from "@/pages/not-found";
 import Login from "@/pages/Login";
 import Dashboard from "@/pages/Dashboard";
 import Properties from "@/pages/Properties";
+import PropertyDetails from "@/pages/PropertyDetails";
 import Maintenance from "@/pages/Maintenance";
 import Leases from "@/pages/Leases";
 import Messages from "@/pages/Messages";
@@ -56,6 +57,9 @@ function Router() {
       </Route>
       <Route path="/properties">
         <ProtectedLayout><Properties /></ProtectedLayout>
+      </Route>
+      <Route path="/properties/:id">
+        <ProtectedLayout><PropertyDetails /></ProtectedLayout>
       </Route>
       <Route path="/maintenance">
         <ProtectedLayout><Maintenance /></ProtectedLayout>

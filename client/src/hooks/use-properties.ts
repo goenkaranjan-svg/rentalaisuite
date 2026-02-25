@@ -45,7 +45,16 @@ export function useCreateProperty() {
         body: JSON.stringify(data),
         credentials: "include",
       });
-      if (!res.ok) throw new Error("Failed to create property");
+      if (!res.ok) {
+        let message = "Failed to create property";
+        try {
+          const errorBody = await res.json();
+          if (errorBody?.message) message = errorBody.message;
+        } catch {
+          // Ignore parse failure and keep default message.
+        }
+        throw new Error(message);
+      }
       return await res.json();
     },
     onSuccess: () => {

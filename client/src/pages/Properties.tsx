@@ -10,6 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { useForm } from "react-hook-form";
@@ -34,9 +35,9 @@ export default function Properties() {
       city: "",
       state: "",
       zipCode: "",
-      price: 0,
+      price: "0.00",
       bedrooms: 1,
-      bathrooms: 1,
+      bathrooms: "1.0",
       sqft: 500,
       description: "",
       status: "available",
@@ -45,7 +46,7 @@ export default function Properties() {
   });
 
   const onSubmit = (data: InsertProperty) => {
-    createProperty({ ...data, managerId: user?.id || "temp-id" }, {
+    createProperty({ ...data, managerId: user?.id || "dev-local-user" }, {
       onSuccess: () => {
         setOpen(false);
         form.reset();
@@ -68,12 +69,12 @@ export default function Properties() {
               Add Property
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
+          <DialogContent className="w-[95vw] sm:max-w-2xl h-[90vh] max-h-[760px] overflow-hidden p-0 flex flex-col">
+            <DialogHeader className="px-6 pt-6 pb-3 border-b">
               <DialogTitle>Add New Property</DialogTitle>
             </DialogHeader>
             <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pt-4">
+              <form id="add-property-form" onSubmit={form.handleSubmit(onSubmit)} className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
                 <FormField
                   control={form.control}
                   name="address"
@@ -127,7 +128,7 @@ export default function Properties() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Price ($)</FormLabel>
-                        <FormControl><Input type="number" {...field} onChange={e => field.onChange(parseFloat(e.target.value))} /></FormControl>
+                        <FormControl><Input type="number" step="0.01" {...field} /></FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -162,7 +163,7 @@ export default function Properties() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Bathrooms</FormLabel>
-                        <FormControl><Input type="number" step="0.5" {...field} onChange={e => field.onChange(parseFloat(e.target.value))} /></FormControl>
+                        <FormControl><Input type="number" step="0.5" {...field} /></FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -179,11 +180,13 @@ export default function Properties() {
                     </FormItem>
                   )}
                 />
-                <Button type="submit" className="w-full" disabled={isPending}>
-                  {isPending ? "Creating..." : "Create Property"}
-                </Button>
               </form>
             </Form>
+            <DialogFooter className="px-6 py-4 border-t bg-white">
+              <Button type="submit" form="add-property-form" className="w-full" disabled={isPending}>
+                {isPending ? "Saving..." : "Save Property"}
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       </div>
