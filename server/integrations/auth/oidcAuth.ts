@@ -8,6 +8,22 @@ import memoize from "memoizee";
 import connectPg from "connect-pg-simple";
 import { authStorage } from "./storage";
 
+const OIDC_PLACEHOLDERS = [
+  "your-auth-provider.com",
+  "your-client-id-here",
+  "your-tenant.auth0.com",
+];
+
+function isOidcConfigured(): boolean {
+  const issuer = process.env.ISSUER_URL ?? process.env.OIDC_ISSUER_URL ?? "";
+  const clientId = process.env.CLIENT_ID ?? "";
+  if (!issuer || !clientId) return false;
+  const isPlaceholder = OIDC_PLACEHOLDERS.some(
+    (p) => issuer.includes(p) || clientId.includes(p)
+  );
+  return !isPlaceholder;
+}
+
 const getOidcConfig = memoize(
   async () => {
     return await client.discovery(
@@ -65,6 +81,22 @@ export async function setupAuth(app: Express) {
   app.use(getSession());
   app.use(passport.initialize());
   app.use(passport.session());
+
+  if (!isOidcConfigured()) {
+    app.get("/api/login", (_req, res) => {
+      res.status(503).json({
+        message:
+          "OIDC not configured. Set ISSUER_URL and CLIENT_ID in .env (see QUICK_OIDC_SETUP.md).",
+      });
+    });
+    app.get("/api/callback", (_req, res) => {
+      res.redirect("/?error=oidc-not-configured");
+    });
+    app.get("/api/logout", (_req, res) => {
+      res.redirect("/");
+    });
+    return;
+  }
 
   const config = await getOidcConfig();
 

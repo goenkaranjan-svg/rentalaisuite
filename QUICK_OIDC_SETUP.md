@@ -22,15 +22,15 @@
 1. Scroll to **Application URIs** section
 2. **Allowed Callback URLs:** Add:
    ```
-   http://localhost:5000/api/callback
+   http://localhost:5001/api/callback
    ```
 3. **Allowed Logout URLs:** Add:
    ```
-   http://localhost:5000
+   http://localhost:5001
    ```
 4. **Allowed Web Origins:** Add:
    ```
-   http://localhost:5000
+   http://localhost:5001
    ```
 5. Click **Save Changes**
 
@@ -58,7 +58,7 @@ CLIENT_ID=your-client-id-from-auth0
 npm run dev
 ```
 
-Visit `http://localhost:5000` and click "Sign In" - you should be redirected to Auth0!
+Visit `http://localhost:5001` and click "Sign In" - you should be redirected to Auth0!
 
 ---
 
@@ -77,7 +77,7 @@ Visit `http://localhost:5000` and click "Sign In" - you should be redirected to 
 2. Click **Create Credentials** → **OAuth client ID**
 3. If prompted, configure OAuth consent screen first
 4. Application type: **Web application**
-5. **Authorized redirect URIs:** Add `http://localhost:5000/api/callback`
+5. **Authorized redirect URIs:** Add `http://localhost:5001/api/callback`
 6. Click **Create**
 7. Copy your **Client ID**
 
@@ -99,7 +99,7 @@ npm run dev
 ## Need Help?
 
 - Check `OIDC_SETUP.md` for detailed instructions
-- Verify your callback URL matches exactly: `http://localhost:5000/api/callback`
+- Verify your callback URL matches exactly: `http://localhost:5001/api/callback`
 - Make sure `.env` file has no extra spaces or quotes
 - Check terminal for error messages
 

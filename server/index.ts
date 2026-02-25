@@ -86,19 +86,31 @@ app.use((req, res, next) => {
     await setupVite(httpServer, app);
   }
 
-  // ALWAYS serve the app on the port specified in the environment variable PORT
-  // Other ports are firewalled. Default to 5000 if not specified.
-  // this serves both the API and the client.
-  // It is the only port that is not firewalled.
-  const port = parseInt(process.env.PORT || "5000", 10);
-  httpServer.listen(
-    {
-      port,
-      host: "0.0.0.0",
-      reusePort: true,
-    },
-    () => {
-      log(`serving on port ${port}`);
-    },
-  );
+  // Serve on the configured port; use HOST if provided.
+  // Some environments do not support binding with all socket options on 0.0.0.0,
+  // so fallback to loopback when an unsupported bind occurs.
+  const port = parseInt(process.env.PORT || "5001", 10);
+  const primaryHost = process.env.HOST || "0.0.0.0";
+  const fallbackHost = "127.0.0.1";
+
+  const startServer = (host: string) => {
+    httpServer.listen({ port, host }, () => {
+      log(`serving on http://${host}:${port}`);
+    });
+  };
+
+  httpServer.once("error", (err: NodeJS.ErrnoException) => {
+    if ((err.code === "ENOTSUP" || err.code === "EADDRNOTAVAIL") && primaryHost !== fallbackHost) {
+      log(
+        `bind failed on ${primaryHost}:${port} (${err.code}), retrying on ${fallbackHost}:${port}`,
+        "server",
+      );
+      startServer(fallbackHost);
+      return;
+    }
+
+    throw err;
+  });
+
+  startServer(primaryHost);
 })();

@@ -19,9 +19,9 @@ OpenID Connect (OIDC) is an authentication layer built on top of OAuth 2.0. It a
    - Name it "Rental AI Suite"
 
 3. **Configure Application Settings:**
-   - **Allowed Callback URLs:** `http://localhost:5000/api/callback`
-   - **Allowed Logout URLs:** `http://localhost:5000`
-   - **Allowed Web Origins:** `http://localhost:5000`
+   - **Allowed Callback URLs:** `http://localhost:5001/api/callback`
+   - **Allowed Logout URLs:** `http://localhost:5001`
+   - **Allowed Web Origins:** `http://localhost:5001`
 
 4. **Get Your Credentials:**
    - **Domain:** Found in your Auth0 dashboard (e.g., `your-tenant.auth0.com`)
@@ -43,7 +43,7 @@ OpenID Connect (OIDC) is an authentication layer built on top of OAuth 2.0. It a
 4. **Create OAuth 2.0 Credentials:**
    - APIs & Services → Credentials → Create Credentials → OAuth client ID
    - Application type: "Web application"
-   - **Authorized redirect URIs:** `http://localhost:5000/api/callback`
+   - **Authorized redirect URIs:** `http://localhost:5001/api/callback`
 5. **Get Your Credentials:**
    - **Client ID:** From the credentials page
    - **Issuer URL:** `https://accounts.google.com`
@@ -64,8 +64,8 @@ OpenID Connect (OIDC) is an authentication layer built on top of OAuth 2.0. It a
    - Choose "OIDC - OpenID Connect"
    - Choose "Web Application"
 3. **Configure Application:**
-   - **Sign-in redirect URIs:** `http://localhost:5000/api/callback`
-   - **Sign-out redirect URIs:** `http://localhost:5000`
+   - **Sign-in redirect URIs:** `http://localhost:5001/api/callback`
+   - **Sign-out redirect URIs:** `http://localhost:5001`
 4. **Get Your Credentials:**
    - **Issuer URL:** Found in Settings → General (e.g., `https://dev-xxxxx.okta.com/oauth2/default`)
    - **Client ID:** Found in your Application settings
@@ -89,8 +89,8 @@ If you want to host your own identity provider:
    - Access admin console at `http://localhost:8080`
    - Create a realm
    - Create a client with:
-     - **Valid Redirect URIs:** `http://localhost:5000/api/callback`
-     - **Web Origins:** `http://localhost:5000`
+     - **Valid Redirect URIs:** `http://localhost:5001/api/callback`
+     - **Web Origins:** `http://localhost:5001`
 
 3. **Update `.env` file:**
    ```env
@@ -128,8 +128,8 @@ CLIENT_ID=your-client-id-here
 
 Make sure your OIDC provider has these URLs configured:
 
-- **Callback URL:** `http://localhost:5000/api/callback` (for development)
-- **Logout URL:** `http://localhost:5000` (for development)
+- **Callback URL:** `http://localhost:5001/api/callback` (for development)
+- **Logout URL:** `http://localhost:5001` (for development)
 
 For production, update these to your production domain:
 - **Callback URL:** `https://yourdomain.com/api/callback`
@@ -143,7 +143,7 @@ Start your application:
 npm run dev
 ```
 
-Visit `http://localhost:5000` and click "Sign In". You should be redirected to your OIDC provider's login page.
+Visit `http://localhost:5001` and click "Sign In". You should be redirected to your OIDC provider's login page.
 
 ## Production Deployment
 
@@ -172,7 +172,7 @@ When deploying to production:
 
 ### Redirect URI Mismatch
 
-- Ensure callback URL in provider matches: `http://localhost:5000/api/callback`
+- Ensure callback URL in provider matches: `http://localhost:5001/api/callback`
 - Check for trailing slashes or protocol mismatches (http vs https)
 
 ### Session Issues

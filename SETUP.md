@@ -53,7 +53,7 @@ Update `.env` with your configuration:
 
 - **AI_INTEGRATIONS_OPENAI_API_KEY**: OpenAI API key (for AI features)
 - **AI_INTEGRATIONS_OPENAI_BASE_URL**: OpenAI API base URL (defaults to OpenAI)
-- **PORT**: Server port (defaults to 5000)
+- **PORT**: Server port (defaults to 5001)
 
 ### 2. Database Setup
 
@@ -131,11 +131,11 @@ npm start
 
 ### Port Already in Use
 
-Change the `PORT` in `.env` or stop the process using port 5000:
+Change the `PORT` in `.env` or stop the process using port 5001:
 
 ```bash
 # macOS/Linux
-lsof -ti:5000 | xargs kill -9
+lsof -ti:5001 | xargs kill -9
 ```
 
 ## Development Tips
