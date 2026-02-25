@@ -38,6 +38,25 @@ function buildLocalSessionUser(user: { id: string; email: string | null }) {
   };
 }
 
+function mapAuthDbError(error: unknown): string {
+  const message = (error as any)?.message ?? "";
+  if (typeof message === "string") {
+    if (
+      message.includes("column") &&
+      (message.includes("auth_provider") ||
+        message.includes("password_hash") ||
+        message.includes("reset_token_hash") ||
+        message.includes("reset_token_expires_at"))
+    ) {
+      return "Database schema is out of date. Run `npm run db:push` and retry.";
+    }
+    if (message.includes("gen_random_uuid")) {
+      return "Database is missing UUID support. Run `npm run db:push` or enable pgcrypto.";
+    }
+  }
+  return "Authentication service error. Check server logs.";
+}
+
 // Register auth-specific routes
 export function registerAuthRoutes(app: Express): void {
   app.post("/api/auth/signup", async (req: any, res) => {
@@ -45,7 +64,23 @@ export function registerAuthRoutes(app: Express): void {
       const input = signupSchema.parse(req.body);
       const existing = await authStorage.getUserByEmail(input.email);
       if (existing) {
-        return res.status(409).json({ message: "Email already registered." });
+        if (!existing.passwordHash) {
+          const linked = await authStorage.linkLocalCredentials({
+            userId: existing.id,
+            passwordHash: hashPassword(input.password),
+            role: input.role,
+            firstName: input.firstName ?? existing.firstName ?? undefined,
+            lastName: input.lastName ?? existing.lastName ?? undefined,
+          });
+          if (!linked) {
+            return res.status(500).json({ message: "Failed to update account." });
+          }
+          return req.login(buildLocalSessionUser(linked), (err: unknown) => {
+            if (err) return res.status(500).json({ message: "Failed to create session." });
+            return res.status(200).json({ id: linked.id, email: linked.email, role: linked.role });
+          });
+        }
+        return res.status(409).json({ message: "Email already registered. Please sign in." });
       }
 
       const user = await authStorage.createLocalUser({
@@ -64,7 +99,8 @@ export function registerAuthRoutes(app: Express): void {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: error.errors[0]?.message ?? "Invalid input." });
       }
-      return res.status(500).json({ message: "Failed to sign up." });
+      console.error("Signup error:", error);
+      return res.status(500).json({ message: mapAuthDbError(error) });
     }
   });
 
@@ -90,7 +126,8 @@ export function registerAuthRoutes(app: Express): void {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: error.errors[0]?.message ?? "Invalid input." });
       }
-      return res.status(500).json({ message: "Failed to log in." });
+      console.error("Login error:", error);
+      return res.status(500).json({ message: mapAuthDbError(error) });
     }
   });
 
@@ -117,7 +154,8 @@ export function registerAuthRoutes(app: Express): void {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: error.errors[0]?.message ?? "Invalid input." });
       }
-      return res.status(500).json({ message: "Failed to process request." });
+      console.error("Forgot-password error:", error);
+      return res.status(500).json({ message: mapAuthDbError(error) });
     }
   });
 
@@ -135,7 +173,8 @@ export function registerAuthRoutes(app: Express): void {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: error.errors[0]?.message ?? "Invalid input." });
       }
-      return res.status(500).json({ message: "Failed to reset password." });
+      console.error("Reset-password error:", error);
+      return res.status(500).json({ message: mapAuthDbError(error) });
     }
   });
 

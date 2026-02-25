@@ -85,6 +85,8 @@ export async function setupAuth(app: Express) {
   app.use(getSession());
   app.use(passport.initialize());
   app.use(passport.session());
+  passport.serializeUser((user: Express.User, cb) => cb(null, user));
+  passport.deserializeUser((user: Express.User, cb) => cb(null, user));
 
   if (isDevAuthBypassEnabled()) {
     const devUserId = process.env.DEV_AUTH_BYPASS_USER_ID ?? "dev-local-user";
@@ -188,9 +190,6 @@ export async function setupAuth(app: Express) {
       registeredStrategies.add(strategyName);
     }
   };
-
-  passport.serializeUser((user: Express.User, cb) => cb(null, user));
-  passport.deserializeUser((user: Express.User, cb) => cb(null, user));
 
   const startOidcLogin = (req: any, res: any, next: any, provider?: "google" | "facebook") => {
     const desiredRole = typeof req.query.role === "string" ? req.query.role : undefined;
