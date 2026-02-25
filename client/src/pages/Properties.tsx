@@ -69,8 +69,8 @@ export default function Properties() {
               Add Property
             </Button>
           </DialogTrigger>
-          <DialogContent className="w-[95vw] sm:max-w-2xl h-[90vh] max-h-[760px] overflow-hidden p-0 flex flex-col">
-            <DialogHeader className="px-6 pt-6 pb-3 border-b">
+          <DialogContent className="w-[95vw] sm:max-w-2xl max-h-[90dvh] p-0 overflow-hidden flex flex-col">
+            <DialogHeader className="px-6 pt-6 pb-2 border-b">
               <DialogTitle>Add New Property</DialogTitle>
             </DialogHeader>
             <Form {...form}>
@@ -86,7 +86,7 @@ export default function Properties() {
                     </FormItem>
                   )}
                 />
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <FormField
                     control={form.control}
                     name="city"
@@ -121,7 +121,7 @@ export default function Properties() {
                     )}
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
                     name="price"
@@ -145,7 +145,7 @@ export default function Properties() {
                     )}
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
                     name="bedrooms"
@@ -182,7 +182,7 @@ export default function Properties() {
                 />
               </form>
             </Form>
-            <DialogFooter className="px-6 py-4 border-t bg-white">
+            <DialogFooter className="px-6 py-4 border-t bg-background">
               <Button type="submit" form="add-property-form" className="w-full" disabled={isPending}>
                 {isPending ? "Saving..." : "Save Property"}
               </Button>
