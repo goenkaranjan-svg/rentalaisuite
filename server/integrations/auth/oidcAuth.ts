@@ -14,6 +14,10 @@ const OIDC_PLACEHOLDERS = [
   "your-tenant.auth0.com",
 ];
 
+function isDevAuthBypassEnabled(): boolean {
+  return process.env.NODE_ENV !== "production" && process.env.DEV_AUTH_BYPASS === "true";
+}
+
 function isOidcConfigured(): boolean {
   const issuer = process.env.ISSUER_URL ?? process.env.OIDC_ISSUER_URL ?? "";
   const clientId = process.env.CLIENT_ID ?? "";
@@ -81,6 +85,42 @@ export async function setupAuth(app: Express) {
   app.use(getSession());
   app.use(passport.initialize());
   app.use(passport.session());
+
+  if (isDevAuthBypassEnabled()) {
+    const devUserId = process.env.DEV_AUTH_BYPASS_USER_ID ?? "dev-local-user";
+    const devUserEmail = process.env.DEV_AUTH_BYPASS_EMAIL ?? "dev@localhost";
+
+    await authStorage.upsertUser({
+      id: devUserId,
+      email: devUserEmail,
+      firstName: "Dev",
+      lastName: "User",
+      role: "manager",
+    });
+
+    app.use((req: any, _res, next) => {
+      req.user = {
+        claims: {
+          sub: devUserId,
+          email: devUserEmail,
+        },
+        expires_at: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 7,
+      };
+      req.isAuthenticated = () => true;
+      next();
+    });
+
+    app.get("/api/login", (_req, res) => {
+      res.redirect("/");
+    });
+    app.get("/api/callback", (_req, res) => {
+      res.redirect("/");
+    });
+    app.get("/api/logout", (_req, res) => {
+      res.redirect("/");
+    });
+    return;
+  }
 
   if (!isOidcConfigured()) {
     app.get("/api/login", (_req, res) => {
