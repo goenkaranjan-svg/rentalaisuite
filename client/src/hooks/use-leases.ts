@@ -40,6 +40,7 @@ export function useCreateLease() {
 }
 
 export function useGenerateLeaseDoc() {
+  const queryClient = useQueryClient();
   const { toast } = useToast();
 
   return useMutation({
@@ -49,11 +50,24 @@ export function useGenerateLeaseDoc() {
         method: api.leases.generateDoc.method,
         credentials: "include",
       });
-      if (!res.ok) throw new Error("Failed to generate document");
+      if (!res.ok) {
+        let message = "Failed to generate document";
+        try {
+          const errorBody = await res.json();
+          if (errorBody?.message) message = errorBody.message;
+        } catch {
+          // Ignore parse error and use default message.
+        }
+        throw new Error(message);
+      }
       return await res.json();
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [api.leases.list.path] });
       toast({ title: "Document Generated", description: "Lease agreement drafted by AI." });
+    },
+    onError: (error) => {
+      toast({ title: "Generation Failed", description: error.message, variant: "destructive" });
     },
   });
 }
