@@ -17,6 +17,245 @@ const openai = new OpenAI({
   baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
 });
 
+function escapeXml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&apos;");
+}
+
+function toCsvCell(value: string): string {
+  return `"${value.replaceAll('"', '""')}"`;
+}
+
+function toMoney(value: string | number): string {
+  const numeric = Number(value);
+  if (Number.isNaN(numeric)) return "0.00";
+  return numeric.toFixed(2);
+}
+
+function collectMissingListingFields(property: any): string[] {
+  const required: Array<{ key: string; valid: boolean }> = [
+    { key: "address", valid: Boolean(property.address) },
+    { key: "city", valid: Boolean(property.city) },
+    { key: "state", valid: Boolean(property.state) },
+    { key: "zipCode", valid: Boolean(property.zipCode) },
+    { key: "price", valid: Number(property.price) > 0 },
+    { key: "bedrooms", valid: Number(property.bedrooms) > 0 },
+    { key: "bathrooms", valid: Number(property.bathrooms) > 0 },
+    { key: "sqft", valid: Number(property.sqft) > 0 },
+    { key: "description", valid: Boolean(property.description) },
+  ];
+  return required.filter((f) => !f.valid).map((f) => f.key);
+}
+
+function buildZillowListingXml(property: any, mapping?: any): string {
+  const common = mapping?.common ?? {};
+  const zillow = mapping?.zillow ?? {};
+  const description = property.description || "Long-term rental listing";
+  const title = common.title || `${property.bedrooms} BR Rental in ${property.city}`;
+  const applicationUrlTag = zillow.applicationUrl
+    ? `\n    <ApplicationURL>${escapeXml(zillow.applicationUrl)}</ApplicationURL>`
+    : "";
+  const virtualTourTag = zillow.virtualTourUrl
+    ? `\n    <VirtualTourURL>${escapeXml(zillow.virtualTourUrl)}</VirtualTourURL>`
+    : "";
+  const availableDateTag = common.availableDate
+    ? `\n    <AvailableDate>${escapeXml(common.availableDate)}</AvailableDate>`
+    : "";
+  const leaseTermTag = common.leaseTermMonths
+    ? `\n    <LeaseTermMonths>${common.leaseTermMonths}</LeaseTermMonths>`
+    : "";
+  const contactNameTag = common.contactName
+    ? `\n    <ContactName>${escapeXml(common.contactName)}</ContactName>`
+    : "";
+  const contactEmailTag = common.contactEmail
+    ? `\n    <ContactEmail>${escapeXml(common.contactEmail)}</ContactEmail>`
+    : "";
+  const contactPhoneTag = common.contactPhone
+    ? `\n    <ContactPhone>${escapeXml(common.contactPhone)}</ContactPhone>`
+    : "";
+  const amenitiesTag = Array.isArray(common.amenities) && common.amenities.length > 0
+    ? `\n    <Amenities>${escapeXml(common.amenities.join(", "))}</Amenities>`
+    : "";
+  const imageTag = property.imageUrl
+    ? `\n    <PhotoURL>${escapeXml(property.imageUrl)}</PhotoURL>`
+    : "";
+
+  return `<RentalFeed>
+  <Property>
+    <ExternalListingId>${property.id}</ExternalListingId>
+    <Title>${escapeXml(title)}</Title>
+    <Address>${escapeXml(property.address)}</Address>
+    <City>${escapeXml(property.city)}</City>
+    <State>${escapeXml(property.state)}</State>
+    <PostalCode>${escapeXml(property.zipCode)}</PostalCode>
+    <MonthlyRent>${toMoney(property.price)}</MonthlyRent>
+    <Bedrooms>${property.bedrooms}</Bedrooms>
+    <Bathrooms>${property.bathrooms}</Bathrooms>
+    <SquareFeet>${property.sqft}</SquareFeet>
+    <Description>${escapeXml(description)}</Description>${imageTag}${availableDateTag}${leaseTermTag}${contactNameTag}${contactEmailTag}${contactPhoneTag}${amenitiesTag}
+    <PropertyType>${escapeXml(zillow.propertyType || "apartment")}</PropertyType>
+    <PetsAllowed>${common.petsAllowed ? "true" : "false"}</PetsAllowed>
+    <Furnished>${common.furnished ? "true" : "false"}</Furnished>
+    <ParkingIncluded>${common.parkingIncluded ? "true" : "false"}</ParkingIncluded>
+    <Laundry>${escapeXml(common.laundry || "unknown")}</Laundry>${applicationUrlTag}${virtualTourTag}
+    <ListingType>LongTermRental</ListingType>
+    <Status>${escapeXml(property.status)}</Status>
+  </Property>
+</RentalFeed>`;
+}
+
+function buildApartmentsPayload(property: any, mapping?: any) {
+  const common = mapping?.common ?? {};
+  const apartments = mapping?.apartments ?? {};
+  const amenities = Array.isArray(common.amenities) ? common.amenities : [];
+  const utilitiesIncluded = Array.isArray(apartments.utilitiesIncluded) ? apartments.utilitiesIncluded : [];
+
+  const payload = {
+    listingId: String(property.id),
+    listingType: "LONG_TERM_RENTAL",
+    title: common.title || `${property.bedrooms} BR Rental in ${property.city}`,
+    availableDate: common.availableDate || undefined,
+    leaseTermMonths: common.leaseTermMonths || undefined,
+    address: {
+      street: property.address,
+      city: property.city,
+      state: property.state,
+      postalCode: property.zipCode,
+      country: "US",
+    },
+    contact: {
+      name: common.contactName || undefined,
+      email: common.contactEmail || undefined,
+      phone: common.contactPhone || undefined,
+    },
+    communityName: apartments.communityName || undefined,
+    unitNumber: apartments.unitNumber || undefined,
+    amenities,
+    pricing: {
+      monthlyRent: Number(toMoney(property.price)),
+      depositAmount: apartments.depositAmount ?? undefined,
+      currency: "USD",
+    },
+    bedrooms: property.bedrooms,
+    bathrooms: Number(property.bathrooms),
+    squareFeet: property.sqft,
+    description: property.description || "",
+    petsAllowed: Boolean(common.petsAllowed),
+    furnished: Boolean(common.furnished),
+    parkingIncluded: Boolean(common.parkingIncluded),
+    laundry: common.laundry || undefined,
+    utilitiesIncluded,
+    media: property.imageUrl ? [{ url: property.imageUrl, type: "PHOTO" }] : [],
+    availabilityStatus: property.status === "available" ? "AVAILABLE" : "UNAVAILABLE",
+  };
+
+  const csvHeader = [
+    "listing_id",
+    "street",
+    "city",
+    "state",
+    "zip",
+    "monthly_rent",
+    "bedrooms",
+    "bathrooms",
+    "sqft",
+    "description",
+    "available_date",
+    "lease_term_months",
+    "pets_allowed",
+    "furnished",
+    "parking_included",
+    "laundry",
+    "amenities",
+    "community_name",
+    "unit_number",
+    "deposit_amount",
+    "utilities_included",
+    "contact_name",
+    "contact_email",
+    "contact_phone",
+    "image_url",
+    "availability_status",
+  ].join(",");
+
+  const csvRow = [
+    toCsvCell(String(property.id)),
+    toCsvCell(property.address ?? ""),
+    toCsvCell(property.city ?? ""),
+    toCsvCell(property.state ?? ""),
+    toCsvCell(property.zipCode ?? ""),
+    toCsvCell(toMoney(property.price)),
+    toCsvCell(String(property.bedrooms ?? "")),
+    toCsvCell(String(property.bathrooms ?? "")),
+    toCsvCell(String(property.sqft ?? "")),
+    toCsvCell(property.description ?? ""),
+    toCsvCell(common.availableDate ?? ""),
+    toCsvCell(String(common.leaseTermMonths ?? "")),
+    toCsvCell(common.petsAllowed ? "true" : "false"),
+    toCsvCell(common.furnished ? "true" : "false"),
+    toCsvCell(common.parkingIncluded ? "true" : "false"),
+    toCsvCell(common.laundry ?? ""),
+    toCsvCell(amenities.join("|")),
+    toCsvCell(apartments.communityName ?? ""),
+    toCsvCell(apartments.unitNumber ?? ""),
+    toCsvCell(apartments.depositAmount !== undefined ? String(apartments.depositAmount) : ""),
+    toCsvCell(utilitiesIncluded.join("|")),
+    toCsvCell(common.contactName ?? ""),
+    toCsvCell(common.contactEmail ?? ""),
+    toCsvCell(common.contactPhone ?? ""),
+    toCsvCell(property.imageUrl ?? ""),
+    toCsvCell(property.status === "available" ? "AVAILABLE" : "UNAVAILABLE"),
+  ].join(",");
+
+  return {
+    json: JSON.stringify(payload, null, 2),
+    csv: `${csvHeader}\n${csvRow}`,
+  };
+}
+
+function getHostLabel(urlValue: string): string {
+  try {
+    const url = new URL(urlValue);
+    return `${url.protocol}//${url.host}${url.pathname}`;
+  } catch {
+    return urlValue;
+  }
+}
+
+async function publishPayload(params: {
+  url: string;
+  payload: string;
+  contentType: string;
+  apiKey?: string;
+}) {
+  const headers: Record<string, string> = {
+    "Content-Type": params.contentType,
+  };
+  if (params.apiKey) {
+    headers.Authorization = `Bearer ${params.apiKey}`;
+  }
+
+  const response = await fetch(params.url, {
+    method: "POST",
+    headers,
+    body: params.payload,
+  });
+
+  const responseText = await response.text().catch(() => "");
+
+  return {
+    success: response.ok,
+    statusCode: response.status,
+    responseBody: responseText.slice(0, 4000),
+    target: getHostLabel(params.url),
+    publishedAt: new Date().toISOString(),
+  };
+}
+
 export async function registerRoutes(
   httpServer: Server,
   app: Express
@@ -37,8 +276,33 @@ export async function registerRoutes(
   
   // === Properties ===
   app.get(api.properties.list.path, async (req, res) => {
-    const properties = await storage.getProperties();
-    res.json(properties);
+    const input = api.properties.list.input.parse(req.query ?? {});
+    const allProperties = await storage.getProperties();
+
+    const filtered = allProperties.filter((property) => {
+      if (input?.status && property.status !== input.status) {
+        return false;
+      }
+
+      if (!input?.search?.trim()) {
+        return true;
+      }
+
+      const search = input.search.trim().toLowerCase();
+      const haystack = [
+        property.address,
+        property.city,
+        property.state,
+        property.zipCode,
+        property.description ?? "",
+      ]
+        .join(" ")
+        .toLowerCase();
+
+      return haystack.includes(search);
+    });
+
+    res.json(filtered);
   });
 
   app.get(api.properties.get.path, async (req, res) => {
@@ -77,6 +341,212 @@ export async function registerRoutes(
   app.delete(api.properties.delete.path, async (req, res) => {
     await storage.deleteProperty(Number(req.params.id));
     res.status(204).send();
+  });
+
+  // === Listing Exports ===
+  app.get(api.listingExports.templatesList.path, isAuthenticated, async (req: any, res) => {
+    const userId = req.user?.claims?.sub;
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
+    const dbUser = await storage.getUser(userId);
+    if (dbUser?.role !== "manager") {
+      return res.status(403).json({ message: "Only managers can manage listing templates" });
+    }
+
+    const templates = await storage.getListingMappingTemplatesByManager(userId);
+    res.json(templates);
+  });
+
+  app.post(api.listingExports.templatesCreate.path, isAuthenticated, async (req: any, res) => {
+    const userId = req.user?.claims?.sub;
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
+    const dbUser = await storage.getUser(userId);
+    if (dbUser?.role !== "manager") {
+      return res.status(403).json({ message: "Only managers can manage listing templates" });
+    }
+
+    const input = api.listingExports.templatesCreate.input.parse(req.body);
+    const template = await storage.createListingMappingTemplate({
+      managerId: userId,
+      name: input.name.trim(),
+      mapping: input.mapping,
+    });
+    res.status(201).json(template);
+  });
+
+  app.delete(api.listingExports.templatesDelete.path, isAuthenticated, async (req: any, res) => {
+    const userId = req.user?.claims?.sub;
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
+    const dbUser = await storage.getUser(userId);
+    if (dbUser?.role !== "manager") {
+      return res.status(403).json({ message: "Only managers can manage listing templates" });
+    }
+
+    const id = Number(req.params.id);
+    const template = await storage.getListingMappingTemplate(id);
+    if (!template) return res.status(404).json({ message: "Template not found" });
+    if (template.managerId !== userId) return res.status(403).json({ message: "Forbidden" });
+
+    await storage.deleteListingMappingTemplate(id);
+    res.status(204).send();
+  });
+
+  app.get(api.listingExports.availableProperties.path, isAuthenticated, async (req: any, res) => {
+    const userId = req.user?.claims?.sub;
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
+    const dbUser = await storage.getUser(userId);
+    if (dbUser?.role !== "manager") {
+      return res.status(403).json({ message: "Only managers can export listings" });
+    }
+
+    const input = api.listingExports.availableProperties.input.parse(req.query ?? {});
+    const managerProperties = await storage.getPropertiesByManager(userId);
+    const availableProperties = managerProperties.filter((property) => property.status === "available");
+
+    if (!input?.search?.trim()) {
+      return res.json(availableProperties);
+    }
+
+    const search = input.search.trim().toLowerCase();
+    const filtered = availableProperties.filter((property) =>
+      `${property.address} ${property.city} ${property.state} ${property.zipCode} ${property.description ?? ""}`
+        .toLowerCase()
+        .includes(search)
+    );
+
+    res.json(filtered);
+  });
+
+  app.post(api.listingExports.zillow.path, isAuthenticated, async (req: any, res) => {
+    const userId = req.user?.claims?.sub;
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
+    const dbUser = await storage.getUser(userId);
+    if (dbUser?.role !== "manager") {
+      return res.status(403).json({ message: "Only managers can export listings" });
+    }
+
+    const input = api.listingExports.zillow.input.parse(req.body);
+    const property = await storage.getProperty(input.propertyId);
+
+    if (!property) return res.status(404).json({ message: "Property not found" });
+    if (property.managerId !== userId) return res.status(403).json({ message: "Forbidden" });
+
+    const payload = buildZillowListingXml(property, input.mapping);
+    const missingFields = collectMissingListingFields(property);
+
+    res.json({
+      propertyId: property.id,
+      platform: "zillow",
+      payload,
+      missingFields,
+    });
+  });
+
+  app.post(api.listingExports.apartments.path, isAuthenticated, async (req: any, res) => {
+    const userId = req.user?.claims?.sub;
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
+    const dbUser = await storage.getUser(userId);
+    if (dbUser?.role !== "manager") {
+      return res.status(403).json({ message: "Only managers can export listings" });
+    }
+
+    const input = api.listingExports.apartments.input.parse(req.body);
+    const property = await storage.getProperty(input.propertyId);
+
+    if (!property) return res.status(404).json({ message: "Property not found" });
+    if (property.managerId !== userId) return res.status(403).json({ message: "Forbidden" });
+
+    const exports = buildApartmentsPayload(property, input.mapping);
+    const missingFields = collectMissingListingFields(property);
+
+    res.json({
+      propertyId: property.id,
+      platform: "apartments.com",
+      payload: exports.json,
+      csv: exports.csv,
+      missingFields,
+    });
+  });
+
+  app.post(api.listingExports.publishZillow.path, isAuthenticated, async (req: any, res) => {
+    const userId = req.user?.claims?.sub;
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
+    const dbUser = await storage.getUser(userId);
+    if (dbUser?.role !== "manager") {
+      return res.status(403).json({ message: "Only managers can publish listings" });
+    }
+
+    const publishUrl = process.env.LISTING_PUBLISH_ZILLOW_URL;
+    if (!publishUrl) {
+      return res.status(400).json({
+        message: "LISTING_PUBLISH_ZILLOW_URL is not configured",
+      });
+    }
+
+    const input = api.listingExports.publishZillow.input.parse(req.body);
+    const property = await storage.getProperty(input.propertyId);
+    if (!property) return res.status(404).json({ message: "Property not found" });
+    if (property.managerId !== userId) return res.status(403).json({ message: "Forbidden" });
+
+    const payload = buildZillowListingXml(property, input.mapping);
+    const result = await publishPayload({
+      url: publishUrl,
+      payload,
+      contentType: "application/xml",
+      apiKey: process.env.LISTING_PUBLISH_ZILLOW_API_KEY,
+    });
+
+    res.json({
+      platform: "zillow",
+      propertyId: property.id,
+      ...result,
+    });
+  });
+
+  app.post(api.listingExports.publishApartments.path, isAuthenticated, async (req: any, res) => {
+    const userId = req.user?.claims?.sub;
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
+    const dbUser = await storage.getUser(userId);
+    if (dbUser?.role !== "manager") {
+      return res.status(403).json({ message: "Only managers can publish listings" });
+    }
+
+    const publishUrl = process.env.LISTING_PUBLISH_APARTMENTS_URL;
+    if (!publishUrl) {
+      return res.status(400).json({
+        message: "LISTING_PUBLISH_APARTMENTS_URL is not configured",
+      });
+    }
+
+    const input = api.listingExports.publishApartments.input.parse(req.body);
+    const property = await storage.getProperty(input.propertyId);
+    if (!property) return res.status(404).json({ message: "Property not found" });
+    if (property.managerId !== userId) return res.status(403).json({ message: "Forbidden" });
+
+    const exports = buildApartmentsPayload(property, input.mapping);
+    const format = input.format ?? "json";
+    const isCsv = format === "csv";
+
+    const result = await publishPayload({
+      url: publishUrl,
+      payload: isCsv ? exports.csv : exports.json,
+      contentType: isCsv ? "text/csv" : "application/json",
+      apiKey: process.env.LISTING_PUBLISH_APARTMENTS_API_KEY,
+    });
+
+    res.json({
+      platform: "apartments.com",
+      propertyId: property.id,
+      format,
+      ...result,
+    });
   });
 
   // === Leases ===
@@ -144,13 +614,39 @@ export async function registerRoutes(
       });
 
       const draftText = response.choices[0]?.message?.content || "Failed to generate.";
-      
+
       // Update lease with draft text
       await storage.updateLease(leaseId, { draftText });
 
       res.json({ documentText: draftText });
     } catch (error) {
       console.error("AI Generation Error:", error);
+      const err = error as any;
+      const isQuotaError =
+        err?.status === 429 ||
+        err?.code === "insufficient_quota" ||
+        err?.error?.code === "insufficient_quota";
+
+      if (isQuotaError) {
+        try {
+          const leaseId = Number(req.params.id);
+          const lease = await storage.getLease(leaseId);
+          if (!lease) return res.status(404).json({ message: "Lease not found" });
+          const property = await storage.getProperty(lease.propertyId);
+
+          const fallbackDraft = `RESIDENTIAL LEASE AGREEMENT (Template)\n\nProperty Address: ${property?.address ?? "N/A"}, ${property?.city ?? ""}, ${property?.state ?? ""}\nTenant ID: ${lease.tenantId}\nLease Term: ${lease.startDate} to ${lease.endDate}\nMonthly Rent: $${lease.rentAmount}\n\n1. Term and Possession\nTenant agrees to rent the premises for the term stated above.\n\n2. Rent and Fees\nRent is due monthly in advance on the first day of each month.\nLate fees and returned payment fees may apply as permitted by law.\n\n3. Security Deposit\nA security deposit may be required and handled according to applicable state/local law.\n\n4. Utilities and Services\nTenant is responsible for utilities unless otherwise agreed in writing.\n\n5. Maintenance and Repairs\nTenant must keep premises clean and promptly report maintenance issues.\nLandlord will maintain major systems and structural elements as required by law.\n\n6. Use and Occupancy\nPremises shall be used for residential purposes only.\nSubletting/assignment requires written consent unless prohibited by law.\n\n7. Rules, Access, and Compliance\nTenant agrees to comply with property rules and applicable laws.\nLandlord may enter with proper notice as permitted by law.\n\n8. Default and Termination\nFailure to pay rent or material lease violations may result in remedies allowed by law.\n\n9. Governing Law\nThis lease is governed by applicable state and local landlord-tenant law.\n\nNote: This is a fallback template generated because AI quota is unavailable. Review and customize before use.`;
+
+          await storage.updateLease(leaseId, { draftText: fallbackDraft });
+          return res.status(200).json({
+            documentText: fallbackDraft,
+            message: "AI quota exceeded. Generated fallback template instead.",
+            generatedBy: "template",
+          });
+        } catch (fallbackError) {
+          console.error("Fallback Draft Error:", fallbackError);
+        }
+      }
+
       res.status(500).json({ message: "AI generation failed" });
     }
   });

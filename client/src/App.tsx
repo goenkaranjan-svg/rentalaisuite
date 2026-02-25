@@ -17,6 +17,7 @@ import Leases from "@/pages/Leases";
 import Messages from "@/pages/Messages";
 import Accounting from "@/pages/Accounting";
 import RenterPortal from "@/pages/RenterPortal";
+import ListingExports from "@/pages/ListingExports";
 
 // Wrapper for protected routes to handle layout
 function ProtectedLayout({ children }: { children: React.ReactNode }) {
@@ -94,6 +95,9 @@ function Router() {
       </Route>
       <Route path="/accounting">
         <ProtectedLayout><Accounting /></ProtectedLayout>
+      </Route>
+      <Route path="/listing-exports">
+        <ProtectedLayout><ListingExports /></ProtectedLayout>
       </Route>
       
       {/* Placeholders for other routes */}

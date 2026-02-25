@@ -22,6 +22,39 @@ export const errorSchemas = {
   }),
 };
 
+const listingFieldMappingSchema = z.object({
+  common: z
+    .object({
+      title: z.string().optional(),
+      availableDate: z.string().optional(),
+      leaseTermMonths: z.number().int().positive().optional(),
+      contactName: z.string().optional(),
+      contactEmail: z.string().optional(),
+      contactPhone: z.string().optional(),
+      amenities: z.array(z.string()).optional(),
+      petsAllowed: z.boolean().optional(),
+      furnished: z.boolean().optional(),
+      parkingIncluded: z.boolean().optional(),
+      laundry: z.string().optional(),
+    })
+    .optional(),
+  zillow: z
+    .object({
+      propertyType: z.string().optional(),
+      applicationUrl: z.string().optional(),
+      virtualTourUrl: z.string().optional(),
+    })
+    .optional(),
+  apartments: z
+    .object({
+      communityName: z.string().optional(),
+      unitNumber: z.string().optional(),
+      depositAmount: z.number().nonnegative().optional(),
+      utilitiesIncluded: z.array(z.string()).optional(),
+    })
+    .optional(),
+});
+
 export const api = {
   properties: {
     list: {
@@ -68,6 +101,132 @@ export const api = {
       responses: {
         204: z.void(),
         404: errorSchemas.notFound,
+      },
+    },
+  },
+  listingExports: {
+    availableProperties: {
+      method: "GET" as const,
+      path: "/api/listings/available" as const,
+      input: z
+        .object({
+          search: z.string().optional(),
+        })
+        .optional(),
+      responses: {
+        200: z.array(z.custom<typeof properties.$inferSelect>()),
+      },
+    },
+    zillow: {
+      method: "POST" as const,
+      path: "/api/listings/export/zillow" as const,
+      input: z.object({
+        propertyId: z.number(),
+        mapping: listingFieldMappingSchema.optional(),
+      }),
+      responses: {
+        200: z.object({
+          propertyId: z.number(),
+          platform: z.literal("zillow"),
+          payload: z.string(),
+          missingFields: z.array(z.string()),
+        }),
+      },
+    },
+    apartments: {
+      method: "POST" as const,
+      path: "/api/listings/export/apartments" as const,
+      input: z.object({
+        propertyId: z.number(),
+        mapping: listingFieldMappingSchema.optional(),
+      }),
+      responses: {
+        200: z.object({
+          propertyId: z.number(),
+          platform: z.literal("apartments.com"),
+          payload: z.string(),
+          csv: z.string(),
+          missingFields: z.array(z.string()),
+        }),
+      },
+    },
+    publishZillow: {
+      method: "POST" as const,
+      path: "/api/listings/publish/zillow" as const,
+      input: z.object({
+        propertyId: z.number(),
+        mapping: listingFieldMappingSchema.optional(),
+      }),
+      responses: {
+        200: z.object({
+          platform: z.literal("zillow"),
+          propertyId: z.number(),
+          success: z.boolean(),
+          statusCode: z.number(),
+          target: z.string(),
+          responseBody: z.string(),
+          publishedAt: z.string(),
+        }),
+      },
+    },
+    publishApartments: {
+      method: "POST" as const,
+      path: "/api/listings/publish/apartments" as const,
+      input: z.object({
+        propertyId: z.number(),
+        format: z.enum(["json", "csv"]).optional(),
+        mapping: listingFieldMappingSchema.optional(),
+      }),
+      responses: {
+        200: z.object({
+          platform: z.literal("apartments.com"),
+          propertyId: z.number(),
+          success: z.boolean(),
+          statusCode: z.number(),
+          target: z.string(),
+          responseBody: z.string(),
+          publishedAt: z.string(),
+          format: z.enum(["json", "csv"]),
+        }),
+      },
+    },
+    templatesList: {
+      method: "GET" as const,
+      path: "/api/listings/templates" as const,
+      responses: {
+        200: z.array(
+          z.object({
+            id: z.number(),
+            managerId: z.string(),
+            name: z.string(),
+            mapping: listingFieldMappingSchema,
+            createdAt: z.string().nullable(),
+          })
+        ),
+      },
+    },
+    templatesCreate: {
+      method: "POST" as const,
+      path: "/api/listings/templates" as const,
+      input: z.object({
+        name: z.string().min(1).max(120),
+        mapping: listingFieldMappingSchema,
+      }),
+      responses: {
+        201: z.object({
+          id: z.number(),
+          managerId: z.string(),
+          name: z.string(),
+          mapping: listingFieldMappingSchema,
+          createdAt: z.string().nullable(),
+        }),
+      },
+    },
+    templatesDelete: {
+      method: "DELETE" as const,
+      path: "/api/listings/templates/:id" as const,
+      responses: {
+        204: z.void(),
       },
     },
   },

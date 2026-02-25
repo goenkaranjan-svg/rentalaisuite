@@ -8,7 +8,8 @@ import {
   UserSearch, 
   MessageSquare, 
   LogOut,
-  Menu
+  Menu,
+  Send
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
@@ -29,6 +30,7 @@ function getNavigation(role?: string) {
     { name: "Maintenance", href: "/maintenance", icon: Wrench },
     { name: "Leases", href: "/leases", icon: FileText },
     { name: "Accounting", href: "/accounting", icon: DollarSign },
+    { name: "Syndication", href: "/listing-exports", icon: Send },
     { name: "Screening", href: "/screenings", icon: UserSearch },
     { name: "Messages", href: "/messages", icon: MessageSquare },
   ];

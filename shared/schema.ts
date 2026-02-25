@@ -75,6 +75,14 @@ export const screenings = pgTable("screenings", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const listingMappingTemplates = pgTable("listing_mapping_templates", {
+  id: serial("id").primaryKey(),
+  managerId: varchar("manager_id").notNull().references(() => users.id),
+  name: text("name").notNull(),
+  mapping: jsonb("mapping").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // === RELATIONS ===
 export const propertiesRelations = relations(properties, ({ one, many }) => ({
   leases: many(leases),
@@ -106,6 +114,7 @@ export const insertLeaseSchema = createInsertSchema(leases, {
 export const insertMaintenanceRequestSchema = createInsertSchema(maintenanceRequests).omit({ id: true, createdAt: true, aiAnalysis: true });
 export const insertPaymentSchema = createInsertSchema(payments).omit({ id: true, date: true });
 export const insertScreeningSchema = createInsertSchema(screenings).omit({ id: true, createdAt: true });
+export const insertListingMappingTemplateSchema = createInsertSchema(listingMappingTemplates).omit({ id: true, createdAt: true });
 
 // === TYPES ===
 export type Property = typeof properties.$inferSelect;
@@ -122,3 +131,6 @@ export type InsertPayment = z.infer<typeof insertPaymentSchema>;
 
 export type Screening = typeof screenings.$inferSelect;
 export type InsertScreening = z.infer<typeof insertScreeningSchema>;
+
+export type ListingMappingTemplate = typeof listingMappingTemplates.$inferSelect;
+export type InsertListingMappingTemplate = z.infer<typeof insertListingMappingTemplateSchema>;

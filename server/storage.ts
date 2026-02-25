@@ -1,10 +1,10 @@
 
 import { db } from "./db";
 import { 
-  users, properties, leases, maintenanceRequests, payments, screenings,
+  users, properties, leases, maintenanceRequests, payments, screenings, listingMappingTemplates,
   type User, type Property, type Lease, type MaintenanceRequest, 
-  type Payment, type Screening, type InsertProperty, type InsertLease, 
-  type InsertMaintenanceRequest, type InsertPayment, type InsertScreening
+  type Payment, type Screening, type ListingMappingTemplate, type InsertProperty, type InsertLease, 
+  type InsertMaintenanceRequest, type InsertPayment, type InsertScreening, type InsertListingMappingTemplate
 } from "@shared/schema";
 import { eq, desc } from "drizzle-orm";
 
@@ -45,6 +45,12 @@ export interface IStorage {
   // Screenings
   createScreening(screening: InsertScreening): Promise<Screening>;
   getScreeningsByTenant(tenantId: string): Promise<Screening[]>;
+
+  // Listing Mapping Templates
+  getListingMappingTemplatesByManager(managerId: string): Promise<ListingMappingTemplate[]>;
+  getListingMappingTemplate(id: number): Promise<ListingMappingTemplate | undefined>;
+  createListingMappingTemplate(template: InsertListingMappingTemplate): Promise<ListingMappingTemplate>;
+  deleteListingMappingTemplate(id: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -161,6 +167,29 @@ export class DatabaseStorage implements IStorage {
   }
   async getScreeningsByTenant(tenantId: string) {
     return await db.select().from(screenings).where(eq(screenings.tenantId, tenantId)).orderBy(desc(screenings.createdAt));
+  }
+
+  // Listing Mapping Templates
+  async getListingMappingTemplatesByManager(managerId: string) {
+    return await db
+      .select()
+      .from(listingMappingTemplates)
+      .where(eq(listingMappingTemplates.managerId, managerId))
+      .orderBy(desc(listingMappingTemplates.createdAt));
+  }
+  async getListingMappingTemplate(id: number) {
+    const [template] = await db
+      .select()
+      .from(listingMappingTemplates)
+      .where(eq(listingMappingTemplates.id, id));
+    return template;
+  }
+  async createListingMappingTemplate(insertTemplate: InsertListingMappingTemplate) {
+    const [template] = await db.insert(listingMappingTemplates).values(insertTemplate).returning();
+    return template;
+  }
+  async deleteListingMappingTemplate(id: number) {
+    await db.delete(listingMappingTemplates).where(eq(listingMappingTemplates.id, id));
   }
 }
 
