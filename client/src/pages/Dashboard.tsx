@@ -2,15 +2,8 @@ import { useProperties } from "@/hooks/use-properties";
 import { useMaintenanceRequests } from "@/hooks/use-maintenance";
 import { useLeases } from "@/hooks/use-leases";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Building2, Wrench, Wallet, Users, ArrowUpRight } from "lucide-react";
+import { Building2, Wrench, Wallet, Users } from "lucide-react";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip } from "recharts";
-
-const stats = [
-  { name: 'Total Properties', value: '12', icon: Building2, change: '+2', changeType: 'increase' },
-  { name: 'Active Leases', value: '10', icon: Users, change: '83%', changeType: 'neutral' },
-  { name: 'Open Requests', value: '5', icon: Wrench, change: '-3', changeType: 'decrease' },
-  { name: 'Monthly Revenue', value: '$24,500', icon: Wallet, change: '+12%', changeType: 'increase' },
-];
 
 const data = [
   { name: 'Jan', revenue: 18000 },
@@ -26,8 +19,21 @@ export default function Dashboard() {
   const { data: maintenance } = useMaintenanceRequests();
   const { data: leases } = useLeases();
 
-  // In a real app, these would be calculated from the data above
-  // Using static for layout demo since we might not have data yet
+  const totalProperties = properties?.length ?? 0;
+  const activeLeases = leases?.filter((lease) => lease.status === "active").length ?? 0;
+  const openRequests = maintenance?.filter((request) => request.status === "open").length ?? 0;
+  const monthlyRevenue = leases
+    ? leases
+        .filter((lease) => lease.status === "active")
+        .reduce((sum, lease) => sum + Number(lease.rentAmount), 0)
+    : 0;
+
+  const stats = [
+    { name: "Total Properties", value: totalProperties.toString(), icon: Building2, subtext: "Live data" },
+    { name: "Active Leases", value: activeLeases.toString(), icon: Users, subtext: "Live data" },
+    { name: "Open Requests", value: openRequests.toString(), icon: Wrench, subtext: "Live data" },
+    { name: "Monthly Revenue", value: `$${monthlyRevenue.toLocaleString()}`, icon: Wallet, subtext: "From active leases" },
+  ];
 
   return (
     <div className="space-y-8 animate-in">
@@ -51,10 +57,7 @@ export default function Dashboard() {
             <CardContent>
               <div className="text-2xl font-bold font-display text-slate-900">{stat.value}</div>
               <p className="text-xs text-slate-500 mt-1 flex items-center">
-                <span className={stat.changeType === 'increase' ? 'text-green-600' : 'text-slate-600'}>
-                  {stat.change}
-                </span>
-                <span className="ml-1">from last month</span>
+                {stat.subtext}
               </p>
             </CardContent>
           </Card>

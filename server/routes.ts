@@ -4,7 +4,7 @@ import type { Server } from "http";
 import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { z } from "zod";
-import { setupAuth, registerAuthRoutes } from "./integrations/auth";
+import { setupAuth, registerAuthRoutes, isAuthenticated } from "./integrations/auth";
 import { registerChatRoutes } from "./integrations/chat";
 import { registerImageRoutes } from "./integrations/image";
 import { seedDatabase } from "./seed";
@@ -80,8 +80,11 @@ export async function registerRoutes(
   });
 
   // === Leases ===
-  app.get(api.leases.list.path, async (req: any, res) => {
+  app.get(api.leases.list.path, isAuthenticated, async (req: any, res) => {
     const user = req.user as any;
+    if (!user?.claims?.sub) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
     const userId = user.claims.sub;
     const dbUser = await storage.getUser(userId);
 
