@@ -1,17 +1,34 @@
 import { users, type User, type UpsertUser } from "@shared/models/auth";
 import { db } from "../../db";
-import { eq } from "drizzle-orm";
+import { and, eq, gt } from "drizzle-orm";
 
 // Interface for auth storage operations
 // (IMPORTANT) These user operations are mandatory for OIDC authentication.
 export interface IAuthStorage {
   getUser(id: string): Promise<User | undefined>;
+  getUserByEmail(email: string): Promise<User | undefined>;
   upsertUser(user: UpsertUser): Promise<User>;
+  createLocalUser(input: {
+    email: string;
+    passwordHash: string;
+    role: "manager" | "tenant";
+    firstName?: string;
+    lastName?: string;
+  }): Promise<User>;
+  updateUserRole(id: string, role: "manager" | "tenant"): Promise<User | undefined>;
+  setResetToken(userId: string, tokenHash: string, expiresAt: Date): Promise<void>;
+  findUserByResetToken(tokenHash: string): Promise<User | undefined>;
+  updatePassword(userId: string, passwordHash: string): Promise<void>;
 }
 
 class AuthStorage implements IAuthStorage {
   async getUser(id: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user;
+  }
+
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.email, email));
     return user;
   }
 
@@ -36,6 +53,68 @@ class AuthStorage implements IAuthStorage {
       })
       .returning();
     return user;
+  }
+
+  async createLocalUser(input: {
+    email: string;
+    passwordHash: string;
+    role: "manager" | "tenant";
+    firstName?: string;
+    lastName?: string;
+  }): Promise<User> {
+    const [user] = await db
+      .insert(users)
+      .values({
+        email: input.email,
+        passwordHash: input.passwordHash,
+        authProvider: "local",
+        role: input.role,
+        firstName: input.firstName,
+        lastName: input.lastName,
+      })
+      .returning();
+    return user;
+  }
+
+  async updateUserRole(id: string, role: "manager" | "tenant"): Promise<User | undefined> {
+    const [user] = await db
+      .update(users)
+      .set({ role, updatedAt: new Date() })
+      .where(eq(users.id, id))
+      .returning();
+    return user;
+  }
+
+  async setResetToken(userId: string, tokenHash: string, expiresAt: Date): Promise<void> {
+    await db
+      .update(users)
+      .set({
+        resetTokenHash: tokenHash,
+        resetTokenExpiresAt: expiresAt,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId));
+  }
+
+  async findUserByResetToken(tokenHash: string): Promise<User | undefined> {
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(and(eq(users.resetTokenHash, tokenHash), gt(users.resetTokenExpiresAt, new Date())));
+    return user;
+  }
+
+  async updatePassword(userId: string, passwordHash: string): Promise<void> {
+    await db
+      .update(users)
+      .set({
+        passwordHash,
+        authProvider: "local",
+        resetTokenHash: null,
+        resetTokenExpiresAt: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId));
   }
 }
 

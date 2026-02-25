@@ -19,6 +19,10 @@ export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   email: varchar("email").unique(),
   role: varchar("role").notNull().default("tenant"), // "manager" or "tenant"
+  authProvider: varchar("auth_provider").notNull().default("oidc"), // "oidc" | "local"
+  passwordHash: varchar("password_hash"),
+  resetTokenHash: varchar("reset_token_hash"),
+  resetTokenExpiresAt: timestamp("reset_token_expires_at"),
   firstName: varchar("first_name"),
   lastName: varchar("last_name"),
   profileImageUrl: varchar("profile_image_url"),

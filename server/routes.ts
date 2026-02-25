@@ -161,9 +161,15 @@ export async function registerRoutes(
     res.json(requests);
   });
 
-  app.post(api.maintenance.create.path, async (req, res) => {
+  app.post(api.maintenance.create.path, isAuthenticated, async (req: any, res) => {
     try {
+      const userId = req.user?.claims?.sub;
+      if (!userId) return res.status(401).json({ message: "Unauthorized" });
+      const dbUser = await storage.getUser(userId);
       const input = api.maintenance.create.input.parse(req.body);
+      if (dbUser?.role !== "manager" && input.tenantId !== userId) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
       const request = await storage.createMaintenanceRequest(input);
       res.status(201).json(request);
     } catch (err) {
@@ -290,9 +296,19 @@ export async function registerRoutes(
     });
   });
 
-  app.post(api.payments.create.path, isAuthenticated, async (req, res) => {
+  app.post(api.payments.create.path, isAuthenticated, async (req: any, res) => {
      try {
+      const userId = req.user?.claims?.sub;
+      if (!userId) return res.status(401).json({ message: "Unauthorized" });
+      const dbUser = await storage.getUser(userId);
       const input = api.payments.create.input.parse(req.body);
+      if (dbUser?.role !== "manager") {
+        const tenantLeases = await storage.getLeasesByTenant(userId);
+        const allowedLeaseIds = new Set(tenantLeases.map((l) => l.id));
+        if (!allowedLeaseIds.has(input.leaseId)) {
+          return res.status(403).json({ message: "Forbidden" });
+        }
+      }
       const payment = await storage.createPayment(input);
       res.status(201).json(payment);
     } catch (err) {

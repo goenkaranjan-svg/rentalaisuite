@@ -16,20 +16,29 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
 
-const navigation = [
-  { name: "Dashboard", href: "/", icon: LayoutDashboard },
-  { name: "Properties", href: "/properties", icon: Building2 },
-  { name: "Maintenance", href: "/maintenance", icon: Wrench },
-  { name: "Leases", href: "/leases", icon: FileText },
-  { name: "Accounting", href: "/accounting", icon: DollarSign },
-  { name: "Screening", href: "/screenings", icon: UserSearch },
-  { name: "Messages", href: "/messages", icon: MessageSquare },
-];
+function getNavigation(role?: string) {
+  if (role === "tenant") {
+    return [
+      { name: "Renter Portal", href: "/renter", icon: LayoutDashboard },
+      { name: "Messages", href: "/messages", icon: MessageSquare },
+    ];
+  }
+  return [
+    { name: "Dashboard", href: "/", icon: LayoutDashboard },
+    { name: "Properties", href: "/properties", icon: Building2 },
+    { name: "Maintenance", href: "/maintenance", icon: Wrench },
+    { name: "Leases", href: "/leases", icon: FileText },
+    { name: "Accounting", href: "/accounting", icon: DollarSign },
+    { name: "Screening", href: "/screenings", icon: UserSearch },
+    { name: "Messages", href: "/messages", icon: MessageSquare },
+  ];
+}
 
 export function Sidebar() {
   const [location] = useLocation();
   const { logout, user } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
+  const navigation = getNavigation(user?.role);
 
   const NavContent = () => (
     <div className="flex flex-col h-full bg-slate-900 text-white">
@@ -71,13 +80,13 @@ export function Sidebar() {
               <img src={user.profileImageUrl} alt="Profile" className="w-full h-full object-cover" />
             ) : (
               <span className="text-lg font-bold text-slate-300">
-                {user?.firstName?.[0] || user?.username?.[0] || "U"}
+                {user?.firstName?.[0] || user?.email?.[0]?.toUpperCase() || "U"}
               </span>
             )}
           </div>
           <div className="flex-1 overflow-hidden">
-            <p className="text-sm font-medium truncate">{user?.firstName || user?.username}</p>
-            <p className="text-xs text-slate-500 truncate">Property Manager</p>
+            <p className="text-sm font-medium truncate">{user?.firstName || user?.email}</p>
+            <p className="text-xs text-slate-500 truncate">{user?.role === "tenant" ? "Renter" : "Property Manager"}</p>
           </div>
         </div>
         <Button 

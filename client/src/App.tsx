@@ -16,6 +16,7 @@ import Maintenance from "@/pages/Maintenance";
 import Leases from "@/pages/Leases";
 import Messages from "@/pages/Messages";
 import Accounting from "@/pages/Accounting";
+import RenterPortal from "@/pages/RenterPortal";
 
 // Wrapper for protected routes to handle layout
 function ProtectedLayout({ children }: { children: React.ReactNode }) {
@@ -32,6 +33,23 @@ function ProtectedLayout({ children }: { children: React.ReactNode }) {
 
   if (!user) {
     setLocation("/login");
+    return null;
+  }
+
+  if (user.role === "tenant") {
+    const allowedTenantRoutes = ["/renter", "/messages", "/login"];
+    const tenantDetailRoutes = ["/properties/"];
+    const isAllowed =
+      allowedTenantRoutes.includes(location) ||
+      tenantDetailRoutes.some((prefix) => location.startsWith(prefix));
+    if (!isAllowed) {
+      setLocation("/renter");
+      return null;
+    }
+  }
+
+  if (user.role === "manager" && location === "/renter") {
+    setLocation("/");
     return null;
   }
 
@@ -55,6 +73,9 @@ function Router() {
       {/* Protected Routes */}
       <Route path="/">
         <ProtectedLayout><Dashboard /></ProtectedLayout>
+      </Route>
+      <Route path="/renter">
+        <ProtectedLayout><RenterPortal /></ProtectedLayout>
       </Route>
       <Route path="/properties">
         <ProtectedLayout><Properties /></ProtectedLayout>

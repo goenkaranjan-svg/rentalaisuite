@@ -113,11 +113,19 @@ export async function setupAuth(app: Express) {
     app.get("/api/login", (_req, res) => {
       res.redirect("/");
     });
+    app.get("/api/login/google", (_req, res) => {
+      res.redirect("/");
+    });
+    app.get("/api/login/facebook", (_req, res) => {
+      res.redirect("/");
+    });
     app.get("/api/callback", (_req, res) => {
       res.redirect("/");
     });
-    app.get("/api/logout", (_req, res) => {
-      res.redirect("/");
+    app.get("/api/logout", (req: any, res) => {
+      req.logout?.(() => {
+        req.session?.destroy(() => res.redirect("/"));
+      });
     });
     return;
   }
@@ -132,8 +140,16 @@ export async function setupAuth(app: Express) {
     app.get("/api/callback", (_req, res) => {
       res.redirect("/?error=oidc-not-configured");
     });
-    app.get("/api/logout", (_req, res) => {
-      res.redirect("/");
+    app.get("/api/login/google", (_req, res) => {
+      res.status(503).json({ message: "OIDC not configured." });
+    });
+    app.get("/api/login/facebook", (_req, res) => {
+      res.status(503).json({ message: "OIDC not configured." });
+    });
+    app.get("/api/logout", (req: any, res) => {
+      req.logout?.(() => {
+        req.session?.destroy(() => res.redirect("/"));
+      });
     });
     return;
   }
@@ -176,19 +192,52 @@ export async function setupAuth(app: Express) {
   passport.serializeUser((user: Express.User, cb) => cb(null, user));
   passport.deserializeUser((user: Express.User, cb) => cb(null, user));
 
-  app.get("/api/login", (req, res, next) => {
+  const startOidcLogin = (req: any, res: any, next: any, provider?: "google" | "facebook") => {
+    const desiredRole = typeof req.query.role === "string" ? req.query.role : undefined;
+    if (desiredRole === "manager" || desiredRole === "tenant") {
+      req.session.desiredRole = desiredRole;
+    }
     ensureStrategy(req);
+    const providerParams =
+      provider === "google"
+        ? { connection: "google-oauth2" }
+        : provider === "facebook"
+          ? { connection: "facebook" }
+          : {};
     passport.authenticate(`oidcauth:${req.hostname}`, {
       prompt: "login consent",
       scope: ["openid", "email", "profile", "offline_access"],
+      ...providerParams,
     })(req, res, next);
+  };
+
+  app.get("/api/login", (req: any, res, next) => {
+    startOidcLogin(req, res, next);
   });
 
-  app.get("/api/callback", (req, res, next) => {
+  app.get("/api/login/google", (req: any, res, next) => {
+    startOidcLogin(req, res, next, "google");
+  });
+
+  app.get("/api/login/facebook", (req: any, res, next) => {
+    startOidcLogin(req, res, next, "facebook");
+  });
+
+  app.get("/api/callback", (req: any, res, next) => {
     ensureStrategy(req);
-    passport.authenticate(`oidcauth:${req.hostname}`, {
-      successReturnToOrRedirect: "/",
-      failureRedirect: "/api/login",
+    passport.authenticate(`oidcauth:${req.hostname}`, async (err: unknown, user: any) => {
+      if (err || !user) {
+        return res.redirect("/api/login");
+      }
+      req.logIn(user, async (loginErr: unknown) => {
+        if (loginErr) return next(loginErr);
+        const desiredRole = req.session?.desiredRole;
+        if ((desiredRole === "manager" || desiredRole === "tenant") && req.user?.claims?.sub) {
+          await authStorage.updateUserRole(req.user.claims.sub, desiredRole);
+          delete req.session.desiredRole;
+        }
+        return res.redirect("/");
+      });
     })(req, res, next);
   });
 
