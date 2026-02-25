@@ -153,6 +153,28 @@ export const api = {
       },
     },
   },
+  accounting: {
+    summary: {
+      method: 'GET' as const,
+      path: '/api/accounting/summary' as const,
+      responses: {
+        200: z.object({
+          totalCollected: z.number(),
+          pending: z.number(),
+          overdue: z.number(),
+          outstanding: z.number(),
+          paymentCount: z.number(),
+          chart: z.array(
+            z.object({
+              label: z.string(),
+              collected: z.number(),
+              outstanding: z.number(),
+            })
+          ),
+        }),
+      },
+    },
+  },
   screenings: {
     create: {
       method: 'POST' as const,

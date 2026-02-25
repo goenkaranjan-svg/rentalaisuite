@@ -213,8 +213,11 @@ export async function registerRoutes(
   });
 
   // === Accounting / Payments ===
-  app.get(api.payments.list.path, async (req: any, res) => {
+  app.get(api.payments.list.path, isAuthenticated, async (req: any, res) => {
     const user = req.user as any;
+    if (!user?.claims?.sub) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
     const dbUser = await storage.getUser(user.claims.sub);
     
     let paymentList;
@@ -230,19 +233,64 @@ export async function registerRoutes(
     res.json(paymentList);
   });
 
-  app.get("/api/accounting/summary", async (req: any, res) => {
-    const allPayments = await storage.getPayments();
-    const totalCollected = allPayments
+  app.get("/api/accounting/summary", isAuthenticated, async (req: any, res) => {
+    const user = req.user as any;
+    if (!user?.claims?.sub) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+    const userId = user.claims.sub;
+    const dbUser = await storage.getUser(userId);
+
+    let scopedPayments = await storage.getPayments();
+    if (dbUser?.role !== "manager") {
+      const tenantLeases = await storage.getLeasesByTenant(userId);
+      const leaseIds = tenantLeases.map((l) => l.id);
+      scopedPayments = scopedPayments.filter((p) => leaseIds.includes(p.leaseId));
+    }
+
+    const totalCollected = scopedPayments
       .filter(p => p.status === "paid")
       .reduce((sum, p) => sum + Number(p.amount), 0);
-    const pending = allPayments
+    const pending = scopedPayments
       .filter(p => p.status === "pending")
       .reduce((sum, p) => sum + Number(p.amount), 0);
-    
-    res.json({ totalCollected, pending });
+    const overdue = scopedPayments
+      .filter(p => p.status === "overdue")
+      .reduce((sum, p) => sum + Number(p.amount), 0);
+
+    const now = new Date();
+    const sixMonthBuckets: { label: string; collected: number; outstanding: number }[] = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const year = d.getFullYear();
+      const month = d.getMonth();
+      const label = d.toLocaleDateString("en-US", { month: "short" });
+      const monthPayments = scopedPayments.filter((p) => {
+        const pd = new Date(p.date ?? new Date());
+        return pd.getFullYear() === year && pd.getMonth() === month;
+      });
+      sixMonthBuckets.push({
+        label,
+        collected: monthPayments
+          .filter((p) => p.status === "paid")
+          .reduce((sum, p) => sum + Number(p.amount), 0),
+        outstanding: monthPayments
+          .filter((p) => p.status === "pending" || p.status === "overdue")
+          .reduce((sum, p) => sum + Number(p.amount), 0),
+      });
+    }
+
+    res.json({
+      totalCollected,
+      pending,
+      overdue,
+      outstanding: pending + overdue,
+      paymentCount: scopedPayments.length,
+      chart: sixMonthBuckets,
+    });
   });
 
-  app.post(api.payments.create.path, async (req, res) => {
+  app.post(api.payments.create.path, isAuthenticated, async (req, res) => {
      try {
       const input = api.payments.create.input.parse(req.body);
       const payment = await storage.createPayment(input);
