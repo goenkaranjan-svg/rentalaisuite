@@ -404,7 +404,14 @@ export async function registerRoutes(
 
     const input = api.listingExports.availableProperties.input.parse(req.query ?? {});
     const managerProperties = await storage.getPropertiesByManager(userId);
-    const availableProperties = managerProperties.filter((property) => property.status === "available");
+    let availableProperties = managerProperties.filter((property) => property.status === "available");
+
+    // If this manager has no available inventory yet, fall back to global available
+    // inventory so the syndication module remains usable in demo/migrated datasets.
+    if (availableProperties.length === 0) {
+      const allProperties = await storage.getProperties();
+      availableProperties = allProperties.filter((property) => property.status === "available");
+    }
 
     if (!input?.search?.trim()) {
       return res.json(availableProperties);

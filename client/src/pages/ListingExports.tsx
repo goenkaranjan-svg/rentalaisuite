@@ -167,7 +167,9 @@ export default function ListingExports() {
           <CardContent className="space-y-3 max-h-[560px] overflow-y-auto">
             {isLoading && <p className="text-sm text-slate-500">Loading properties...</p>}
             {!isLoading && availableProperties?.length === 0 && (
-              <p className="text-sm text-slate-500">No available properties found.</p>
+              <p className="text-sm text-slate-500">
+                No available properties found. Clear search, or set a property status to <span className="font-medium">available</span> on the Properties page.
+              </p>
             )}
             {availableProperties?.map((property) => {
               const isSelected = selectedPropertyId === property.id;
