@@ -9,6 +9,7 @@ import { registerChatRoutes } from "./integrations/chat";
 import { registerImageRoutes } from "./integrations/image";
 import { seedDatabase } from "./seed";
 import OpenAI from "openai";
+import { scrapePublicStrListings } from "./services/str-market";
 
 // Initialize OpenAI for backend logic (Lease gen, Maintenance analysis)
 // Use placeholder when no key is set so app can start; AI routes will check and return friendly error
@@ -553,6 +554,48 @@ export async function registerRoutes(
       propertyId: property.id,
       format,
       ...result,
+    });
+  });
+
+  // === STR Market (Investor) ===
+  app.get(api.strMarket.list.path, isAuthenticated, async (req: any, res) => {
+    const userId = req.user?.claims?.sub;
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
+    const dbUser = await storage.getUser(userId);
+    if (dbUser?.role !== "investor" && dbUser?.role !== "manager") {
+      return res.status(403).json({ message: "Only investors and managers can view STR market data" });
+    }
+
+    let listings = await storage.getStrMarketListings();
+
+    // Auto-bootstrap initial market data for first investor session.
+    if (listings.length === 0) {
+      const scraped = await scrapePublicStrListings();
+      if (scraped.length > 0) {
+        listings = await storage.replaceStrMarketListings(scraped);
+      }
+    }
+
+    res.json(listings);
+  });
+
+  app.post(api.strMarket.sync.path, isAuthenticated, async (req: any, res) => {
+    const userId = req.user?.claims?.sub;
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
+    const dbUser = await storage.getUser(userId);
+    if (dbUser?.role !== "investor" && dbUser?.role !== "manager") {
+      return res.status(403).json({ message: "Only investors and managers can sync STR data" });
+    }
+
+    const scraped = await scrapePublicStrListings();
+    const stored = await storage.replaceStrMarketListings(scraped);
+    res.json({
+      scrapedCount: scraped.length,
+      storedCount: stored.length,
+      source: "insideairbnb",
+      syncedAt: new Date().toISOString(),
     });
   });
 

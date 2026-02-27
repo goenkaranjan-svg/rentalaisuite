@@ -193,7 +193,7 @@ export async function setupAuth(app: Express) {
 
   const startOidcLogin = (req: any, res: any, next: any, provider?: "google" | "facebook") => {
     const desiredRole = typeof req.query.role === "string" ? req.query.role : undefined;
-    if (desiredRole === "manager" || desiredRole === "tenant") {
+    if (desiredRole === "manager" || desiredRole === "tenant" || desiredRole === "investor") {
       req.session.desiredRole = desiredRole;
     }
     ensureStrategy(req);
@@ -231,7 +231,10 @@ export async function setupAuth(app: Express) {
       req.logIn(user, async (loginErr: unknown) => {
         if (loginErr) return next(loginErr);
         const desiredRole = req.session?.desiredRole;
-        if ((desiredRole === "manager" || desiredRole === "tenant") && req.user?.claims?.sub) {
+        if (
+          (desiredRole === "manager" || desiredRole === "tenant" || desiredRole === "investor") &&
+          req.user?.claims?.sub
+        ) {
           await authStorage.updateUserRole(req.user.claims.sub, desiredRole);
           delete req.session.desiredRole;
         }

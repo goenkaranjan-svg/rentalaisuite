@@ -1,10 +1,11 @@
 
 import { db } from "./db";
 import { 
-  users, properties, leases, maintenanceRequests, payments, screenings, listingMappingTemplates,
+  users, properties, leases, maintenanceRequests, payments, screenings, listingMappingTemplates, strMarketListings,
   type User, type Property, type Lease, type MaintenanceRequest, 
   type Payment, type Screening, type ListingMappingTemplate, type InsertProperty, type InsertLease, 
-  type InsertMaintenanceRequest, type InsertPayment, type InsertScreening, type InsertListingMappingTemplate
+  type InsertMaintenanceRequest, type InsertPayment, type InsertScreening, type InsertListingMappingTemplate,
+  type StrMarketListing, type InsertStrMarketListing
 } from "@shared/schema";
 import { eq, desc } from "drizzle-orm";
 
@@ -51,6 +52,10 @@ export interface IStorage {
   getListingMappingTemplate(id: number): Promise<ListingMappingTemplate | undefined>;
   createListingMappingTemplate(template: InsertListingMappingTemplate): Promise<ListingMappingTemplate>;
   deleteListingMappingTemplate(id: number): Promise<void>;
+
+  // STR Market Listings
+  getStrMarketListings(): Promise<StrMarketListing[]>;
+  replaceStrMarketListings(listings: InsertStrMarketListing[]): Promise<StrMarketListing[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -190,6 +195,18 @@ export class DatabaseStorage implements IStorage {
   }
   async deleteListingMappingTemplate(id: number) {
     await db.delete(listingMappingTemplates).where(eq(listingMappingTemplates.id, id));
+  }
+
+  // STR Market Listings
+  async getStrMarketListings() {
+    return await db.select().from(strMarketListings).orderBy(desc(strMarketListings.expectedAnnualReturn));
+  }
+  async replaceStrMarketListings(listings: InsertStrMarketListing[]) {
+    if (listings.length === 0) return [];
+    return await db.transaction(async (tx) => {
+      await tx.delete(strMarketListings);
+      return await tx.insert(strMarketListings).values(listings).returning();
+    });
   }
 }
 

@@ -5,7 +5,8 @@ import {
   insertLeaseSchema, leases,
   insertMaintenanceRequestSchema, maintenanceRequests,
   insertPaymentSchema, payments,
-  insertScreeningSchema, screenings
+  insertScreeningSchema, screenings,
+  strMarketListings
 } from './schema';
 
 // Shared error schemas
@@ -227,6 +228,27 @@ export const api = {
       path: "/api/listings/templates/:id" as const,
       responses: {
         204: z.void(),
+      },
+    },
+  },
+  strMarket: {
+    list: {
+      method: "GET" as const,
+      path: "/api/str-market/listings" as const,
+      responses: {
+        200: z.array(z.custom<typeof strMarketListings.$inferSelect>()),
+      },
+    },
+    sync: {
+      method: "POST" as const,
+      path: "/api/str-market/sync" as const,
+      responses: {
+        200: z.object({
+          scrapedCount: z.number(),
+          storedCount: z.number(),
+          source: z.string(),
+          syncedAt: z.string(),
+        }),
       },
     },
   },

@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 
-type UserRole = "manager" | "tenant";
+type UserRole = "manager" | "tenant" | "investor";
 type AuthMode = "signin" | "signup" | "forgot";
 
 export default function Login() {
@@ -43,6 +43,7 @@ export default function Login() {
   useEffect(() => {
     if (!user) return;
     if (user.role === "tenant") setLocation("/renter");
+    else if (user.role === "investor") setLocation("/investor");
     else setLocation("/");
   }, [user, setLocation]);
 
@@ -109,12 +110,15 @@ export default function Login() {
         <Card className="w-full max-w-md border-slate-200">
           <CardHeader className="space-y-4">
             <CardTitle className="text-2xl">Account Access</CardTitle>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               <Button variant={role === "manager" ? "default" : "outline"} onClick={() => setRole("manager")}>
                 Property Manager
               </Button>
               <Button variant={role === "tenant" ? "default" : "outline"} onClick={() => setRole("tenant")}>
                 Renter
+              </Button>
+              <Button variant={role === "investor" ? "default" : "outline"} onClick={() => setRole("investor")}>
+                Investor
               </Button>
             </div>
             <div className="grid grid-cols-3 gap-2">
@@ -141,7 +145,11 @@ export default function Login() {
                   <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
                 </div>
                 <Button className="w-full" onClick={handleSignIn} disabled={isLoggingIn}>
-                  {isLoggingIn ? "Signing in..." : `Sign In as ${role === "manager" ? "Manager" : "Renter"}`}
+                  {isLoggingIn
+                    ? "Signing in..."
+                    : `Sign In as ${
+                        role === "manager" ? "Manager" : role === "investor" ? "Investor" : "Renter"
+                      }`}
                 </Button>
                 <div className="grid grid-cols-2 gap-2">
                   <Button variant="outline" onClick={() => socialLogin("google")}>
@@ -175,7 +183,11 @@ export default function Login() {
                   <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
                 </div>
                 <Button className="w-full" onClick={handleSignUp} disabled={isSigningUp}>
-                  {isSigningUp ? "Creating account..." : `Create ${role === "manager" ? "Manager" : "Renter"} Account`}
+                  {isSigningUp
+                    ? "Creating account..."
+                    : `Create ${
+                        role === "manager" ? "Manager" : role === "investor" ? "Investor" : "Renter"
+                      } Account`}
                 </Button>
               </>
             )}

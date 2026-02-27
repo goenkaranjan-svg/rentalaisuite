@@ -7,7 +7,7 @@ import { generateResetToken, hashPassword, hashToken, verifyPassword } from "./c
 const signupSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8),
-  role: z.enum(["manager", "tenant"]),
+  role: z.enum(["manager", "tenant", "investor"]),
   firstName: z.string().optional(),
   lastName: z.string().optional(),
 });
@@ -15,7 +15,7 @@ const signupSchema = z.object({
 const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(1),
-  role: z.enum(["manager", "tenant"]),
+  role: z.enum(["manager", "tenant", "investor"]),
 });
 
 const forgotSchema = z.object({

@@ -21,7 +21,7 @@ async function logout(): Promise<void> {
   window.location.href = "/api/logout";
 }
 
-type UserRole = "manager" | "tenant";
+type UserRole = "manager" | "tenant" | "investor";
 
 type LoginInput = {
   email: string;

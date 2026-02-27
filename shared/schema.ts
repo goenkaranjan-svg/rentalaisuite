@@ -1,5 +1,5 @@
 
-import { pgTable, text, serial, integer, boolean, timestamp, jsonb, decimal, varchar } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, jsonb, decimal, varchar, uniqueIndex } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -83,6 +83,43 @@ export const listingMappingTemplates = pgTable("listing_mapping_templates", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const strMarketListings = pgTable(
+  "str_market_listings",
+  {
+    id: serial("id").primaryKey(),
+    source: text("source").notNull().default("insideairbnb"),
+    sourceCountry: text("source_country").notNull().default("united-states"),
+    sourceRegion: text("source_region"),
+    sourceCity: text("source_city").notNull(),
+    sourceSnapshotDate: text("source_snapshot_date"),
+    sourceUrl: text("source_url").notNull(),
+    externalListingId: text("external_listing_id").notNull(),
+    title: text("title"),
+    roomType: text("room_type"),
+    neighbourhood: text("neighbourhood"),
+    latitude: decimal("latitude", { precision: 9, scale: 6 }),
+    longitude: decimal("longitude", { precision: 9, scale: 6 }),
+    accommodates: integer("accommodates"),
+    bedrooms: decimal("bedrooms", { precision: 4, scale: 1 }),
+    bathrooms: decimal("bathrooms", { precision: 4, scale: 1 }),
+    nightlyRate: decimal("nightly_rate", { precision: 10, scale: 2 }).notNull(),
+    availability365: integer("availability_365"),
+    expectedOccupancyRate: decimal("expected_occupancy_rate", { precision: 5, scale: 2 }).notNull(),
+    expectedMonthlyReturn: decimal("expected_monthly_return", { precision: 12, scale: 2 }).notNull(),
+    expectedAnnualReturn: decimal("expected_annual_return", { precision: 12, scale: 2 }).notNull(),
+    currency: text("currency").notNull().default("USD"),
+    lastScrapedAt: timestamp("last_scraped_at").defaultNow().notNull(),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("str_market_source_city_listing_idx").on(
+      table.source,
+      table.sourceCity,
+      table.externalListingId
+    ),
+  ]
+);
+
 // === RELATIONS ===
 export const propertiesRelations = relations(properties, ({ one, many }) => ({
   leases: many(leases),
@@ -115,6 +152,7 @@ export const insertMaintenanceRequestSchema = createInsertSchema(maintenanceRequ
 export const insertPaymentSchema = createInsertSchema(payments).omit({ id: true, date: true });
 export const insertScreeningSchema = createInsertSchema(screenings).omit({ id: true, createdAt: true });
 export const insertListingMappingTemplateSchema = createInsertSchema(listingMappingTemplates).omit({ id: true, createdAt: true });
+export const insertStrMarketListingSchema = createInsertSchema(strMarketListings).omit({ id: true, createdAt: true });
 
 // === TYPES ===
 export type Property = typeof properties.$inferSelect;
@@ -134,3 +172,6 @@ export type InsertScreening = z.infer<typeof insertScreeningSchema>;
 
 export type ListingMappingTemplate = typeof listingMappingTemplates.$inferSelect;
 export type InsertListingMappingTemplate = z.infer<typeof insertListingMappingTemplateSchema>;
+
+export type StrMarketListing = typeof strMarketListings.$inferSelect;
+export type InsertStrMarketListing = z.infer<typeof insertStrMarketListingSchema>;

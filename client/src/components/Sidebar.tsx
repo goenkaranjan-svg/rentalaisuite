@@ -9,7 +9,8 @@ import {
   MessageSquare, 
   LogOut,
   Menu,
-  Send
+  Send,
+  TrendingUp
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
@@ -21,6 +22,12 @@ function getNavigation(role?: string) {
   if (role === "tenant") {
     return [
       { name: "Renter Portal", href: "/renter", icon: LayoutDashboard },
+      { name: "Messages", href: "/messages", icon: MessageSquare },
+    ];
+  }
+  if (role === "investor") {
+    return [
+      { name: "STR Market", href: "/investor", icon: TrendingUp },
       { name: "Messages", href: "/messages", icon: MessageSquare },
     ];
   }
@@ -88,7 +95,9 @@ export function Sidebar() {
           </div>
           <div className="flex-1 overflow-hidden">
             <p className="text-sm font-medium truncate">{user?.firstName || user?.email}</p>
-            <p className="text-xs text-slate-500 truncate">{user?.role === "tenant" ? "Renter" : "Property Manager"}</p>
+            <p className="text-xs text-slate-500 truncate">
+              {user?.role === "tenant" ? "Renter" : user?.role === "investor" ? "Investor" : "Property Manager"}
+            </p>
           </div>
         </div>
         <Button 

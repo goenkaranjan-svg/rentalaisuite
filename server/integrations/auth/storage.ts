@@ -12,15 +12,15 @@ export interface IAuthStorage {
   createLocalUser(input: {
     email: string;
     passwordHash: string;
-    role: "manager" | "tenant";
+    role: "manager" | "tenant" | "investor";
     firstName?: string;
     lastName?: string;
   }): Promise<User>;
-  updateUserRole(id: string, role: "manager" | "tenant"): Promise<User | undefined>;
+  updateUserRole(id: string, role: "manager" | "tenant" | "investor"): Promise<User | undefined>;
   linkLocalCredentials(input: {
     userId: string;
     passwordHash: string;
-    role: "manager" | "tenant";
+    role: "manager" | "tenant" | "investor";
     firstName?: string;
     lastName?: string;
   }): Promise<User | undefined>;
@@ -66,7 +66,7 @@ class AuthStorage implements IAuthStorage {
   async createLocalUser(input: {
     email: string;
     passwordHash: string;
-    role: "manager" | "tenant";
+    role: "manager" | "tenant" | "investor";
     firstName?: string;
     lastName?: string;
   }): Promise<User> {
@@ -85,7 +85,7 @@ class AuthStorage implements IAuthStorage {
     return user;
   }
 
-  async updateUserRole(id: string, role: "manager" | "tenant"): Promise<User | undefined> {
+  async updateUserRole(id: string, role: "manager" | "tenant" | "investor"): Promise<User | undefined> {
     const [user] = await db
       .update(users)
       .set({ role, updatedAt: new Date() })
@@ -97,7 +97,7 @@ class AuthStorage implements IAuthStorage {
   async linkLocalCredentials(input: {
     userId: string;
     passwordHash: string;
-    role: "manager" | "tenant";
+    role: "manager" | "tenant" | "investor";
     firstName?: string;
     lastName?: string;
   }): Promise<User | undefined> {
