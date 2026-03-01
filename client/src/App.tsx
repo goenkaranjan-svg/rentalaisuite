@@ -19,6 +19,7 @@ import Accounting from "@/pages/Accounting";
 import RenterPortal from "@/pages/RenterPortal";
 import ListingExports from "@/pages/ListingExports";
 import InvestorPortal from "@/pages/InvestorPortal";
+import InvestorDealDetails from "@/pages/InvestorDealDetails";
 
 // Wrapper for protected routes to handle layout
 function ProtectedLayout({ children }: { children: React.ReactNode }) {
@@ -51,7 +52,11 @@ function ProtectedLayout({ children }: { children: React.ReactNode }) {
   }
   if (user.role === "investor") {
     const allowedInvestorRoutes = ["/investor", "/messages", "/login"];
-    if (!allowedInvestorRoutes.includes(location)) {
+    const investorDetailRoutes = ["/investor/deals/"];
+    const isAllowedInvestorRoute =
+      allowedInvestorRoutes.includes(location) ||
+      investorDetailRoutes.some((prefix) => location.startsWith(prefix));
+    if (!isAllowedInvestorRoute) {
       setLocation("/investor");
       return null;
     }
@@ -92,6 +97,9 @@ function Router() {
       </Route>
       <Route path="/investor">
         <ProtectedLayout><InvestorPortal /></ProtectedLayout>
+      </Route>
+      <Route path="/investor/deals/:id">
+        <ProtectedLayout><InvestorDealDetails /></ProtectedLayout>
       </Route>
       <Route path="/properties">
         <ProtectedLayout><Properties /></ProtectedLayout>

@@ -54,6 +54,7 @@ export interface IStorage {
   deleteListingMappingTemplate(id: number): Promise<void>;
 
   // STR Market Listings
+  getStrMarketListing(id: number): Promise<StrMarketListing | undefined>;
   getStrMarketListings(): Promise<StrMarketListing[]>;
   replaceStrMarketListings(listings: InsertStrMarketListing[]): Promise<StrMarketListing[]>;
 }
@@ -198,6 +199,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   // STR Market Listings
+  async getStrMarketListing(id: number) {
+    const [listing] = await db.select().from(strMarketListings).where(eq(strMarketListings.id, id));
+    return listing;
+  }
   async getStrMarketListings() {
     return await db.select().from(strMarketListings).orderBy(desc(strMarketListings.expectedAnnualReturn));
   }

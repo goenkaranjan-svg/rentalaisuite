@@ -3,8 +3,9 @@ import type { InsertStrMarketListing } from "@shared/schema";
 
 const STR_SOURCE = "insideairbnb";
 const INSIDE_AIRBNB_DATA_PAGE = "https://insideairbnb.com/get-the-data/";
-const MAX_DATASETS = 4;
-const MAX_ROWS_PER_DATASET = 80;
+const MAX_DATASETS = 30;
+const MAX_ROWS_PER_DATASET = 60;
+const SALE_PRICE_CAP_RATE = 0.08;
 
 type DatasetMeta = {
   url: string;
@@ -29,6 +30,14 @@ function parseNumber(value: string | undefined): number | null {
   const cleaned = value.replace(/[$,]/g, "").trim();
   const parsed = Number(cleaned);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function parseBoolean(value: string | undefined): boolean | null {
+  if (!value) return null;
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "t" || normalized === "true" || normalized === "1" || normalized === "yes") return true;
+  if (normalized === "f" || normalized === "false" || normalized === "0" || normalized === "no") return false;
+  return null;
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -108,7 +117,48 @@ function extractDatasetsFromInsideAirbnbPage(html: string): DatasetMeta[] {
     })
     .filter((dataset) => dataset.sourceCity !== "unknown-city");
 
-  return datasetCandidates.slice(0, MAX_DATASETS);
+  // Keep only the most recent snapshot per region/city.
+  const latestByCity = new Map<string, DatasetMeta>();
+  for (const dataset of datasetCandidates) {
+    const key = `${dataset.sourceRegion}::${dataset.sourceCity}`;
+    const existing = latestByCity.get(key);
+    if (!existing) {
+      latestByCity.set(key, dataset);
+      continue;
+    }
+    const existingDate = existing.sourceSnapshotDate ?? "";
+    const nextDate = dataset.sourceSnapshotDate ?? "";
+    if (nextDate > existingDate) {
+      latestByCity.set(key, dataset);
+    }
+  }
+
+  // Prefer wide state coverage first, then fill remaining slots.
+  const byRegion = new Map<string, DatasetMeta[]>();
+  for (const dataset of Array.from(latestByCity.values())) {
+    const key = dataset.sourceRegion || "unknown";
+    byRegion.set(key, [...(byRegion.get(key) ?? []), dataset]);
+  }
+
+  const selected: DatasetMeta[] = [];
+  for (const [, regionDatasets] of Array.from(byRegion.entries())) {
+    if (regionDatasets.length > 0) {
+      selected.push(regionDatasets[0]);
+    }
+    if (selected.length >= MAX_DATASETS) break;
+  }
+
+  if (selected.length < MAX_DATASETS) {
+    for (const [, regionDatasets] of Array.from(byRegion.entries())) {
+      for (let i = 1; i < regionDatasets.length; i++) {
+        selected.push(regionDatasets[i]);
+        if (selected.length >= MAX_DATASETS) break;
+      }
+      if (selected.length >= MAX_DATASETS) break;
+    }
+  }
+
+  return selected;
 }
 
 async function fetchDatasets(): Promise<DatasetMeta[]> {
@@ -129,6 +179,10 @@ function toStrListing(dataset: DatasetMeta, row: CsvRow): InsertStrMarketListing
   const accommodates = parseNumber(row.accommodates);
   const bedrooms = parseNumber(row.bedrooms);
   const bathrooms = parseNumber(row.bathrooms);
+  const minimumNights = parseNumber(row.minimum_nights);
+  const numberOfReviews = parseNumber(row.number_of_reviews);
+  const reviewScoreRating = parseNumber(row.review_scores_rating);
+  const hostIsSuperhost = parseBoolean(row.host_is_superhost);
 
   if (!externalId || nightlyRate === null || nightlyRate <= 0) return null;
 
@@ -137,6 +191,9 @@ function toStrListing(dataset: DatasetMeta, row: CsvRow): InsertStrMarketListing
     : clamp((365 - availability365) / 365, 0.2, 0.95);
   const annualReturn = nightlyRate * 365 * occupancyRate * 0.72;
   const monthlyReturn = annualReturn / 12;
+  const estimatedSalePrice = annualReturn / SALE_PRICE_CAP_RATE;
+  const pictureUrl =
+    row.picture_url?.trim() || row.xl_picture_url?.trim() || row.medium_url?.trim() || null;
 
   return {
     source: STR_SOURCE,
@@ -146,7 +203,10 @@ function toStrListing(dataset: DatasetMeta, row: CsvRow): InsertStrMarketListing
     sourceSnapshotDate: dataset.sourceSnapshotDate,
     sourceUrl: dataset.url,
     externalListingId: externalId,
+    listingUrl: row.listing_url?.trim() || null,
+    pictureUrl,
     title: row.name?.trim() || null,
+    propertyType: row.property_type?.trim() || null,
     roomType: row.room_type?.trim() || null,
     neighbourhood: row.neighbourhood_cleansed?.trim() || row.neighbourhood?.trim() || null,
     latitude: latitude !== null ? latitude.toFixed(6) : null,
@@ -154,11 +214,17 @@ function toStrListing(dataset: DatasetMeta, row: CsvRow): InsertStrMarketListing
     accommodates: accommodates !== null ? Math.round(accommodates) : null,
     bedrooms: bedrooms !== null ? bedrooms.toFixed(1) : null,
     bathrooms: bathrooms !== null ? bathrooms.toFixed(1) : null,
+    minimumNights: minimumNights !== null ? Math.round(minimumNights) : null,
+    numberOfReviews: numberOfReviews !== null ? Math.round(numberOfReviews) : null,
+    reviewScoreRating: reviewScoreRating !== null ? reviewScoreRating.toFixed(2) : null,
+    hostIsSuperhost,
     nightlyRate: nightlyRate.toFixed(2),
     availability365: availability365 !== null ? Math.round(availability365) : null,
     expectedOccupancyRate: (occupancyRate * 100).toFixed(2),
     expectedMonthlyReturn: monthlyReturn.toFixed(2),
     expectedAnnualReturn: annualReturn.toFixed(2),
+    estimatedSalePrice: estimatedSalePrice.toFixed(2),
+    valuationMethod: "cap-rate-8pct",
     currency: "USD",
     lastScrapedAt: new Date(),
   };

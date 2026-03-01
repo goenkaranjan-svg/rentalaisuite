@@ -558,6 +558,20 @@ export async function registerRoutes(
   });
 
   // === STR Market (Investor) ===
+  app.get(api.strMarket.get.path, isAuthenticated, async (req: any, res) => {
+    const userId = req.user?.claims?.sub;
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
+    const dbUser = await storage.getUser(userId);
+    if (dbUser?.role !== "investor" && dbUser?.role !== "manager") {
+      return res.status(403).json({ message: "Only investors and managers can view STR market data" });
+    }
+
+    const listing = await storage.getStrMarketListing(Number(req.params.id));
+    if (!listing) return res.status(404).json({ message: "STR listing not found" });
+    res.json(listing);
+  });
+
   app.get(api.strMarket.list.path, isAuthenticated, async (req: any, res) => {
     const userId = req.user?.claims?.sub;
     if (!userId) return res.status(401).json({ message: "Unauthorized" });
@@ -567,6 +581,7 @@ export async function registerRoutes(
       return res.status(403).json({ message: "Only investors and managers can view STR market data" });
     }
 
+    const input = api.strMarket.list.input?.parse(req.query ?? {});
     let listings = await storage.getStrMarketListings();
 
     // Auto-bootstrap initial market data for first investor session.
@@ -577,7 +592,42 @@ export async function registerRoutes(
       }
     }
 
-    res.json(listings);
+    const normalizedSearch = input?.search?.trim().toLowerCase();
+    const cityFilter = input?.city?.trim().toLowerCase();
+    const regionFilter = input?.region?.trim().toLowerCase();
+    const roomTypeFilter = input?.roomType?.trim().toLowerCase();
+    const filtered = listings.filter((listing) => {
+      if (cityFilter && listing.sourceCity.toLowerCase() !== cityFilter) return false;
+      if (regionFilter) {
+        if ((listing.sourceRegion ?? "").toLowerCase() !== regionFilter) return false;
+      }
+      if (roomTypeFilter) {
+        if ((listing.roomType ?? "").toLowerCase() !== roomTypeFilter) return false;
+      }
+      if (input?.minAnnualReturn !== undefined && Number(listing.expectedAnnualReturn) < input.minAnnualReturn) {
+        return false;
+      }
+      if (input?.maxNightlyRate !== undefined && Number(listing.nightlyRate) > input.maxNightlyRate) {
+        return false;
+      }
+      if (input?.minOccupancyRate !== undefined && Number(listing.expectedOccupancyRate) < input.minOccupancyRate) {
+        return false;
+      }
+      if (!normalizedSearch) return true;
+      const haystack = [
+        listing.title ?? "",
+        listing.sourceCity ?? "",
+        listing.sourceRegion ?? "",
+        listing.neighbourhood ?? "",
+        listing.roomType ?? "",
+      ]
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(normalizedSearch);
+    });
+
+    const limit = input?.limit ?? 100;
+    res.json(filtered.slice(0, limit));
   });
 
   app.post(api.strMarket.sync.path, isAuthenticated, async (req: any, res) => {

@@ -232,9 +232,29 @@ export const api = {
     },
   },
   strMarket: {
+    get: {
+      method: "GET" as const,
+      path: "/api/str-market/listings/:id" as const,
+      responses: {
+        200: z.custom<typeof strMarketListings.$inferSelect>(),
+        404: errorSchemas.notFound,
+      },
+    },
     list: {
       method: "GET" as const,
       path: "/api/str-market/listings" as const,
+      input: z
+        .object({
+          search: z.string().optional(),
+          city: z.string().optional(),
+          region: z.string().optional(),
+          roomType: z.string().optional(),
+          minAnnualReturn: z.coerce.number().nonnegative().optional(),
+          maxNightlyRate: z.coerce.number().positive().optional(),
+          minOccupancyRate: z.coerce.number().min(0).max(100).optional(),
+          limit: z.coerce.number().int().positive().max(5000).optional(),
+        })
+        .optional(),
       responses: {
         200: z.array(z.custom<typeof strMarketListings.$inferSelect>()),
       },
