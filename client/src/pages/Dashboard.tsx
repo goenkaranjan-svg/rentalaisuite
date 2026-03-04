@@ -1,9 +1,12 @@
 import { useProperties } from "@/hooks/use-properties";
 import { useMaintenanceRequests } from "@/hooks/use-maintenance";
 import { useLeases } from "@/hooks/use-leases";
+import { usePortfolioHealth, useSmartAlerts } from "@/hooks/use-insights";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Building2, Wrench, Wallet, Users } from "lucide-react";
+import { AlertTriangle, Building2, Wrench, Wallet, Users } from "lucide-react";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip } from "recharts";
+import { Badge } from "@/components/ui/badge";
+import { Link } from "wouter";
 
 const data = [
   { name: 'Jan', revenue: 18000 },
@@ -18,6 +21,8 @@ export default function Dashboard() {
   const { data: properties } = useProperties();
   const { data: maintenance } = useMaintenanceRequests();
   const { data: leases } = useLeases();
+  const { data: alerts } = useSmartAlerts();
+  const { data: health } = usePortfolioHealth();
 
   const totalProperties = properties?.length ?? 0;
   const activeLeases = leases?.filter((lease) => lease.status === "active").length ?? 0;
@@ -86,29 +91,71 @@ export default function Dashboard() {
 
         <Card className="col-span-1 border-slate-200 shadow-sm">
           <CardHeader>
-            <CardTitle>Recent Activity</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-amber-600" />
+              Smart Alerts Center
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-6">
-              {[
-                { title: 'New Lease Signed', desc: 'Unit 4B - John Doe', time: '2h ago' },
-                { title: 'Maintenance Request', desc: 'Leaky faucet at 123 Main', time: '4h ago' },
-                { title: 'Rent Payment', desc: '$1,200 from Unit 2A', time: '5h ago' },
-                { title: 'Screening Complete', desc: 'Sarah Smith approved', time: '1d ago' },
-              ].map((item, i) => (
-                <div key={i} className="flex items-start gap-3">
-                  <div className="w-2 h-2 mt-2 rounded-full bg-blue-500" />
+              {(alerts ?? []).slice(0, 6).map((item) => (
+                <div key={item.id} className="flex items-start gap-3">
+                  <div
+                    className={`w-2 h-2 mt-2 rounded-full ${
+                      item.severity === "high"
+                        ? "bg-red-500"
+                        : item.severity === "medium"
+                          ? "bg-amber-500"
+                          : "bg-blue-500"
+                    }`}
+                  />
                   <div>
                     <p className="text-sm font-medium text-slate-900">{item.title}</p>
-                    <p className="text-xs text-slate-500">{item.desc}</p>
+                    <p className="text-xs text-slate-500">{item.detail}</p>
                   </div>
-                  <span className="ml-auto text-xs text-slate-400">{item.time}</span>
+                  <Badge className="ml-auto capitalize" variant="outline">{item.severity}</Badge>
                 </div>
               ))}
+              {(alerts ?? []).length === 0 && (
+                <p className="text-sm text-slate-500">No alerts right now.</p>
+              )}
             </div>
           </CardContent>
         </Card>
       </div>
+
+      <Card className="border-slate-200 shadow-sm">
+        <CardHeader>
+          <CardTitle>Portfolio Health Score</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {(health ?? []).slice(0, 8).map((item) => (
+            <div key={item.propertyId} className="rounded-lg border border-slate-200 p-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="font-medium text-slate-900">{item.address}</p>
+                  <p className="text-xs text-slate-500">{item.city}, {item.state}</p>
+                </div>
+                <Badge variant={item.score >= 80 ? "default" : "outline"}>{item.score}/100</Badge>
+              </div>
+              <div className="mt-2 grid grid-cols-2 md:grid-cols-4 gap-2 text-xs text-slate-600">
+                <span>Occupancy: {item.occupancyScore}</span>
+                <span>On-time Rent: {item.onTimeRentScore}</span>
+                <span>Maintenance: {item.maintenanceScore}</span>
+                <span>NOI Trend: {item.noiTrendScore}</span>
+              </div>
+              <div className="mt-3">
+                <Link href={`/properties/${item.propertyId}`} className="text-xs text-blue-700 hover:text-blue-800">
+                  View Property Details
+                </Link>
+              </div>
+            </div>
+          ))}
+          {(health ?? []).length === 0 && (
+            <p className="text-sm text-slate-500">No health score data available yet.</p>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

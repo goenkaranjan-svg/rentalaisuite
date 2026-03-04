@@ -3,6 +3,7 @@ import { z } from "zod";
 import { authStorage } from "./storage";
 import { isAuthenticated } from "./oidcAuth";
 import { generateResetToken, hashPassword, hashToken, verifyPassword } from "./crypto";
+import { createRateLimiter } from "../../middleware/rateLimit";
 
 const signupSchema = z.object({
   email: z.string().email(),
@@ -59,7 +60,25 @@ function mapAuthDbError(error: unknown): string {
 
 // Register auth-specific routes
 export function registerAuthRoutes(app: Express): void {
-  app.post("/api/auth/signup", async (req: any, res) => {
+  const strictAuthLimiter = createRateLimiter({
+    keyPrefix: "auth-strict",
+    windowMs: 15 * 60 * 1000,
+    max: 20,
+    message: "Too many auth attempts. Please wait and try again.",
+  });
+  const loginLimiter = createRateLimiter({
+    keyPrefix: "auth-login",
+    windowMs: 15 * 60 * 1000,
+    max: 10,
+    keyGenerator: (req) => {
+      const email = typeof req.body?.email === "string" ? req.body.email.trim().toLowerCase() : "";
+      const ip = req.ip || req.socket?.remoteAddress || "unknown";
+      return `${ip}:${email}`;
+    },
+    message: "Too many login attempts. Please wait and try again.",
+  });
+
+  app.post("/api/auth/signup", strictAuthLimiter, async (req: any, res) => {
     try {
       const input = signupSchema.parse(req.body);
       const existing = await authStorage.getUserByEmail(input.email);
@@ -104,7 +123,7 @@ export function registerAuthRoutes(app: Express): void {
     }
   });
 
-  app.post("/api/auth/login", async (req: any, res) => {
+  app.post("/api/auth/login", loginLimiter, async (req: any, res) => {
     try {
       const input = loginSchema.parse(req.body);
       const user = await authStorage.getUserByEmail(input.email);
@@ -131,7 +150,7 @@ export function registerAuthRoutes(app: Express): void {
     }
   });
 
-  app.post("/api/auth/forgot-password", async (req, res) => {
+  app.post("/api/auth/forgot-password", strictAuthLimiter, async (req, res) => {
     try {
       const input = forgotSchema.parse(req.body);
       const user = await authStorage.getUserByEmail(input.email);
@@ -159,7 +178,7 @@ export function registerAuthRoutes(app: Express): void {
     }
   });
 
-  app.post("/api/auth/reset-password", async (req, res) => {
+  app.post("/api/auth/reset-password", strictAuthLimiter, async (req, res) => {
     try {
       const input = resetSchema.parse(req.body);
       const tokenHash = hashToken(input.token);

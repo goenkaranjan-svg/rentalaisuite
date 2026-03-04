@@ -1,14 +1,16 @@
 import { useRoute, Link } from "wouter";
 import { useProperty } from "@/hooks/use-properties";
+import { useRentGuidance } from "@/hooks/use-insights";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, MapPin, BedDouble, Bath, Ruler } from "lucide-react";
+import { ArrowLeft, MapPin, BedDouble, Bath, Ruler, Sparkles } from "lucide-react";
 
 export default function PropertyDetails() {
   const [match, params] = useRoute("/properties/:id");
   const id = match ? Number(params.id) : 0;
   const { data: property, isLoading } = useProperty(id);
+  const { data: rentGuidance } = useRentGuidance(id);
 
   if (!match) return null;
 
@@ -72,6 +74,44 @@ export default function PropertyDetails() {
           </div>
           {property.description && (
             <p className="text-slate-600">{property.description}</p>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card className="border-slate-200 shadow-sm">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-indigo-600" />
+            Dynamic Rent Guidance
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {!rentGuidance && <p className="text-sm text-slate-500">Calculating rent guidance...</p>}
+          {rentGuidance && (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="rounded-lg border border-slate-200 p-3">
+                  <p className="text-xs text-slate-500">Current Rent</p>
+                  <p className="text-xl font-semibold">${rentGuidance.currentRent.toLocaleString()}/mo</p>
+                </div>
+                <div className="rounded-lg border border-slate-200 p-3 bg-indigo-50">
+                  <p className="text-xs text-indigo-700">Recommended Rent</p>
+                  <p className="text-xl font-semibold text-indigo-900">${rentGuidance.recommendedRent.toLocaleString()}/mo</p>
+                </div>
+                <div className="rounded-lg border border-slate-200 p-3">
+                  <p className="text-xs text-slate-500">Suggested Range</p>
+                  <p className="text-xl font-semibold">
+                    ${rentGuidance.suggestedRange.min.toLocaleString()} - ${rentGuidance.suggestedRange.max.toLocaleString()}
+                  </p>
+                </div>
+              </div>
+              <div className="text-sm text-slate-600">
+                Confidence: <span className="font-medium capitalize">{rentGuidance.confidence}</span> •
+                Comps: <span className="font-medium"> {rentGuidance.factors.comparableCount}</span> •
+                City Occupancy: <span className="font-medium"> {rentGuidance.factors.cityOccupancyRatePct}%</span>
+              </div>
+              <p className="text-sm text-slate-600">{rentGuidance.rationale}</p>
+            </>
           )}
         </CardContent>
       </Card>

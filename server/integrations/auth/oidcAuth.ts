@@ -39,6 +39,10 @@ const getOidcConfig = memoize(
 );
 
 export function getSession() {
+  if (process.env.NODE_ENV === "production" && (!process.env.SESSION_SECRET || process.env.SESSION_SECRET.length < 32)) {
+    throw new Error("SESSION_SECRET must be set and at least 32 characters long.");
+  }
+
   const sessionTtl = 7 * 24 * 60 * 60 * 1000; // 1 week
   const pgStore = connectPg(session);
   const sessionStore = new pgStore({
@@ -48,15 +52,20 @@ export function getSession() {
     tableName: "sessions",
   });
   return session({
-    secret: process.env.SESSION_SECRET!,
+    name: process.env.NODE_ENV === "production" ? "__Host-propman.sid" : "propman.sid",
+    secret: process.env.SESSION_SECRET || "dev-insecure-session-secret-change-me",
     store: sessionStore,
     resave: false,
     saveUninitialized: false,
-      cookie: {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        maxAge: sessionTtl,
-      },
+    unset: "destroy",
+    rolling: true,
+    cookie: {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: sessionTtl,
+    },
   });
 }
 
@@ -81,7 +90,7 @@ async function upsertUser(claims: any) {
 }
 
 export async function setupAuth(app: Express) {
-  app.set("trust proxy", 1);
+  app.set("trust proxy", process.env.NODE_ENV === "production" ? 1 : 0);
   app.use(getSession());
   app.use(passport.initialize());
   app.use(passport.session());

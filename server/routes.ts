@@ -305,6 +305,18 @@ export async function registerRoutes(
     listings = await storage.getStrMarketListings();
     return listings;
   };
+
+  const getManagerScopedData = async (managerId: string) => {
+    const managerProperties = await storage.getPropertiesByManager(managerId);
+    const propertyIds = new Set(managerProperties.map((p) => p.id));
+    const managerLeases = await storage.getLeasesByManager(managerId);
+    const leaseIds = new Set(managerLeases.map((l) => l.id));
+    const allMaintenance = await storage.getMaintenanceRequests();
+    const managerMaintenance = allMaintenance.filter((m) => propertyIds.has(m.propertyId));
+    const allPayments = await storage.getPayments();
+    const managerPayments = allPayments.filter((p) => leaseIds.has(p.leaseId));
+    return { managerProperties, managerLeases, managerMaintenance, managerPayments };
+  };
   
   // Seed Database (Non-blocking)
   seedDatabase().catch(console.error);
@@ -953,6 +965,332 @@ export async function registerRoutes(
     });
   });
 
+  app.get("/api/insights/alerts", isAuthenticated, async (req: any, res) => {
+    const userId = req.user?.claims?.sub;
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+    const dbUser = await storage.getUser(userId);
+    if (!dbUser) return res.status(401).json({ message: "Unauthorized" });
+
+    const now = new Date();
+    const alerts: Array<{
+      id: string;
+      type: "overdue_rent" | "lease_expiry" | "maintenance_stalled" | "data_sync" | "vacancy_risk";
+      severity: "high" | "medium" | "low";
+      title: string;
+      detail: string;
+      propertyId?: number;
+      leaseId?: number;
+      createdAt: string;
+    }> = [];
+
+    if (dbUser.role === "manager") {
+      const { managerProperties, managerLeases, managerMaintenance, managerPayments } = await getManagerScopedData(userId);
+
+      const activeLeases = managerLeases.filter((l) => l.status === "active");
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+      for (const lease of activeLeases) {
+        const monthRentPaid = managerPayments
+          .filter((p) => {
+            const pd = new Date(p.date ?? new Date());
+            return (
+              p.leaseId === lease.id &&
+              p.type === "rent" &&
+              p.status === "paid" &&
+              pd >= startOfMonth &&
+              pd <= now
+            );
+          })
+          .reduce((sum, p) => sum + Number(p.amount), 0);
+
+        if (monthRentPaid + 0.01 < Number(lease.rentAmount)) {
+          alerts.push({
+            id: `overdue-${lease.id}-${startOfMonth.toISOString()}`,
+            type: "overdue_rent",
+            severity: "high",
+            title: "Overdue Rent Detected",
+            detail: `Lease #${lease.id} has ${Math.max(Number(lease.rentAmount) - monthRentPaid, 0).toFixed(0)} outstanding for this month.`,
+            leaseId: lease.id,
+            propertyId: lease.propertyId,
+            createdAt: now.toISOString(),
+          });
+        }
+
+        const daysUntilEnd = Math.ceil((new Date(lease.endDate).getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+        if ([7, 30, 60].includes(daysUntilEnd)) {
+          alerts.push({
+            id: `expiry-${lease.id}-${daysUntilEnd}`,
+            type: "lease_expiry",
+            severity: daysUntilEnd <= 7 ? "high" : "medium",
+            title: `Lease Expires in ${daysUntilEnd} Days`,
+            detail: `Lease #${lease.id} for property #${lease.propertyId} reaches term end on ${new Date(lease.endDate).toLocaleDateString()}.`,
+            leaseId: lease.id,
+            propertyId: lease.propertyId,
+            createdAt: now.toISOString(),
+          });
+        }
+      }
+
+      for (const request of managerMaintenance) {
+        if (request.status === "completed" || request.status === "rejected") continue;
+        const ageDays = Math.floor((now.getTime() - new Date(request.createdAt ?? now).getTime()) / (1000 * 60 * 60 * 24));
+        if (ageDays >= 7) {
+          alerts.push({
+            id: `maint-${request.id}`,
+            type: "maintenance_stalled",
+            severity: ageDays >= 14 ? "high" : "medium",
+            title: "Stalled Maintenance Request",
+            detail: `Request #${request.id} has been ${request.status} for ${ageDays} days.`,
+            propertyId: request.propertyId,
+            createdAt: now.toISOString(),
+          });
+        }
+      }
+
+      const vacantCount = managerProperties.filter((p) => p.status === "available").length;
+      const vacancyRate = managerProperties.length > 0 ? vacantCount / managerProperties.length : 0;
+      if (managerProperties.length >= 4 && vacancyRate >= 0.35) {
+        alerts.push({
+          id: `vacancy-${now.toISOString().slice(0, 10)}`,
+          type: "vacancy_risk",
+          severity: "medium",
+          title: "Vacancy Risk Increasing",
+          detail: `${(vacancyRate * 100).toFixed(0)}% of properties are currently vacant.`,
+          createdAt: now.toISOString(),
+        });
+      }
+    }
+
+    const strListings = await storage.getStrMarketListings();
+    if (strListings.length > 0) {
+      const newestScrapeMs = Math.max(...strListings.map((l) => new Date(l.lastScrapedAt).getTime()));
+      const ageHours = (now.getTime() - newestScrapeMs) / (1000 * 60 * 60);
+      if (ageHours >= 2) {
+        alerts.push({
+          id: `str-stale-${new Date(newestScrapeMs).toISOString()}`,
+          type: "data_sync",
+          severity: ageHours >= 6 ? "high" : "low",
+          title: "STR Market Data Is Stale",
+          detail: `Last STR sync was ${ageHours.toFixed(1)} hours ago.`,
+          createdAt: now.toISOString(),
+        });
+      }
+    }
+
+    const severityRank = { high: 3, medium: 2, low: 1 } as const;
+    alerts.sort((a, b) => severityRank[b.severity] - severityRank[a.severity]);
+    res.json(alerts.slice(0, 25));
+  });
+
+  app.get("/api/insights/portfolio-health", isAuthenticated, async (req: any, res) => {
+    const userId = req.user?.claims?.sub;
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+    const dbUser = await storage.getUser(userId);
+    if (!dbUser) return res.status(401).json({ message: "Unauthorized" });
+
+    const now = new Date();
+    const allProperties = dbUser.role === "manager" ? await storage.getPropertiesByManager(userId) : await storage.getProperties();
+    const allLeases = dbUser.role === "manager" ? await storage.getLeasesByManager(userId) : await storage.getLeasesByTenant(userId);
+    const allPayments = await storage.getPayments();
+    const allMaintenance = await storage.getMaintenanceRequests();
+
+    const health = allProperties.map((property) => {
+      const propertyLeases = allLeases.filter((l) => l.propertyId === property.id);
+      const activeLease = propertyLeases.find((l) => l.status === "active");
+      const propertyMaintenance = allMaintenance.filter((m) => m.propertyId === property.id);
+      const openMaintenance = propertyMaintenance.filter((m) => m.status !== "completed" && m.status !== "rejected");
+      const maintenanceAgeDays = openMaintenance.length
+        ? openMaintenance.reduce((sum, m) => sum + (now.getTime() - new Date(m.createdAt ?? now).getTime()) / (1000 * 60 * 60 * 24), 0) / openMaintenance.length
+        : 0;
+      const occupancyScore = activeLease || property.status === "rented" ? 100 : 45;
+      const leasePayments = activeLease ? allPayments.filter((p) => p.leaseId === activeLease.id && p.type === "rent") : [];
+      const paidLeasePayments = leasePayments.filter((p) => p.status === "paid").length;
+      const onTimeRentScore = leasePayments.length > 0 ? (paidLeasePayments / leasePayments.length) * 100 : 70;
+      const maintenanceScore = Math.max(10, 100 - openMaintenance.length * 15 - Math.min(maintenanceAgeDays, 30));
+      const noiTrendScore = Math.max(35, Math.min(100, onTimeRentScore * 0.65 + occupancyScore * 0.35));
+      const healthScore = Math.round(
+        occupancyScore * 0.35 +
+          onTimeRentScore * 0.25 +
+          maintenanceScore * 0.2 +
+          noiTrendScore * 0.2
+      );
+
+      return {
+        propertyId: property.id,
+        address: property.address,
+        city: property.city,
+        state: property.state,
+        score: healthScore,
+        occupancyScore: Math.round(occupancyScore),
+        onTimeRentScore: Math.round(onTimeRentScore),
+        maintenanceScore: Math.round(maintenanceScore),
+        noiTrendScore: Math.round(noiTrendScore),
+        openMaintenanceCount: openMaintenance.length,
+      };
+    });
+
+    health.sort((a, b) => b.score - a.score);
+    res.json(health);
+  });
+
+  app.get("/api/leases/renewal-pipeline", isAuthenticated, async (req: any, res) => {
+    const userId = req.user?.claims?.sub;
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+    const dbUser = await storage.getUser(userId);
+    if (!dbUser) return res.status(401).json({ message: "Unauthorized" });
+
+    const leases = dbUser.role === "manager" ? await storage.getLeasesByManager(userId) : await storage.getLeasesByTenant(userId);
+    const now = new Date();
+    const pipeline = leases.map((lease) => {
+      const daysUntilEnd = Math.ceil((new Date(lease.endDate).getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+      const stage =
+        lease.status === "terminated" || lease.status === "expired"
+          ? "move-out"
+          : daysUntilEnd <= 30
+            ? "negotiating"
+            : daysUntilEnd <= 60
+              ? "outreach"
+              : "renewed";
+      const nextAction =
+        stage === "negotiating"
+          ? "Finalize terms and send renewal addendum."
+          : stage === "outreach"
+            ? "Contact tenant and propose renewal options."
+            : stage === "renewed"
+              ? "Confirm term extension and update lease dates."
+              : "Prepare move-out inspection and turnover checklist.";
+
+      return {
+        leaseId: lease.id,
+        propertyId: lease.propertyId,
+        tenantId: lease.tenantId,
+        endDate: lease.endDate,
+        daysUntilEnd,
+        stage,
+        nextAction,
+      };
+    });
+
+    pipeline.sort((a, b) => a.daysUntilEnd - b.daysUntilEnd);
+    res.json(pipeline);
+  });
+
+  app.get("/api/reports/monthly-owner", isAuthenticated, async (req: any, res) => {
+    const userId = req.user?.claims?.sub;
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+    const dbUser = await storage.getUser(userId);
+    if (dbUser?.role !== "manager") return res.status(403).json({ message: "Only managers can export owner reports" });
+
+    const monthParam = String(req.query.month ?? "").trim();
+    const [yearRaw, monthRaw] = monthParam ? monthParam.split("-") : [];
+    const now = new Date();
+    const year = Number(yearRaw) || now.getFullYear();
+    const monthIndex = Number(monthRaw) > 0 ? Number(monthRaw) - 1 : now.getMonth();
+    const monthStart = new Date(year, monthIndex, 1);
+    const monthEnd = new Date(year, monthIndex + 1, 1);
+
+    const { managerProperties, managerLeases, managerMaintenance, managerPayments } = await getManagerScopedData(userId);
+    const activeLeases = managerLeases.filter((l) => l.status === "active");
+    const monthPayments = managerPayments.filter((p) => {
+      const d = new Date(p.date ?? new Date());
+      return d >= monthStart && d < monthEnd;
+    });
+    const collected = monthPayments.filter((p) => p.status === "paid").reduce((sum, p) => sum + Number(p.amount), 0);
+    const outstanding = monthPayments
+      .filter((p) => p.status === "pending" || p.status === "overdue")
+      .reduce((sum, p) => sum + Number(p.amount), 0);
+    const openMaintenance = managerMaintenance.filter((m) => m.status !== "completed" && m.status !== "rejected").length;
+    const occupancyRate = managerProperties.length
+      ? (managerProperties.filter((p) => p.status === "rented").length / managerProperties.length) * 100
+      : 0;
+    const expectedMonthlyRent = activeLeases.reduce((sum, lease) => sum + Number(lease.rentAmount), 0);
+
+    const rows = [
+      ["month", monthStart.toISOString().slice(0, 7)],
+      ["properties_total", String(managerProperties.length)],
+      ["active_leases", String(activeLeases.length)],
+      ["occupancy_rate_pct", occupancyRate.toFixed(1)],
+      ["expected_monthly_rent", expectedMonthlyRent.toFixed(2)],
+      ["collected", collected.toFixed(2)],
+      ["outstanding", outstanding.toFixed(2)],
+      ["open_maintenance", String(openMaintenance)],
+    ];
+    const propertyRows = managerProperties.map((p) => {
+      const lease = activeLeases.find((l) => l.propertyId === p.id);
+      return [
+        `property_${p.id}`,
+        p.address,
+        p.status,
+        lease ? Number(lease.rentAmount).toFixed(2) : "0.00",
+      ];
+    });
+    const csvLines = [
+      "metric,value,extra_1,extra_2",
+      ...rows.map((row) => `${row[0]},${row[1]},,`),
+      ...propertyRows.map((row) => `${row[0]},"${row[1].replace(/"/g, '""')}",${row[2]},${row[3]}`),
+    ];
+
+    res.json({
+      month: monthStart.toISOString().slice(0, 7),
+      summary: {
+        properties: managerProperties.length,
+        activeLeases: activeLeases.length,
+        occupancyRate,
+        expectedMonthlyRent,
+        collected,
+        outstanding,
+        openMaintenance,
+      },
+      csv: csvLines.join("\n"),
+    });
+  });
+
+  app.get("/api/rent-guidance/:propertyId", isAuthenticated, async (req: any, res) => {
+    const userId = req.user?.claims?.sub;
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+    const propertyId = Number(req.params.propertyId);
+    const property = await storage.getProperty(propertyId);
+    if (!property) return res.status(404).json({ message: "Property not found" });
+
+    const comps = (await storage.getProperties()).filter(
+      (p) => p.id !== property.id && p.city.toLowerCase() === property.city.toLowerCase() && p.state.toLowerCase() === property.state.toLowerCase()
+    );
+
+    const compAvgRent = comps.length > 0 ? comps.reduce((sum, p) => sum + Number(p.price), 0) / comps.length : Number(property.price);
+    const compSqftAvg = comps.length > 0 ? comps.reduce((sum, p) => sum + p.sqft, 0) / comps.length : property.sqft;
+    const compRentPerSqft = compSqftAvg > 0 ? compAvgRent / compSqftAvg : Number(property.price) / Math.max(property.sqft, 1);
+    const baseBySqft = compRentPerSqft * Math.max(property.sqft, 1);
+    const baseRent = Number(property.price) * 0.45 + compAvgRent * 0.35 + baseBySqft * 0.2;
+
+    const cityProperties = (await storage.getProperties()).filter(
+      (p) => p.city.toLowerCase() === property.city.toLowerCase() && p.state.toLowerCase() === property.state.toLowerCase()
+    );
+    const cityOccupancy = cityProperties.length
+      ? cityProperties.filter((p) => p.status === "rented").length / cityProperties.length
+      : 0.8;
+    const occupancyFactor = cityOccupancy >= 0.9 ? 1.05 : cityOccupancy <= 0.7 ? 0.96 : 1.0;
+    const month = new Date().getMonth();
+    const seasonalFactor = [4, 5, 6, 7].includes(month) ? 1.03 : [11, 0, 1].includes(month) ? 0.98 : 1.0;
+    const recommended = Math.round(baseRent * occupancyFactor * seasonalFactor);
+    const minRecommended = Math.round(recommended * 0.95);
+    const maxRecommended = Math.round(recommended * 1.05);
+    const confidence = comps.length >= 6 ? "high" : comps.length >= 3 ? "medium" : "low";
+
+    res.json({
+      propertyId: property.id,
+      currentRent: Number(property.price),
+      recommendedRent: recommended,
+      suggestedRange: { min: minRecommended, max: maxRecommended },
+      confidence,
+      factors: {
+        comparableCount: comps.length,
+        cityOccupancyRatePct: Number((cityOccupancy * 100).toFixed(1)),
+        seasonalFactor,
+      },
+      rationale: `Based on ${comps.length} comparable listings in ${property.city}, local occupancy, and seasonal demand.`,
+    });
+  });
+
   app.post(api.payments.create.path, isAuthenticated, async (req: any, res) => {
      try {
       const userId = req.user?.claims?.sub;
@@ -972,6 +1310,50 @@ export async function registerRoutes(
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.message });
       throw err;
     }
+  });
+
+  app.get("/api/security/readiness", isAuthenticated, async (req: any, res) => {
+    const userId = req.user?.claims?.sub;
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+    const dbUser = await storage.getUser(userId);
+    if (dbUser?.role !== "manager") return res.status(403).json({ message: "Forbidden" });
+
+    const checks = [
+      {
+        name: "production_mode",
+        ok: process.env.NODE_ENV === "production",
+        value: process.env.NODE_ENV ?? "undefined",
+      },
+      {
+        name: "session_secret_strength",
+        ok: Boolean(process.env.SESSION_SECRET && process.env.SESSION_SECRET.length >= 32),
+        value: process.env.SESSION_SECRET ? `len:${process.env.SESSION_SECRET.length}` : "missing",
+      },
+      {
+        name: "database_url_configured",
+        ok: Boolean(process.env.DATABASE_URL),
+        value: process.env.DATABASE_URL ? "set" : "missing",
+      },
+      {
+        name: "dev_auth_bypass_disabled",
+        ok: process.env.DEV_AUTH_BYPASS !== "true",
+        value: process.env.DEV_AUTH_BYPASS ?? "unset",
+      },
+      {
+        name: "oidc_or_local_auth_configured",
+        ok: Boolean(process.env.CLIENT_ID || process.env.DEV_AUTH_BYPASS === "true"),
+        value: process.env.CLIENT_ID ? "oidc" : "local-only",
+      },
+    ];
+
+    const passed = checks.filter((c) => c.ok).length;
+    res.json({
+      ready: passed === checks.length,
+      passed,
+      total: checks.length,
+      checks,
+      checkedAt: new Date().toISOString(),
+    });
   });
   
   // === Screenings ===

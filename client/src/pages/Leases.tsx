@@ -1,6 +1,7 @@
 import { useLeases, useCreateLease, useGenerateLeaseDoc } from "@/hooks/use-leases";
 import { useProperties } from "@/hooks/use-properties";
 import { useTenants } from "@/hooks/use-auth";
+import { useLeaseRenewalPipeline } from "@/hooks/use-insights";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -24,6 +25,7 @@ export default function Leases() {
   const { data: tenants } = useTenants();
   const { mutate: createLease, isPending: isCreating } = useCreateLease();
   const { mutate: generateDoc, isPending: isGenerating } = useGenerateLeaseDoc();
+  const { data: pipeline } = useLeaseRenewalPipeline();
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -272,6 +274,55 @@ export default function Leases() {
               <TableRow>
                 <TableCell colSpan={6} className="h-24 text-center text-slate-500">
                   No leases found.
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </Card>
+
+      <Card className="border-slate-200 shadow-sm overflow-hidden">
+        <div className="px-4 py-3 border-b border-slate-200 bg-slate-50">
+          <h3 className="font-semibold text-slate-900">Automated Lease Renewal Pipeline</h3>
+          <p className="text-xs text-slate-500 mt-1">Stages: outreach, negotiating, renewed, move-out.</p>
+        </div>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Lease</TableHead>
+              <TableHead>Days to End</TableHead>
+              <TableHead>Stage</TableHead>
+              <TableHead>Next Action</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {(pipeline ?? []).slice(0, 12).map((item) => (
+              <TableRow key={item.leaseId}>
+                <TableCell className="font-medium">#{item.leaseId} · Property {item.propertyId}</TableCell>
+                <TableCell>{item.daysUntilEnd}</TableCell>
+                <TableCell>
+                  <Badge
+                    variant="outline"
+                    className={
+                      item.stage === "negotiating"
+                        ? "border-amber-300 bg-amber-50 text-amber-700"
+                        : item.stage === "move-out"
+                          ? "border-red-300 bg-red-50 text-red-700"
+                          : item.stage === "renewed"
+                            ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+                            : "border-blue-300 bg-blue-50 text-blue-700"
+                    }
+                  >
+                    {item.stage}
+                  </Badge>
+                </TableCell>
+                <TableCell className="text-slate-600">{item.nextAction}</TableCell>
+              </TableRow>
+            ))}
+            {(pipeline ?? []).length === 0 && (
+              <TableRow>
+                <TableCell colSpan={4} className="h-20 text-center text-slate-500">
+                  No renewal pipeline items available.
                 </TableCell>
               </TableRow>
             )}

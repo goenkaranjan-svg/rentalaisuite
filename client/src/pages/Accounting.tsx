@@ -1,12 +1,13 @@
 import { useMemo, useState, type ComponentType } from "react";
 import { format } from "date-fns";
-import { DollarSign, Receipt, AlertTriangle, TrendingUp, Plus } from "lucide-react";
+import { DollarSign, Receipt, AlertTriangle, TrendingUp, Plus, FileDown } from "lucide-react";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend } from "recharts";
 
 import { useLeases } from "@/hooks/use-leases";
 import { useProperties } from "@/hooks/use-properties";
 import { useTenants } from "@/hooks/use-auth";
 import { useAccountingSummary, useCreatePayment, usePayments } from "@/hooks/use-payments";
+import { useMonthlyOwnerReportExport } from "@/hooks/use-insights";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -31,6 +32,7 @@ export default function Accounting() {
   const { data: payments } = usePayments();
   const { data: summary } = useAccountingSummary();
   const { mutate: createPayment, isPending: isSavingPayment } = useCreatePayment();
+  const { mutateAsync: exportMonthlyReport, isPending: isExportingReport } = useMonthlyOwnerReportExport();
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [form, setForm] = useState<PaymentFormState>({
@@ -128,6 +130,21 @@ export default function Accounting() {
     );
   };
 
+  const handleExportMonthlyReport = async () => {
+    try {
+      const report = await exportMonthlyReport(undefined);
+      const blob = new Blob([report.csv], { type: "text/csv;charset=utf-8;" });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `owner-report-${report.month}.csv`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Failed to export monthly report:", error);
+    }
+  };
+
   return (
     <div className="space-y-8 animate-in">
       <div className="flex items-center justify-between gap-4">
@@ -135,78 +152,84 @@ export default function Accounting() {
           <h1 className="text-3xl font-bold font-display text-slate-900">Accounting</h1>
           <p className="text-slate-500 mt-1">Collections, receivables, and rent roll management.</p>
         </div>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button className="bg-slate-900 hover:bg-slate-800">
-              <Plus className="w-4 h-4 mr-2" />
-              Record Payment
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>Record Payment</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label>Lease</Label>
-                <Select value={form.leaseId} onValueChange={(v) => setForm((s) => ({ ...s, leaseId: v }))}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select lease" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {activeLeases.map((lease) => (
-                      <SelectItem key={lease.id} value={String(lease.id)}>
-                        #{lease.id} · {propertyLookup.get(lease.propertyId) ?? `Property ${lease.propertyId}`}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Amount</Label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  value={form.amount}
-                  onChange={(e) => setForm((s) => ({ ...s, amount: e.target.value }))}
-                  placeholder="0.00"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-2">
-                  <Label>Status</Label>
-                  <Select value={form.status} onValueChange={(v: PaymentFormState["status"]) => setForm((s) => ({ ...s, status: v }))}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="paid">Paid</SelectItem>
-                      <SelectItem value="pending">Pending</SelectItem>
-                      <SelectItem value="overdue">Overdue</SelectItem>
-                      <SelectItem value="failed">Failed</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Type</Label>
-                  <Select value={form.type} onValueChange={(v: PaymentFormState["type"]) => setForm((s) => ({ ...s, type: v }))}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="rent">Rent</SelectItem>
-                      <SelectItem value="deposit">Deposit</SelectItem>
-                      <SelectItem value="fee">Fee</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <Button className="w-full" onClick={savePayment} disabled={isSavingPayment}>
-                {isSavingPayment ? "Saving..." : "Save Payment"}
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={handleExportMonthlyReport} disabled={isExportingReport}>
+            <FileDown className="w-4 h-4 mr-2" />
+            {isExportingReport ? "Exporting..." : "Export Monthly Owner Report"}
+          </Button>
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <DialogTrigger asChild>
+              <Button className="bg-slate-900 hover:bg-slate-800">
+                <Plus className="w-4 h-4 mr-2" />
+                Record Payment
               </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Record Payment</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Lease</Label>
+                  <Select value={form.leaseId} onValueChange={(v) => setForm((s) => ({ ...s, leaseId: v }))}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select lease" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {activeLeases.map((lease) => (
+                        <SelectItem key={lease.id} value={String(lease.id)}>
+                          #{lease.id} · {propertyLookup.get(lease.propertyId) ?? `Property ${lease.propertyId}`}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Amount</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={form.amount}
+                    onChange={(e) => setForm((s) => ({ ...s, amount: e.target.value }))}
+                    placeholder="0.00"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label>Status</Label>
+                    <Select value={form.status} onValueChange={(v: PaymentFormState["status"]) => setForm((s) => ({ ...s, status: v }))}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="paid">Paid</SelectItem>
+                        <SelectItem value="pending">Pending</SelectItem>
+                        <SelectItem value="overdue">Overdue</SelectItem>
+                        <SelectItem value="failed">Failed</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Type</Label>
+                    <Select value={form.type} onValueChange={(v: PaymentFormState["type"]) => setForm((s) => ({ ...s, type: v }))}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="rent">Rent</SelectItem>
+                        <SelectItem value="deposit">Deposit</SelectItem>
+                        <SelectItem value="fee">Fee</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <Button className="w-full" onClick={savePayment} disabled={isSavingPayment}>
+                  {isSavingPayment ? "Saving..." : "Save Payment"}
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
