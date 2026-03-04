@@ -168,7 +168,7 @@ export default function Login() {
         </div>
       </div>
 
-      <div className="flex items-center justify-center p-4 sm:p-6 lg:p-8 bg-white">
+      <div className="flex items-center justify-center p-3 sm:p-6 lg:p-8 bg-white">
         <motion.div
           initial={{ opacity: 0, y: 12, scale: 0.98 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -176,7 +176,7 @@ export default function Login() {
           className="w-full max-w-[430px]"
         >
         <Card className="w-full border-slate-200 shadow-[0_8px_28px_rgba(15,23,42,0.06)]">
-          <CardHeader className="space-y-4 px-7 pt-7 pb-5">
+          <CardHeader className="space-y-3 px-5 pt-5 pb-4 sm:space-y-4 sm:px-7 sm:pt-7 sm:pb-5">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 lg:hidden">
                 <div className="w-8 h-8 rounded-lg bg-slate-900 flex items-center justify-center">
@@ -207,7 +207,7 @@ export default function Login() {
                 exit={{ opacity: 0, y: -6 }}
                 transition={{ duration: 0.18 }}
               >
-                <CardTitle className="text-[27px] tracking-tight flex items-center gap-2">
+                <CardTitle className="text-2xl sm:text-[27px] tracking-tight flex items-center gap-2">
                   <ActiveModeIcon className="h-5 w-5 text-emerald-700" />
                   {activeMode.title}
                 </CardTitle>
@@ -230,7 +230,7 @@ export default function Login() {
             </div>
             <p className="text-xs text-slate-500">{activeRole.label}: {activeRole.subtitle}</p>
           </CardHeader>
-          <CardContent className="px-7 pb-7">
+          <CardContent className="px-5 pb-5 sm:px-7 sm:pb-7">
             <AnimatePresence mode="wait" initial={false}>
               <motion.div
                 key={mode}
@@ -269,7 +269,7 @@ export default function Login() {
                         role === "manager" ? "Manager" : role === "investor" ? "Investor" : "Renter"
                       }`}
                 </Button>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <Button variant="outline" className="bg-white h-10 border-slate-200 transition-all duration-200 hover:-translate-y-0.5" onClick={() => socialLogin("google")}>
                     Continue with Google
                   </Button>
@@ -289,7 +289,7 @@ export default function Login() {
 
             {mode === "signup" && (
               <>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-2">
                     <Label>First Name</Label>
                     <Input
@@ -330,10 +330,10 @@ export default function Login() {
                   />
                 </div>
                 <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-                  <p className="text-xs font-medium text-slate-700 mb-2">Password complexity requirements</p>
+                  <p className="text-[11px] sm:text-xs font-medium text-slate-700 mb-2">Password complexity requirements</p>
                   <div className="space-y-1">
                     {passwordRuleState.map((rule) => (
-                      <p key={rule.id} className={`text-xs ${rule.met ? "text-emerald-700" : "text-slate-500"}`}>
+                      <p key={rule.id} className={`text-[11px] sm:text-xs ${rule.met ? "text-emerald-700" : "text-slate-500"}`}>
                         {rule.met ? "✓" : "•"} {rule.label}
                       </p>
                     ))}
@@ -398,10 +398,10 @@ export default function Login() {
                   />
                 </div>
                 <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-                  <p className="text-xs font-medium text-slate-700 mb-2">Password complexity requirements</p>
+                  <p className="text-[11px] sm:text-xs font-medium text-slate-700 mb-2">Password complexity requirements</p>
                   <div className="space-y-1">
                     {newPasswordRuleState.map((rule) => (
-                      <p key={rule.id} className={`text-xs ${rule.met ? "text-emerald-700" : "text-slate-500"}`}>
+                      <p key={rule.id} className={`text-[11px] sm:text-xs ${rule.met ? "text-emerald-700" : "text-slate-500"}`}>
                         {rule.met ? "✓" : "•"} {rule.label}
                       </p>
                     ))}
