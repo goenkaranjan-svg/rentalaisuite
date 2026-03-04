@@ -29,6 +29,11 @@ type LoginInput = {
   role: UserRole;
 };
 
+type PasskeyRequestOptionsResponse = {
+  publicKey?: CredentialRequestOptions["publicKey"];
+  message?: string;
+};
+
 type SignupInput = {
   email: string;
   password: string;
@@ -126,6 +131,49 @@ export function useAuth() {
     },
   });
 
+  const passkeyLoginMutation = useMutation({
+    mutationFn: async () => {
+      if (!("credentials" in navigator) || !window.PublicKeyCredential) {
+        throw new Error("Passkeys are not supported on this device/browser.");
+      }
+
+      const optionsRes = await fetch("/api/auth/passkeys/auth/options", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({}),
+      });
+      const optionsBody = (await optionsRes.json().catch(() => ({}))) as PasskeyRequestOptionsResponse;
+      if (!optionsRes.ok) {
+        throw new Error(optionsBody?.message || "Unable to start passkey login.");
+      }
+      if (!optionsBody.publicKey) {
+        throw new Error(optionsBody?.message || "Passkey login is not enabled yet.");
+      }
+
+      const assertion = (await navigator.credentials.get({
+        publicKey: optionsBody.publicKey,
+      })) as PublicKeyCredential | null;
+
+      if (!assertion) throw new Error("Passkey authentication was cancelled.");
+
+      const verifyRes = await fetch("/api/auth/passkeys/auth/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(assertion),
+      });
+      const verifyBody = await verifyRes.json().catch(() => ({}));
+      if (!verifyRes.ok) {
+        throw new Error(verifyBody?.message || "Passkey verification failed.");
+      }
+      return verifyBody;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+    },
+  });
+
   return {
     user,
     isLoading,
@@ -136,9 +184,11 @@ export function useAuth() {
     signup: signupMutation.mutateAsync,
     forgotPassword: forgotPasswordMutation.mutateAsync,
     resetPassword: resetPasswordMutation.mutateAsync,
+    loginWithPasskey: passkeyLoginMutation.mutateAsync,
     isLoggingIn: loginMutation.isPending,
     isSigningUp: signupMutation.isPending,
     isProcessingForgotPassword: forgotPasswordMutation.isPending,
     isResettingPassword: resetPasswordMutation.isPending,
+    isLoggingInWithPasskey: passkeyLoginMutation.isPending,
   };
 }

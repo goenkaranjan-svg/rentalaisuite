@@ -58,10 +58,12 @@ export default function Login() {
     signup,
     forgotPassword,
     resetPassword,
+    loginWithPasskey,
     isLoggingIn,
     isSigningUp,
     isProcessingForgotPassword,
     isResettingPassword,
+    isLoggingInWithPasskey,
   } = useAuth();
 
   const [role, setRole] = useState<UserRole>("manager");
@@ -124,6 +126,15 @@ export default function Login() {
 
   const socialLogin = (provider: "google" | "facebook") => {
     window.location.href = `/api/login/${provider}?role=${role}`;
+  };
+
+  const handlePasskeyLogin = async () => {
+    try {
+      await loginWithPasskey();
+      toast({ title: "Signed in", description: "Authenticated with passkey." });
+    } catch (error: any) {
+      toast({ title: "Passkey sign-in unavailable", description: error.message, variant: "destructive" });
+    }
   };
 
   const activeRole = roleConfig[role];
@@ -207,27 +218,13 @@ export default function Login() {
                 exit={{ opacity: 0, y: -6 }}
                 transition={{ duration: 0.18 }}
               >
-                <CardTitle className="text-2xl sm:text-[27px] tracking-tight flex items-center gap-2">
+                <CardTitle className="text-[22px] sm:text-[27px] tracking-tight flex items-center gap-2 leading-tight">
                   <ActiveModeIcon className="h-5 w-5 text-emerald-700" />
                   {activeMode.title}
                 </CardTitle>
                 <p className="mt-1 text-[14px] text-slate-600">{activeMode.description}</p>
               </motion.div>
             </AnimatePresence>
-            <div className="rounded-xl border border-slate-200 p-2">
-              <div className="grid grid-cols-2 gap-2">
-                {(["signin", "signup"] as AuthMode[]).map((m) => (
-                  <Button
-                    key={m}
-                    variant={mode === m ? "default" : "outline"}
-                    className={`h-10 transition-all duration-200 hover:-translate-y-0.5 active:translate-y-0 ${mode === m ? "bg-slate-900 text-white shadow-md shadow-slate-900/15" : "bg-white hover:bg-slate-50"}`}
-                    onClick={() => setMode(m)}
-                  >
-                    {modeConfig[m].label}
-                  </Button>
-                ))}
-              </div>
-            </div>
             <p className="text-xs text-slate-500">{activeRole.label}: {activeRole.subtitle}</p>
           </CardHeader>
           <CardContent className="px-5 pb-5 sm:px-7 sm:pb-7">
@@ -262,7 +259,7 @@ export default function Login() {
                     className="h-11 bg-slate-50 border-slate-200 focus-visible:ring-2 focus-visible:ring-emerald-500/20 focus-visible:border-emerald-500"
                   />
                 </div>
-                <Button className="w-full h-11 bg-emerald-500 hover:bg-emerald-600 text-white transition-all duration-200" onClick={handleSignIn} disabled={isLoggingIn}>
+                <Button className="w-full h-11 bg-emerald-500 hover:bg-emerald-600 text-white transition-all duration-200 text-sm sm:text-base px-3" onClick={handleSignIn} disabled={isLoggingIn}>
                   {isLoggingIn
                     ? "Signing in..."
                     : `Sign In as ${
@@ -270,19 +267,34 @@ export default function Login() {
                       }`}
                 </Button>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  <Button variant="outline" className="bg-white h-10 border-slate-200 transition-all duration-200 hover:-translate-y-0.5" onClick={() => socialLogin("google")}>
+                  <Button variant="outline" className="bg-white h-10 border-slate-200 transition-all duration-200 hover:-translate-y-0.5 text-xs sm:text-sm px-2" onClick={() => socialLogin("google")}>
                     Continue with Google
                   </Button>
-                  <Button variant="outline" className="bg-white h-10 border-slate-200 transition-all duration-200 hover:-translate-y-0.5" onClick={() => socialLogin("facebook")}>
+                  <Button variant="outline" className="bg-white h-10 border-slate-200 transition-all duration-200 hover:-translate-y-0.5 text-xs sm:text-sm px-2" onClick={() => socialLogin("facebook")}>
                     Continue with Facebook
                   </Button>
                 </div>
+                <Button
+                  variant="outline"
+                  className="w-full h-11 border-slate-200 bg-white"
+                  onClick={handlePasskeyLogin}
+                  disabled={isLoggingInWithPasskey}
+                >
+                  {isLoggingInWithPasskey ? "Checking passkey..." : "Continue with Passkey"}
+                </Button>
                 <button
                   type="button"
                   onClick={() => setMode("forgot")}
                   className="w-full text-sm text-slate-600 hover:text-slate-900 underline underline-offset-2"
                 >
                   Forgot password?
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMode("signup")}
+                  className="w-full text-sm text-slate-600 hover:text-slate-900 underline underline-offset-2"
+                >
+                  Create an account
                 </button>
               </>
             )}
@@ -339,13 +351,20 @@ export default function Login() {
                     ))}
                   </div>
                 </div>
-                <Button className="w-full h-11 bg-emerald-500 hover:bg-emerald-600 text-white transition-all duration-200" onClick={handleSignUp} disabled={isSigningUp}>
+                <Button className="w-full h-11 bg-emerald-500 hover:bg-emerald-600 text-white transition-all duration-200 text-sm sm:text-base px-3 leading-tight" onClick={handleSignUp} disabled={isSigningUp}>
                   {isSigningUp
                     ? "Creating account..."
                     : `Create ${
                         role === "manager" ? "Manager" : role === "investor" ? "Investor" : "Renter"
                       } Account`}
                 </Button>
+                <button
+                  type="button"
+                  onClick={() => setMode("signin")}
+                  className="w-full text-sm text-slate-600 hover:text-slate-900 underline underline-offset-2"
+                >
+                  Already have an account? Sign in
+                </button>
               </>
             )}
 
@@ -368,7 +387,7 @@ export default function Login() {
                     className="h-11 bg-slate-50 border-slate-200 focus-visible:ring-2 focus-visible:ring-emerald-500/20 focus-visible:border-emerald-500"
                   />
                 </div>
-                <Button className="w-full h-11 bg-emerald-500 hover:bg-emerald-600 text-white transition-all duration-200" onClick={handleForgot} disabled={isProcessingForgotPassword}>
+                <Button className="w-full h-11 bg-emerald-500 hover:bg-emerald-600 text-white transition-all duration-200 text-sm sm:text-base px-3" onClick={handleForgot} disabled={isProcessingForgotPassword}>
                   {isProcessingForgotPassword ? "Submitting..." : "Send Reset Link"}
                 </Button>
 
@@ -414,6 +433,27 @@ export default function Login() {
             )}
               </motion.div>
             </AnimatePresence>
+            <p className="mt-4 text-[11px] leading-relaxed text-slate-500">
+              This site is protected by reCAPTCHA and the Google{" "}
+              <a
+                href="https://policies.google.com/privacy"
+                target="_blank"
+                rel="noreferrer"
+                className="underline underline-offset-2 hover:text-slate-700"
+              >
+                Privacy Policy
+              </a>
+              .{" "}
+              <a
+                href="https://policies.google.com/terms"
+                target="_blank"
+                rel="noreferrer"
+                className="underline underline-offset-2 hover:text-slate-700"
+              >
+                Terms of Service
+              </a>{" "}
+              apply.
+            </p>
           </CardContent>
         </Card>
         </motion.div>
