@@ -134,7 +134,7 @@ export default function Login() {
 
   return (
     <div className="min-h-screen grid lg:grid-cols-2 bg-white">
-      <div className="hidden lg:flex flex-col justify-between p-10 xl:p-12 bg-gradient-to-br from-white via-slate-50 to-emerald-50 relative overflow-hidden border-r border-slate-200">
+      <div className="hidden lg:flex flex-col justify-between p-12 bg-gradient-to-br from-white via-slate-50 to-emerald-50 relative overflow-hidden border-r border-slate-200">
         <div className="pointer-events-none absolute -top-20 -right-16 h-72 w-72 rounded-full bg-emerald-200/35 blur-3xl" />
         <div className="pointer-events-none absolute -bottom-24 -left-16 h-72 w-72 rounded-full bg-slate-200/40 blur-3xl" />
         <div className="relative text-slate-900">
@@ -144,8 +144,8 @@ export default function Login() {
             </div>
             <span className="text-2xl font-bold font-display">PropMan.ai</span>
           </div>
-          <h1 className="text-5xl font-bold font-display leading-tight mb-6">Invest and manage with confidence.</h1>
-          <p className="text-slate-600 max-w-md">
+          <h1 className="text-[44px] font-bold font-display leading-[1.05] mb-5 tracking-tight">Invest and manage with confidence.</h1>
+          <p className="text-[15px] leading-6 text-slate-600 max-w-md">
             Fast property operations for managers, renters, and investors in one secure workspace.
           </p>
         </div>
@@ -173,10 +173,10 @@ export default function Login() {
           initial={{ opacity: 0, y: 12, scale: 0.98 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           transition={{ duration: 0.35, ease: "easeOut" }}
-          className="w-full max-w-md"
+          className="w-full max-w-[430px]"
         >
-        <Card className="w-full border-slate-200 shadow-sm">
-          <CardHeader className="space-y-4">
+        <Card className="w-full border-slate-200 shadow-[0_8px_28px_rgba(15,23,42,0.06)]">
+          <CardHeader className="space-y-4 px-7 pt-7 pb-5">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 lg:hidden">
                 <div className="w-8 h-8 rounded-lg bg-slate-900 flex items-center justify-center">
@@ -186,10 +186,10 @@ export default function Login() {
               </div>
               <Badge variant="secondary">Secure Access</Badge>
             </div>
-            <div className="space-y-2">
-              <Label className="text-xs text-slate-500">Role</Label>
+            <div className="space-y-1.5">
+              <Label className="text-[11px] uppercase tracking-wide text-slate-500">Role</Label>
               <Select value={role} onValueChange={(value: UserRole) => setRole(value)}>
-                <SelectTrigger className="bg-slate-50 border-slate-200">
+                <SelectTrigger className="h-11 bg-slate-50 border-slate-200 focus:ring-2 focus:ring-emerald-500/20">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -207,11 +207,11 @@ export default function Login() {
                 exit={{ opacity: 0, y: -6 }}
                 transition={{ duration: 0.18 }}
               >
-                <CardTitle className="text-2xl flex items-center gap-2">
-                  <ActiveModeIcon className="h-5 w-5 text-cyan-700" />
+                <CardTitle className="text-[27px] tracking-tight flex items-center gap-2">
+                  <ActiveModeIcon className="h-5 w-5 text-emerald-700" />
                   {activeMode.title}
                 </CardTitle>
-                <p className="mt-1 text-sm text-slate-600">{activeMode.description}</p>
+                <p className="mt-1 text-[14px] text-slate-600">{activeMode.description}</p>
               </motion.div>
             </AnimatePresence>
             <div className="rounded-xl border border-slate-200 p-2">
@@ -220,7 +220,7 @@ export default function Login() {
                   <Button
                     key={m}
                     variant={mode === m ? "default" : "outline"}
-                    className={`transition-all duration-200 hover:-translate-y-0.5 active:translate-y-0 ${mode === m ? "shadow-md shadow-cyan-900/10" : "bg-white hover:bg-slate-50"}`}
+                    className={`h-10 transition-all duration-200 hover:-translate-y-0.5 active:translate-y-0 ${mode === m ? "bg-slate-900 text-white shadow-md shadow-slate-900/15" : "bg-white hover:bg-slate-50"}`}
                     onClick={() => setMode(m)}
                   >
                     {modeConfig[m].label}
@@ -230,7 +230,7 @@ export default function Login() {
             </div>
             <p className="text-xs text-slate-500">{activeRole.label}: {activeRole.subtitle}</p>
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-7 pb-7">
             <AnimatePresence mode="wait" initial={false}>
               <motion.div
                 key={mode}
@@ -249,6 +249,7 @@ export default function Login() {
                     placeholder="you@company.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
+                    className="h-11 bg-slate-50 border-slate-200 focus-visible:ring-2 focus-visible:ring-emerald-500/20 focus-visible:border-emerald-500"
                   />
                 </div>
                 <div className="space-y-2">
@@ -258,9 +259,10 @@ export default function Login() {
                     placeholder="Enter your password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
+                    className="h-11 bg-slate-50 border-slate-200 focus-visible:ring-2 focus-visible:ring-emerald-500/20 focus-visible:border-emerald-500"
                   />
                 </div>
-                <Button className="w-full h-11 transition-all duration-200 hover:brightness-110" onClick={handleSignIn} disabled={isLoggingIn}>
+                <Button className="w-full h-11 bg-emerald-500 hover:bg-emerald-600 text-white transition-all duration-200" onClick={handleSignIn} disabled={isLoggingIn}>
                   {isLoggingIn
                     ? "Signing in..."
                     : `Sign In as ${
@@ -268,10 +270,10 @@ export default function Login() {
                       }`}
                 </Button>
                 <div className="grid grid-cols-2 gap-2">
-                  <Button variant="outline" className="bg-white h-10 transition-all duration-200 hover:-translate-y-0.5" onClick={() => socialLogin("google")}>
+                  <Button variant="outline" className="bg-white h-10 border-slate-200 transition-all duration-200 hover:-translate-y-0.5" onClick={() => socialLogin("google")}>
                     Continue with Google
                   </Button>
-                  <Button variant="outline" className="bg-white h-10 transition-all duration-200 hover:-translate-y-0.5" onClick={() => socialLogin("facebook")}>
+                  <Button variant="outline" className="bg-white h-10 border-slate-200 transition-all duration-200 hover:-translate-y-0.5" onClick={() => socialLogin("facebook")}>
                     Continue with Facebook
                   </Button>
                 </div>
@@ -294,6 +296,7 @@ export default function Login() {
                       placeholder="Jane"
                       value={firstName}
                       onChange={(e) => setFirstName(e.target.value)}
+                      className="h-11 bg-slate-50 border-slate-200 focus-visible:ring-2 focus-visible:ring-emerald-500/20 focus-visible:border-emerald-500"
                     />
                   </div>
                   <div className="space-y-2">
@@ -302,6 +305,7 @@ export default function Login() {
                       placeholder="Doe"
                       value={lastName}
                       onChange={(e) => setLastName(e.target.value)}
+                      className="h-11 bg-slate-50 border-slate-200 focus-visible:ring-2 focus-visible:ring-emerald-500/20 focus-visible:border-emerald-500"
                     />
                   </div>
                 </div>
@@ -312,6 +316,7 @@ export default function Login() {
                     placeholder="you@company.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
+                    className="h-11 bg-slate-50 border-slate-200 focus-visible:ring-2 focus-visible:ring-emerald-500/20 focus-visible:border-emerald-500"
                   />
                 </div>
                 <div className="space-y-2">
@@ -321,6 +326,7 @@ export default function Login() {
                     placeholder="Create a secure password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
+                    className="h-11 bg-slate-50 border-slate-200 focus-visible:ring-2 focus-visible:ring-emerald-500/20 focus-visible:border-emerald-500"
                   />
                 </div>
                 <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
@@ -333,7 +339,7 @@ export default function Login() {
                     ))}
                   </div>
                 </div>
-                <Button className="w-full h-11 transition-all duration-200 hover:brightness-110" onClick={handleSignUp} disabled={isSigningUp}>
+                <Button className="w-full h-11 bg-emerald-500 hover:bg-emerald-600 text-white transition-all duration-200" onClick={handleSignUp} disabled={isSigningUp}>
                   {isSigningUp
                     ? "Creating account..."
                     : `Create ${
@@ -359,9 +365,10 @@ export default function Login() {
                     placeholder="you@company.com"
                     value={forgotEmail}
                     onChange={(e) => setForgotEmail(e.target.value)}
+                    className="h-11 bg-slate-50 border-slate-200 focus-visible:ring-2 focus-visible:ring-emerald-500/20 focus-visible:border-emerald-500"
                   />
                 </div>
-                <Button className="w-full h-11 transition-all duration-200 hover:brightness-110" onClick={handleForgot} disabled={isProcessingForgotPassword}>
+                <Button className="w-full h-11 bg-emerald-500 hover:bg-emerald-600 text-white transition-all duration-200" onClick={handleForgot} disabled={isProcessingForgotPassword}>
                   {isProcessingForgotPassword ? "Submitting..." : "Send Reset Link"}
                 </Button>
 
@@ -377,6 +384,7 @@ export default function Login() {
                     placeholder="Paste reset token"
                     value={resetToken}
                     onChange={(e) => setResetToken(e.target.value)}
+                    className="h-11 bg-slate-50 border-slate-200 focus-visible:ring-2 focus-visible:ring-emerald-500/20 focus-visible:border-emerald-500"
                   />
                 </div>
                 <div className="space-y-2">
@@ -386,6 +394,7 @@ export default function Login() {
                     placeholder="Enter a new password"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
+                    className="h-11 bg-slate-50 border-slate-200 focus-visible:ring-2 focus-visible:ring-emerald-500/20 focus-visible:border-emerald-500"
                   />
                 </div>
                 <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
