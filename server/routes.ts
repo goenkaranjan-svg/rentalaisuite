@@ -261,6 +261,50 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+  const STR_MARKET_AUTO_REFRESH_MS = 60 * 60 * 1000;
+  const STR_MARKET_RETRY_BACKOFF_MS = 5 * 60 * 1000;
+  let strMarketAutoRefreshInFlight: Promise<void> | null = null;
+  let nextStrMarketAutoRefreshAllowedAt = 0;
+
+  const latestScrapedAtMs = (listings: Array<{ lastScrapedAt?: Date | null }>) => {
+    let latest = 0;
+    for (const listing of listings) {
+      const parsed = listing.lastScrapedAt ? new Date(listing.lastScrapedAt).getTime() : 0;
+      if (Number.isFinite(parsed) && parsed > latest) latest = parsed;
+    }
+    return latest;
+  };
+
+  const ensureStrMarketListingsAreFresh = async () => {
+    let listings = await storage.getStrMarketListings();
+    const now = Date.now();
+    const latestMs = latestScrapedAtMs(listings);
+    const isStale = listings.length === 0 || !latestMs || now - latestMs >= STR_MARKET_AUTO_REFRESH_MS;
+
+    if (!isStale) return listings;
+    if (now < nextStrMarketAutoRefreshAllowedAt) return listings;
+
+    if (!strMarketAutoRefreshInFlight) {
+      strMarketAutoRefreshInFlight = (async () => {
+        try {
+          const scraped = await scrapePublicStrListings();
+          if (scraped.length > 0) {
+            await storage.replaceStrMarketListings(scraped);
+          }
+          nextStrMarketAutoRefreshAllowedAt = 0;
+        } catch (error) {
+          console.error("STR market auto-refresh failed:", error);
+          nextStrMarketAutoRefreshAllowedAt = Date.now() + STR_MARKET_RETRY_BACKOFF_MS;
+        } finally {
+          strMarketAutoRefreshInFlight = null;
+        }
+      })();
+    }
+
+    await strMarketAutoRefreshInFlight;
+    listings = await storage.getStrMarketListings();
+    return listings;
+  };
   
   // Seed Database (Non-blocking)
   seedDatabase().catch(console.error);
@@ -582,24 +626,40 @@ export async function registerRoutes(
     }
 
     const input = api.strMarket.list.input?.parse(req.query ?? {});
-    let listings = await storage.getStrMarketListings();
+    let listings = await ensureStrMarketListingsAreFresh();
 
-    // Auto-bootstrap initial market data for first investor session.
-    if (listings.length === 0) {
-      const scraped = await scrapePublicStrListings();
-      if (scraped.length > 0) {
-        listings = await storage.replaceStrMarketListings(scraped);
-      }
-    }
+    const US_STATE_CODES_TO_NAMES: Record<string, string> = {
+      al: "alabama", ak: "alaska", az: "arizona", ar: "arkansas", ca: "california", co: "colorado",
+      ct: "connecticut", de: "delaware", fl: "florida", ga: "georgia", hi: "hawaii", id: "idaho",
+      il: "illinois", in: "indiana", ia: "iowa", ks: "kansas", ky: "kentucky", la: "louisiana",
+      me: "maine", md: "maryland", ma: "massachusetts", mi: "michigan", mn: "minnesota", ms: "mississippi",
+      mo: "missouri", mt: "montana", ne: "nebraska", nv: "nevada", nh: "new hampshire", nj: "new jersey",
+      nm: "new mexico", ny: "new york", nc: "north carolina", nd: "north dakota", oh: "ohio", ok: "oklahoma",
+      or: "oregon", pa: "pennsylvania", ri: "rhode island", sc: "south carolina", sd: "south dakota", tn: "tennessee",
+      tx: "texas", ut: "utah", vt: "vermont", va: "virginia", wa: "washington", wv: "west virginia",
+      wi: "wisconsin", wy: "wyoming", dc: "district of columbia",
+    };
+    const US_STATE_NAMES_TO_CODES = Object.fromEntries(
+      Object.entries(US_STATE_CODES_TO_NAMES).map(([code, name]) => [name, code])
+    );
+    const normalizeRegion = (value?: string | null) => {
+      const normalized = (value ?? "").trim().toLowerCase().replace(/[_-]+/g, " ");
+      if (!normalized) return "";
+      const compact = normalized.replace(/\./g, "");
+      if (US_STATE_CODES_TO_NAMES[compact]) return US_STATE_CODES_TO_NAMES[compact];
+      if (US_STATE_NAMES_TO_CODES[compact]) return compact;
+      return compact;
+    };
 
     const normalizedSearch = input?.search?.trim().toLowerCase();
     const cityFilter = input?.city?.trim().toLowerCase();
-    const regionFilter = input?.region?.trim().toLowerCase();
+    const regionFilter = normalizeRegion(input?.region);
     const roomTypeFilter = input?.roomType?.trim().toLowerCase();
     const filtered = listings.filter((listing) => {
       if (cityFilter && listing.sourceCity.toLowerCase() !== cityFilter) return false;
       if (regionFilter) {
-        if ((listing.sourceRegion ?? "").toLowerCase() !== regionFilter) return false;
+        const listingRegion = normalizeRegion(listing.sourceRegion);
+        if (listingRegion !== regionFilter) return false;
       }
       if (roomTypeFilter) {
         if ((listing.roomType ?? "").toLowerCase() !== roomTypeFilter) return false;
@@ -618,6 +678,7 @@ export async function registerRoutes(
         listing.title ?? "",
         listing.sourceCity ?? "",
         listing.sourceRegion ?? "",
+        normalizeRegion(listing.sourceRegion),
         listing.neighbourhood ?? "",
         listing.roomType ?? "",
       ]

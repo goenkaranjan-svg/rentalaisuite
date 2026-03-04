@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { RefreshCw, TrendingUp, Building2, DollarSign, Sparkles, MapPin, SlidersHorizontal } from "lucide-react";
+import { RefreshCw, TrendingUp, Building2, DollarSign, Sparkles, MapPin, SlidersHorizontal, ExternalLink } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,6 +9,50 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { useStrMarketListings, useSyncStrMarketData, type StrMarketFilters } from "@/hooks/use-str-market";
 import type { StrMarketListing } from "@shared/schema";
+
+const US_STATE_CODES_TO_NAMES: Record<string, string> = {
+  al: "Alabama", ak: "Alaska", az: "Arizona", ar: "Arkansas", ca: "California", co: "Colorado",
+  ct: "Connecticut", de: "Delaware", fl: "Florida", ga: "Georgia", hi: "Hawaii", id: "Idaho",
+  il: "Illinois", in: "Indiana", ia: "Iowa", ks: "Kansas", ky: "Kentucky", la: "Louisiana",
+  me: "Maine", md: "Maryland", ma: "Massachusetts", mi: "Michigan", mn: "Minnesota", ms: "Mississippi",
+  mo: "Missouri", mt: "Montana", ne: "Nebraska", nv: "Nevada", nh: "New Hampshire", nj: "New Jersey",
+  nm: "New Mexico", ny: "New York", nc: "North Carolina", nd: "North Dakota", oh: "Ohio", ok: "Oklahoma",
+  or: "Oregon", pa: "Pennsylvania", ri: "Rhode Island", sc: "South Carolina", sd: "South Dakota", tn: "Tennessee",
+  tx: "Texas", ut: "Utah", vt: "Vermont", va: "Virginia", wa: "Washington", wv: "West Virginia",
+  wi: "Wisconsin", wy: "Wyoming", dc: "District of Columbia",
+};
+
+function normalizeRegion(region?: string | null): string {
+  const raw = (region ?? "").trim().toLowerCase().replace(/[_-]+/g, " ");
+  if (!raw) return "";
+  return US_STATE_CODES_TO_NAMES[raw] ? raw : raw;
+}
+
+function formatRegionLabel(region?: string | null): string {
+  const normalized = normalizeRegion(region);
+  if (!normalized) return "Unknown region";
+  const fullName = US_STATE_CODES_TO_NAMES[normalized];
+  if (fullName) return `${fullName} (${normalized.toUpperCase()})`;
+  return normalized
+    .split(" ")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function extractDisplayAddress(listing: StrMarketListing): string {
+  const title = (listing.title ?? "").trim();
+  const titleAddressMatch = title.match(/\b\d{1,5}\s+[a-z0-9.\-'\s]+(?:street|st|avenue|ave|road|rd|drive|dr|lane|ln|boulevard|blvd|way|court|ct|place|pl)\b/i);
+  if (titleAddressMatch?.[0]) {
+    const suffix = `${listing.sourceCity}${listing.sourceRegion ? `, ${formatRegionLabel(listing.sourceRegion)}` : ""}`;
+    return `${titleAddressMatch[0]}, ${suffix}`;
+  }
+
+  if (listing.neighbourhood) {
+    return `${listing.neighbourhood}, ${listing.sourceCity}${listing.sourceRegion ? `, ${formatRegionLabel(listing.sourceRegion)}` : ""}`;
+  }
+
+  return `${listing.sourceCity}${listing.sourceRegion ? `, ${formatRegionLabel(listing.sourceRegion)}` : ""}`;
+}
 
 function formatMoney(value: string | number): string {
   const parsed = Number(value);
@@ -30,6 +74,7 @@ export default function InvestorPortal() {
   const [maxNightlyRate, setMaxNightlyRate] = useState("");
   const [locationDefault, setLocationDefault] = useState<string | null>(null);
   const [locationApplied, setLocationApplied] = useState(false);
+  const [locationStatus, setLocationStatus] = useState<"idle" | "applied" | "unsupported" | "denied" | "unavailable">("idle");
 
   const filters: StrMarketFilters = {
     search: search || undefined,
@@ -91,26 +136,44 @@ export default function InvestorPortal() {
       return earthRadiusKm * c;
     };
 
-    let nearest: StrMarketListing | null = null;
-    let nearestDistance = Number.POSITIVE_INFINITY;
-    for (const listing of withCoordinates) {
+    const withDistance = withCoordinates.map((listing) => {
       const distance = distanceKm(
         coords.latitude,
         coords.longitude,
         Number(listing.latitude),
         Number(listing.longitude)
       );
-      if (distance < nearestDistance) {
-        nearest = listing;
-        nearestDistance = distance;
-      }
-    }
+      return { listing, distance };
+    });
 
-    if (nearest?.sourceCity) {
-      setCity(nearest.sourceCity);
-      setRegion(nearest.sourceRegion ?? "");
-      setLocationDefault(`${nearest.sourceCity}${nearest.sourceRegion ? `, ${nearest.sourceRegion.toUpperCase()}` : ""}`);
+    withDistance.sort((a, b) => a.distance - b.distance);
+    const nearest = withDistance[0]?.listing;
+    if (!nearest) return;
+
+    const closeListings = withDistance.filter((item) => item.distance <= 250);
+    const regionBuckets = new Map<string, number>();
+    for (const item of closeListings) {
+      const key = item.listing.sourceRegion ?? "";
+      if (!key) continue;
+      regionBuckets.set(key, (regionBuckets.get(key) ?? 0) + 1);
     }
+    const [bestRegion] = Array.from(regionBuckets.entries()).sort((a, b) => b[1] - a[1])[0] ?? [];
+    const nearestInBestRegion =
+      bestRegion
+        ? withDistance.find((item) => item.listing.sourceRegion === bestRegion)?.listing
+        : nearest;
+    const selected = nearestInBestRegion ?? nearest;
+
+    if (selected.sourceCity) {
+      setCity(selected.sourceCity);
+      setRegion(selected.sourceRegion ?? "");
+      setLocationDefault(
+        `${selected.sourceCity}${selected.sourceRegion ? `, ${formatRegionLabel(selected.sourceRegion)}` : ""}`
+      );
+      setLocationStatus("applied");
+      return;
+    }
+    setLocationStatus("unavailable");
   };
 
   useEffect(() => {
@@ -119,11 +182,18 @@ export default function InvestorPortal() {
     if (city || region) return;
     setLocationApplied(true);
 
-    if (!navigator.geolocation) return;
+    if (!navigator.geolocation) {
+      setLocationStatus("unsupported");
+      return;
+    }
     navigator.geolocation.getCurrentPosition(
       (position) => autoApplyLocationFilter(position.coords, allListings),
-      () => {
-        // Ignore denied/blocked geolocation and keep global filter.
+      (error) => {
+        if (error.code === error.PERMISSION_DENIED) {
+          setLocationStatus("denied");
+          return;
+        }
+        setLocationStatus("unavailable");
       },
       { enableHighAccuracy: false, timeout: 5000 }
     );
@@ -162,6 +232,9 @@ export default function InvestorPortal() {
             {syncMutation.isPending ? "Syncing..." : "Refresh Public STR Data"}
           </Button>
         </div>
+        <p className="relative mt-3 text-xs text-slate-500">
+          Listings auto-refresh hourly while this page is open.
+        </p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -254,7 +327,7 @@ export default function InvestorPortal() {
                   <SelectItem value="all">All states/regions</SelectItem>
                   {regions.map((item) => (
                     <SelectItem key={item!} value={item!}>
-                      {item!.toUpperCase()}
+                      {formatRegionLabel(item)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -303,7 +376,11 @@ export default function InvestorPortal() {
             <p className="text-xs text-slate-500">
               {locationDefault
                 ? `Defaulted to your location: ${locationDefault}`
-                : "Location default is applied automatically when browser location is available."}
+                : locationStatus === "denied"
+                  ? "Location permission was denied, so state defaults were not auto-applied."
+                  : locationStatus === "unsupported"
+                    ? "This browser does not support geolocation, so default state could not be set."
+                    : "Location default is applied automatically when browser location is available."}
             </p>
             <div className="flex items-center gap-2">
               <Button
@@ -334,6 +411,7 @@ export default function InvestorPortal() {
                   setMaxNightlyRate("");
                   setLocationDefault(null);
                   setLocationApplied(false);
+                  setLocationStatus("idle");
                 }}
               >
                 Clear Filters
@@ -385,6 +463,24 @@ export default function InvestorPortal() {
                       {listing.sourceCity}, {listing.sourceRegion?.toUpperCase()} • {listing.roomType || "Unknown type"}
                       {listing.neighbourhood ? ` • ${listing.neighbourhood}` : ""}
                     </p>
+                    <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+                      <Link
+                        href={`/investor/deals/${listing.id}`}
+                        className="font-medium text-sky-700 hover:text-sky-800 hover:underline"
+                      >
+                        {extractDisplayAddress(listing)}
+                      </Link>
+                      <span className="text-slate-300">•</span>
+                      <a
+                        href={listing.listingUrl || listing.sourceUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center text-slate-600 hover:text-slate-900"
+                      >
+                        Listing Site
+                        <ExternalLink className="ml-1 h-3.5 w-3.5" />
+                      </a>
+                    </div>
                   </div>
                   <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700">
                     {formatMoney(listing.expectedAnnualReturn)} / yr

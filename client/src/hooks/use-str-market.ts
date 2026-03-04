@@ -7,6 +7,7 @@ type SyncResponse = {
   source: string;
   syncedAt: string;
 };
+const STR_MARKET_REFETCH_INTERVAL_MS = 60 * 60 * 1000;
 
 export type StrMarketFilters = {
   search?: string;
@@ -36,6 +37,8 @@ export function useStrMarketListings(filters?: StrMarketFilters) {
   const queryString = buildStrMarketQuery(filters);
   return useQuery<StrMarketListing[]>({
     queryKey: ["/api/str-market/listings", queryString],
+    refetchInterval: STR_MARKET_REFETCH_INTERVAL_MS,
+    refetchIntervalInBackground: true,
     queryFn: async () => {
       const res = await fetch(`/api/str-market/listings${queryString}`, { credentials: "include" });
       const body = await res.json().catch(() => ({}));

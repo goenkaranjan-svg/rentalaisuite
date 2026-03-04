@@ -15,6 +15,15 @@ function formatMoney(value: string | number): string {
   });
 }
 
+function displayAddress(
+  city?: string | null,
+  region?: string | null,
+  neighbourhood?: string | null
+): string {
+  if (neighbourhood) return `${neighbourhood}, ${city}${region ? `, ${region.toUpperCase()}` : ""}`;
+  return `${city ?? "Unknown city"}${region ? `, ${region.toUpperCase()}` : ""}`;
+}
+
 export default function InvestorDealDetails() {
   const [match, params] = useRoute("/investor/deals/:id");
   const id = match ? Number(params.id) : 0;
@@ -74,6 +83,15 @@ export default function InvestorDealDetails() {
                 {listing.sourceCity}, {listing.sourceRegion?.toUpperCase()}
                 {listing.neighbourhood ? ` • ${listing.neighbourhood}` : ""}
               </p>
+              <a
+                href={listing.listingUrl || listing.sourceUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-2 inline-flex items-center text-sm font-medium text-sky-700 hover:text-sky-800 hover:underline"
+              >
+                {displayAddress(listing.sourceCity, listing.sourceRegion, listing.neighbourhood)}
+                <ExternalLink className="ml-1 h-3.5 w-3.5" />
+              </a>
             </div>
             <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700">
               {formatMoney(listing.expectedAnnualReturn)} / year

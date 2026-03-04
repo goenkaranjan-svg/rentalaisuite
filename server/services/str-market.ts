@@ -3,7 +3,7 @@ import type { InsertStrMarketListing } from "@shared/schema";
 
 const STR_SOURCE = "insideairbnb";
 const INSIDE_AIRBNB_DATA_PAGE = "https://insideairbnb.com/get-the-data/";
-const MAX_DATASETS = 30;
+const MAX_DATASETS = 80;
 const MAX_ROWS_PER_DATASET = 60;
 const SALE_PRICE_CAP_RATE = 0.08;
 
