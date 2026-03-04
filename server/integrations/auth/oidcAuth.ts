@@ -7,6 +7,8 @@ import type { Express, RequestHandler } from "express";
 import memoize from "memoizee";
 import connectPg from "connect-pg-simple";
 import { authStorage } from "./storage";
+import { deviceFingerprint } from "./security";
+import { removeSession, touchSession, trackSession } from "./sessionRegistry";
 
 const OIDC_PLACEHOLDERS = [
   "your-auth-provider.com",
@@ -79,6 +81,14 @@ function updateUserSession(
   user.expires_at = user.claims?.exp;
 }
 
+function getClientIp(req: any): string {
+  const forwarded = req.headers["x-forwarded-for"];
+  if (typeof forwarded === "string" && forwarded.trim()) {
+    return forwarded.split(",")[0].trim();
+  }
+  return req.ip || req.socket?.remoteAddress || "unknown";
+}
+
 async function upsertUser(claims: any) {
   await authStorage.upsertUser({
     id: claims["sub"],
@@ -94,6 +104,54 @@ export async function setupAuth(app: Express) {
   app.use(getSession());
   app.use(passport.initialize());
   app.use(passport.session());
+
+  app.use((req: any, res, next) => {
+    const sid = req.sessionID;
+    if (!sid) return next();
+
+    if (req.user?.claims?.sub) {
+      const ip = getClientIp(req);
+      const ua = String(req.headers["user-agent"] || "unknown");
+      const fp = deviceFingerprint(ip, ua);
+
+      if (!req.session.securityBinding) {
+        req.session.securityBinding = fp;
+      } else if (req.session.securityBinding !== fp) {
+        req.logout?.(() => {
+          req.session?.destroy(() => {
+            removeSession(sid);
+            return res.status(401).json({ message: "Session security check failed. Please sign in again." });
+          });
+        });
+        return;
+      }
+
+      const idleMaxMs = Number(process.env.SESSION_IDLE_TIMEOUT_MS || 30 * 60 * 1000);
+      const lastActivityAt = Number(req.session.lastActivityAt || Date.now());
+      if (Date.now() - lastActivityAt > idleMaxMs) {
+        req.logout?.(() => {
+          req.session?.destroy(() => {
+            removeSession(sid);
+            return res.status(401).json({ message: "Session expired due to inactivity." });
+          });
+        });
+        return;
+      }
+      req.session.lastActivityAt = Date.now();
+      touchSession(sid);
+      trackSession({
+        sid,
+        userId: req.user.claims.sub,
+        ip,
+        userAgent: ua,
+        createdAt: Number(req.session.createdAt || Date.now()),
+        lastSeenAt: Date.now(),
+      });
+    }
+
+    next();
+  });
+
   passport.serializeUser((user: Express.User, cb) => cb(null, user));
   passport.deserializeUser((user: Express.User, cb) => cb(null, user));
 
@@ -135,7 +193,11 @@ export async function setupAuth(app: Express) {
     });
     app.get("/api/logout", (req: any, res) => {
       req.logout?.(() => {
-        req.session?.destroy(() => res.redirect("/"));
+        const sid = req.sessionID;
+        req.session?.destroy(() => {
+          if (sid) removeSession(sid);
+          res.redirect("/");
+        });
       });
     });
     return;
@@ -159,7 +221,11 @@ export async function setupAuth(app: Express) {
     });
     app.get("/api/logout", (req: any, res) => {
       req.logout?.(() => {
-        req.session?.destroy(() => res.redirect("/"));
+        const sid = req.sessionID;
+        req.session?.destroy(() => {
+          if (sid) removeSession(sid);
+          res.redirect("/");
+        });
       });
     });
     return;
@@ -254,6 +320,8 @@ export async function setupAuth(app: Express) {
 
   app.get("/api/logout", (req, res) => {
     req.logout(() => {
+      const sid = (req as any).sessionID;
+      if (sid) removeSession(sid);
       res.redirect(
         client.buildEndSessionUrl(config, {
           client_id: process.env.CLIENT_ID!,

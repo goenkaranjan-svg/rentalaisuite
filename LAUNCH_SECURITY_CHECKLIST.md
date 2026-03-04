@@ -11,6 +11,16 @@
 - Rotate API keys/secrets and store them in environment variables only.
 - Disable verbose debug logs in production.
 
+### Optional but Recommended Auth Security Env Vars
+
+- `REQUIRE_EMAIL_VERIFICATION=true`
+- `ENABLE_RISK_STEP_UP=true`
+- `REQUIRE_CAPTCHA_ON_AUTH=true` (requires gateway/provider integration)
+- `AUTH_ALLOW_COUNTRIES=US,CA` (optional allowlist)
+- `AUTH_DENY_COUNTRIES=` (optional denylist)
+- `SESSION_IDLE_TIMEOUT_MS=1800000` (30m)
+- `ENABLE_PASSKEYS=true` (once full WebAuthn ceremony wiring is complete)
+
 ## Authentication & Access
 
 - Enforce role checks on sensitive routes (manager-only actions).

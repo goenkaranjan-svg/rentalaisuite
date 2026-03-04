@@ -10,6 +10,7 @@ import { registerImageRoutes } from "./integrations/image";
 import { seedDatabase } from "./seed";
 import OpenAI from "openai";
 import { scrapePublicStrListings } from "./services/str-market";
+import type { Request, Response, NextFunction } from "express";
 
 // Initialize OpenAI for backend logic (Lease gen, Maintenance analysis)
 // Use placeholder when no key is set so app can start; AI routes will check and return friendly error
@@ -36,6 +37,15 @@ function toMoney(value: string | number): string {
   if (Number.isNaN(numeric)) return "0.00";
   return numeric.toFixed(2);
 }
+
+const STEP_UP_TTL_MS = 10 * 60 * 1000;
+const requireStepUpAuth = (req: Request & any, res: Response, next: NextFunction) => {
+  const verifiedAt = Number(req.session?.stepUpVerifiedAt || 0);
+  if (!verifiedAt || Date.now() - verifiedAt > STEP_UP_TTL_MS) {
+    return res.status(403).json({ message: "Step-up authentication required. Call /api/auth/reauth first." });
+  }
+  return next();
+};
 
 function collectMissingListingFields(property: any): string[] {
   const required: Array<{ key: string; valid: boolean }> = [
@@ -414,7 +424,7 @@ export async function registerRoutes(
     res.json(templates);
   });
 
-  app.post(api.listingExports.templatesCreate.path, isAuthenticated, async (req: any, res) => {
+  app.post(api.listingExports.templatesCreate.path, isAuthenticated, requireStepUpAuth, async (req: any, res) => {
     const userId = req.user?.claims?.sub;
     if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
@@ -432,7 +442,7 @@ export async function registerRoutes(
     res.status(201).json(template);
   });
 
-  app.delete(api.listingExports.templatesDelete.path, isAuthenticated, async (req: any, res) => {
+  app.delete(api.listingExports.templatesDelete.path, isAuthenticated, requireStepUpAuth, async (req: any, res) => {
     const userId = req.user?.claims?.sub;
     if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
@@ -537,7 +547,7 @@ export async function registerRoutes(
     });
   });
 
-  app.post(api.listingExports.publishZillow.path, isAuthenticated, async (req: any, res) => {
+  app.post(api.listingExports.publishZillow.path, isAuthenticated, requireStepUpAuth, async (req: any, res) => {
     const userId = req.user?.claims?.sub;
     if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
@@ -573,7 +583,7 @@ export async function registerRoutes(
     });
   });
 
-  app.post(api.listingExports.publishApartments.path, isAuthenticated, async (req: any, res) => {
+  app.post(api.listingExports.publishApartments.path, isAuthenticated, requireStepUpAuth, async (req: any, res) => {
     const userId = req.user?.claims?.sub;
     if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
@@ -1291,7 +1301,7 @@ export async function registerRoutes(
     });
   });
 
-  app.post(api.payments.create.path, isAuthenticated, async (req: any, res) => {
+  app.post(api.payments.create.path, isAuthenticated, requireStepUpAuth, async (req: any, res) => {
      try {
       const userId = req.user?.claims?.sub;
       if (!userId) return res.status(401).json({ message: "Unauthorized" });

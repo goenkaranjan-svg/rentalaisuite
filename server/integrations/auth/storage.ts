@@ -27,6 +27,19 @@ export interface IAuthStorage {
   setResetToken(userId: string, tokenHash: string, expiresAt: Date): Promise<void>;
   findUserByResetToken(tokenHash: string): Promise<User | undefined>;
   updatePassword(userId: string, passwordHash: string): Promise<void>;
+  markEmailVerified(userId: string): Promise<void>;
+  updateLoginSecurityState(input: {
+    userId: string;
+    failedLoginCount?: number;
+    lockoutUntil?: Date | null;
+    lastLoginAt?: Date | null;
+  }): Promise<void>;
+  updateMfaConfig(input: {
+    userId: string;
+    enabled: boolean;
+    secret?: string | null;
+    backupCodes?: string[];
+  }): Promise<void>;
 }
 
 class AuthStorage implements IAuthStorage {
@@ -78,6 +91,7 @@ class AuthStorage implements IAuthStorage {
         passwordHash: input.passwordHash,
         authProvider: "local",
         role: input.role,
+        emailVerifiedAt: null,
         firstName: input.firstName,
         lastName: input.lastName,
       })
@@ -146,6 +160,50 @@ class AuthStorage implements IAuthStorage {
         updatedAt: new Date(),
       })
       .where(eq(users.id, userId));
+  }
+
+  async markEmailVerified(userId: string): Promise<void> {
+    await db
+      .update(users)
+      .set({
+        emailVerifiedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId));
+  }
+
+  async updateLoginSecurityState(input: {
+    userId: string;
+    failedLoginCount?: number;
+    lockoutUntil?: Date | null;
+    lastLoginAt?: Date | null;
+  }): Promise<void> {
+    await db
+      .update(users)
+      .set({
+        ...(input.failedLoginCount !== undefined ? { failedLoginCount: input.failedLoginCount } : {}),
+        ...(input.lockoutUntil !== undefined ? { lockoutUntil: input.lockoutUntil } : {}),
+        ...(input.lastLoginAt !== undefined ? { lastLoginAt: input.lastLoginAt } : {}),
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, input.userId));
+  }
+
+  async updateMfaConfig(input: {
+    userId: string;
+    enabled: boolean;
+    secret?: string | null;
+    backupCodes?: string[];
+  }): Promise<void> {
+    await db
+      .update(users)
+      .set({
+        mfaEnabled: input.enabled,
+        mfaSecret: input.secret ?? null,
+        mfaBackupCodes: input.backupCodes ?? [],
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, input.userId));
   }
 }
 

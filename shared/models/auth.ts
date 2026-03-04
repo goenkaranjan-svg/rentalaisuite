@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { index, jsonb, pgTable, timestamp, varchar } from "drizzle-orm/pg-core";
+import { boolean, index, integer, jsonb, pgTable, timestamp, varchar } from "drizzle-orm/pg-core";
 
 // Session storage table.
 // (IMPORTANT) This table is mandatory for OIDC authentication, don't drop it.
@@ -21,8 +21,16 @@ export const users = pgTable("users", {
   role: varchar("role").notNull().default("tenant"), // "manager" | "tenant" | "investor"
   authProvider: varchar("auth_provider").notNull().default("oidc"), // "oidc" | "local"
   passwordHash: varchar("password_hash"),
+  emailVerifiedAt: timestamp("email_verified_at"),
   resetTokenHash: varchar("reset_token_hash"),
   resetTokenExpiresAt: timestamp("reset_token_expires_at"),
+  failedLoginCount: integer("failed_login_count").notNull().default(0),
+  lockoutUntil: timestamp("lockout_until"),
+  mfaEnabled: boolean("mfa_enabled").notNull().default(false),
+  mfaSecret: varchar("mfa_secret"),
+  mfaBackupCodes: jsonb("mfa_backup_codes").$type<string[]>().notNull().default([]),
+  lastLoginAt: timestamp("last_login_at"),
+  securityVersion: integer("security_version").notNull().default(1),
   firstName: varchar("first_name"),
   lastName: varchar("last_name"),
   profileImageUrl: varchar("profile_image_url"),
