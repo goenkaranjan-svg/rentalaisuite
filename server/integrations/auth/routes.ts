@@ -83,6 +83,9 @@ const loginMfaVerifySchema = z.object({
 const emailVerifySchema = z.object({
   token: z.string().min(1),
 });
+const resendVerifySchema = z.object({
+  email: z.string().email(),
+});
 
 const magicLinkRequestSchema = z.object({
   email: z.string().email(),
@@ -192,6 +195,7 @@ export function registerAuthRoutes(app: Express): void {
         return res.status(400).json({ message: "Captcha validation required." });
       }
       const input = signupSchema.parse(req.body);
+      input.email = input.email.trim().toLowerCase();
       const passwordPolicy = passwordPolicyResult(input.password);
       if (!passwordPolicy.ok) {
         return res.status(400).json({ message: passwordPolicy.message });
@@ -256,6 +260,7 @@ export function registerAuthRoutes(app: Express): void {
         return res.status(400).json({ message: "Captcha validation required." });
       }
       const input = loginSchema.parse(req.body);
+      input.email = input.email.trim().toLowerCase();
       const ip = getClientIp(req);
       const userAgent = String(req.headers["user-agent"] || "unknown");
       const countryCode = parseCountryFromHeaders(req.headers as Record<string, unknown>);
@@ -357,6 +362,7 @@ export function registerAuthRoutes(app: Express): void {
   app.post("/api/auth/forgot-password", strictAuthLimiter, async (req, res) => {
     try {
       const input = forgotSchema.parse(req.body);
+      input.email = input.email.trim().toLowerCase();
       const user = await authStorage.getUserByEmail(input.email);
       if (!user) {
         return res.json({ message: "If that email exists, a reset link has been generated." });
@@ -437,6 +443,35 @@ export function registerAuthRoutes(app: Express): void {
     }
   });
 
+  app.post("/api/auth/verify-email/resend", strictAuthLimiter, async (req, res) => {
+    try {
+      const input = resendVerifySchema.parse(req.body);
+      const normalizedEmail = input.email.trim().toLowerCase();
+      const user = await authStorage.getUserByEmail(normalizedEmail);
+      // Always return success-style response to avoid account enumeration.
+      const payload: Record<string, unknown> = {
+        message: "If the account exists and is not verified, a verification email has been sent.",
+      };
+      if (!user || !user.email || user.emailVerifiedAt) {
+        if (process.env.NODE_ENV !== "production") {
+          payload.debug = !user ? "no_user" : user.emailVerifiedAt ? "already_verified" : "no_email";
+        }
+        return res.json(payload);
+      }
+      const token = createVerificationToken(user.id);
+      await sendVerificationEmail({ to: user.email, token });
+      console.log(`[auth] verification resend queued for ${user.email}`);
+      if (process.env.NODE_ENV !== "production") {
+        payload.debug = "sent";
+      }
+      if (process.env.NODE_ENV !== "production") payload.verificationToken = token;
+      return res.json(payload);
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ message: "Invalid email." });
+      return res.status(500).json({ message: mapAuthDbError(error) });
+    }
+  });
+
   app.get("/api/auth/verify-email", strictAuthLimiter, async (req, res) => {
     try {
       const token = String(req.query?.token ?? "");
@@ -453,6 +488,7 @@ export function registerAuthRoutes(app: Express): void {
   app.post("/api/auth/magic-link/request", strictAuthLimiter, async (req, res) => {
     try {
       const input = magicLinkRequestSchema.parse(req.body);
+      input.email = input.email.trim().toLowerCase();
       const user = await authStorage.getUserByEmail(input.email);
       const response: Record<string, unknown> = { message: "If the account exists, a magic link has been generated." };
       if (!user) return res.json(response);
@@ -661,6 +697,7 @@ export function registerAuthRoutes(app: Express): void {
   app.post("/api/auth/recovery/start", strictAuthLimiter, async (req, res) => {
     try {
       const input = recoveryStartSchema.parse(req.body);
+      input.email = input.email.trim().toLowerCase();
       const user = await authStorage.getUserByEmail(input.email);
       const payload: Record<string, unknown> = { message: "If the account exists, recovery has started." };
       if (!user) return res.json(payload);

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
-import { Building2, ShieldCheck, Users, TrendingUp, LogIn, UserPlus, KeyRound, type LucideIcon } from "lucide-react";
+import { Building2, ShieldCheck, Users, TrendingUp, LogIn, UserPlus, KeyRound, Menu, type LucideIcon } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 
 import { useAuth } from "@/hooks/use-auth";
@@ -8,9 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 type UserRole = "manager" | "tenant" | "investor";
 type AuthMode = "signin" | "signup" | "forgot";
@@ -31,8 +30,8 @@ const roleConfig: Record<UserRole, { label: string; subtitle: string; icon: Luci
 const modeConfig: Record<AuthMode, { label: string; title: string; description: string; icon: LucideIcon }> = {
   signin: {
     label: "Sign In",
-    title: "Welcome back",
-    description: "Continue where you left off.",
+    title: "Sign in",
+    description: "",
     icon: LogIn,
   },
   signup: {
@@ -58,11 +57,13 @@ export default function Login() {
     signup,
     forgotPassword,
     resetPassword,
+    resendVerificationEmail,
     loginWithPasskey,
     isLoggingIn,
     isSigningUp,
     isProcessingForgotPassword,
     isResettingPassword,
+    isResendingVerificationEmail,
     isLoggingInWithPasskey,
   } = useAuth();
 
@@ -78,6 +79,7 @@ export default function Login() {
   const [resetToken, setResetToken] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [devResetToken, setDevResetToken] = useState<string | null>(null);
+  const [showResendVerification, setShowResendVerification] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -89,9 +91,21 @@ export default function Login() {
   const handleSignIn = async () => {
     try {
       await login({ email, password, role });
+      setShowResendVerification(false);
       toast({ title: "Signed in", description: "Welcome back." });
     } catch (error: any) {
+      const message = String(error?.message || "");
+      setShowResendVerification(message.toLowerCase().includes("verify your email"));
       toast({ title: "Sign in failed", description: error.message, variant: "destructive" });
+    }
+  };
+
+  const handleResendVerification = async () => {
+    try {
+      await resendVerificationEmail(email);
+      toast({ title: "Verification email sent", description: "Check your inbox for the verification link." });
+    } catch (error: any) {
+      toast({ title: "Unable to resend", description: error.message, variant: "destructive" });
     }
   };
 
@@ -122,10 +136,6 @@ export default function Login() {
     } catch (error: any) {
       toast({ title: "Reset failed", description: error.message, variant: "destructive" });
     }
-  };
-
-  const socialLogin = (provider: "google" | "facebook") => {
-    window.location.href = `/api/login/${provider}?role=${role}`;
   };
 
   const handlePasskeyLogin = async () => {
@@ -165,17 +175,6 @@ export default function Login() {
             <p className="text-xs uppercase tracking-wide text-emerald-700">Built for focused decisions</p>
             <p className="mt-2 text-sm text-slate-600">Track leasing, maintenance, accounting, and investment opportunities with fewer clicks.</p>
           </div>
-          <div className="grid grid-cols-3 gap-3">
-            {(["manager", "tenant", "investor"] as UserRole[]).map((r) => {
-              const Icon = roleConfig[r].icon;
-              return (
-                <div key={r} className="rounded-xl border border-slate-200 bg-white p-3 text-center transition-all duration-300 hover:-translate-y-0.5">
-                  <Icon className="mx-auto h-4 w-4 text-emerald-700" />
-                  <p className="mt-2 text-xs text-slate-700">{roleConfig[r].label}</p>
-                </div>
-              );
-            })}
-          </div>
         </div>
       </div>
 
@@ -195,20 +194,23 @@ export default function Login() {
                 </div>
                 <span className="font-semibold text-slate-900">PropMan.ai</span>
               </div>
-              <Badge variant="secondary">Secure Access</Badge>
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-[11px] uppercase tracking-wide text-slate-500">Role</Label>
-              <Select value={role} onValueChange={(value: UserRole) => setRole(value)}>
-                <SelectTrigger className="h-11 bg-slate-50 border-slate-200 focus:ring-2 focus:ring-emerald-500/20">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="manager">Property Manager</SelectItem>
-                  <SelectItem value="tenant">Renter</SelectItem>
-                  <SelectItem value="investor">Investor</SelectItem>
-                </SelectContent>
-              </Select>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    aria-label="Select role"
+                    className="ml-auto h-9 w-9 shrink-0 bg-slate-50 border-slate-200 text-slate-700"
+                  >
+                    <Menu className="h-4 w-4 text-slate-500" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuItem onClick={() => setRole("manager")}>Property Manager</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setRole("tenant")}>Renter</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setRole("investor")}>Investor</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
             <AnimatePresence mode="wait" initial={false}>
               <motion.div
@@ -222,10 +224,14 @@ export default function Login() {
                   <ActiveModeIcon className="h-5 w-5 text-emerald-700" />
                   {activeMode.title}
                 </CardTitle>
-                <p className="mt-1 text-[14px] text-slate-600">{activeMode.description}</p>
+                {activeMode.description ? (
+                  <p className="mt-1 text-[14px] text-slate-600">{activeMode.description}</p>
+                ) : null}
               </motion.div>
             </AnimatePresence>
-            <p className="text-xs text-slate-500">{activeRole.label}: {activeRole.subtitle}</p>
+            <p className="text-xs text-slate-500">
+              Signing in as <span className="font-medium text-slate-700">{activeRole.label}</span>
+            </p>
           </CardHeader>
           <CardContent className="px-5 pb-5 sm:px-7 sm:pb-7">
             <AnimatePresence mode="wait" initial={false}>
@@ -260,20 +266,19 @@ export default function Login() {
                   />
                 </div>
                 <Button className="w-full h-11 bg-emerald-500 hover:bg-emerald-600 text-white transition-all duration-200 text-sm sm:text-base px-3" onClick={handleSignIn} disabled={isLoggingIn}>
-                  {isLoggingIn
-                    ? "Signing in..."
-                    : `Sign In as ${
-                        role === "manager" ? "Manager" : role === "investor" ? "Investor" : "Renter"
-                      }`}
+                  {isLoggingIn ? "Signing in..." : "Sign in"}
                 </Button>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  <Button variant="outline" className="bg-white h-10 border-slate-200 transition-all duration-200 hover:-translate-y-0.5 text-xs sm:text-sm px-2" onClick={() => socialLogin("google")}>
-                    Continue with Google
+                {showResendVerification && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full h-10 border-slate-200"
+                    onClick={handleResendVerification}
+                    disabled={!email || isResendingVerificationEmail}
+                  >
+                    {isResendingVerificationEmail ? "Sending verification..." : "Resend verification email"}
                   </Button>
-                  <Button variant="outline" className="bg-white h-10 border-slate-200 transition-all duration-200 hover:-translate-y-0.5 text-xs sm:text-sm px-2" onClick={() => socialLogin("facebook")}>
-                    Continue with Facebook
-                  </Button>
-                </div>
+                )}
                 <Button
                   variant="outline"
                   className="w-full h-11 border-slate-200 bg-white"
@@ -282,20 +287,22 @@ export default function Login() {
                 >
                   {isLoggingInWithPasskey ? "Checking passkey..." : "Continue with Passkey"}
                 </Button>
-                <button
-                  type="button"
-                  onClick={() => setMode("forgot")}
-                  className="w-full text-sm text-slate-600 hover:text-slate-900 underline underline-offset-2"
-                >
-                  Forgot password?
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMode("signup")}
-                  className="w-full text-sm text-slate-600 hover:text-slate-900 underline underline-offset-2"
-                >
-                  Create an account
-                </button>
+                <div className="grid grid-cols-2 gap-2 -mt-1">
+                  <button
+                    type="button"
+                    onClick={() => setMode("forgot")}
+                    className="text-sm text-slate-600 hover:text-slate-900 underline underline-offset-2 text-left"
+                  >
+                    Forgot password?
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMode("signup")}
+                    className="text-sm text-slate-600 hover:text-slate-900 underline underline-offset-2 text-right"
+                  >
+                    Create an account
+                  </button>
+                </div>
               </>
             )}
 

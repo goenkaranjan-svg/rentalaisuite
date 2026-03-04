@@ -131,6 +131,20 @@ export function useAuth() {
     },
   });
 
+  const resendVerificationMutation = useMutation({
+    mutationFn: async (email: string) => {
+      const res = await fetch("/api/auth/verify-email/resend", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ email }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body?.message || "Failed to resend verification email.");
+      return body as { message: string };
+    },
+  });
+
   const passkeyLoginMutation = useMutation({
     mutationFn: async () => {
       if (!("credentials" in navigator) || !window.PublicKeyCredential) {
@@ -184,11 +198,13 @@ export function useAuth() {
     signup: signupMutation.mutateAsync,
     forgotPassword: forgotPasswordMutation.mutateAsync,
     resetPassword: resetPasswordMutation.mutateAsync,
+    resendVerificationEmail: resendVerificationMutation.mutateAsync,
     loginWithPasskey: passkeyLoginMutation.mutateAsync,
     isLoggingIn: loginMutation.isPending,
     isSigningUp: signupMutation.isPending,
     isProcessingForgotPassword: forgotPasswordMutation.isPending,
     isResettingPassword: resetPasswordMutation.isPending,
+    isResendingVerificationEmail: resendVerificationMutation.isPending,
     isLoggingInWithPasskey: passkeyLoginMutation.isPending,
   };
 }

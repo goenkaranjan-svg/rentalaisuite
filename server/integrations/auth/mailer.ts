@@ -5,6 +5,11 @@ type MailPayload = {
   text: string;
 };
 
+export type MailSendResult = {
+  provider: "resend";
+  id?: string;
+};
+
 function getAppBaseUrl(): string {
   const fromEnv =
     process.env.PUBLIC_APP_URL ||
@@ -18,7 +23,7 @@ function getFromAddress(): string {
   return process.env.AUTH_EMAIL_FROM || "PropMan Security <security@propman.local>";
 }
 
-async function sendWithResend(payload: MailPayload): Promise<void> {
+async function sendWithResend(payload: MailPayload): Promise<MailSendResult> {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
     throw new Error("RESEND_API_KEY is not configured.");
@@ -43,9 +48,12 @@ async function sendWithResend(payload: MailPayload): Promise<void> {
     const body = await response.text().catch(() => "");
     throw new Error(`Resend request failed (${response.status}): ${body.slice(0, 300)}`);
   }
+
+  const body = await response.json().catch(() => ({} as any));
+  return { provider: "resend", id: body?.id };
 }
 
-export async function sendAuthEmail(payload: MailPayload): Promise<void> {
+export async function sendAuthEmail(payload: MailPayload): Promise<MailSendResult> {
   const provider = (process.env.AUTH_EMAIL_PROVIDER || "resend").toLowerCase();
 
   if (provider === "resend") {
@@ -58,7 +66,7 @@ export async function sendAuthEmail(payload: MailPayload): Promise<void> {
 export async function sendVerificationEmail(input: { to: string; token: string }): Promise<void> {
   const base = getAppBaseUrl();
   const verifyLink = `${base}/api/auth/verify-email?token=${encodeURIComponent(input.token)}`;
-  return sendAuthEmail({
+  await sendAuthEmail({
     to: input.to,
     subject: "Verify your email",
     html: `<p>Verify your email to activate your account:</p><p><a href="${verifyLink}">Verify Email</a></p><p>If you did not create this account, ignore this email.</p>`,
@@ -69,7 +77,7 @@ export async function sendVerificationEmail(input: { to: string; token: string }
 export async function sendPasswordResetEmail(input: { to: string; token: string }): Promise<void> {
   const base = getAppBaseUrl();
   const resetLink = `${base}/login?mode=forgot&token=${encodeURIComponent(input.token)}`;
-  return sendAuthEmail({
+  await sendAuthEmail({
     to: input.to,
     subject: "Reset your password",
     html: `<p>Use the link below to reset your password:</p><p><a href="${resetLink}">Reset Password</a></p><p>This link expires in 1 hour.</p>`,
@@ -81,7 +89,7 @@ export async function sendMagicLinkEmail(input: { to: string; token: string; rol
   const base = getAppBaseUrl();
   const rolePart = input.role ? `&role=${encodeURIComponent(input.role)}` : "";
   const link = `${base}/api/auth/magic-link/consume?token=${encodeURIComponent(input.token)}${rolePart}`;
-  return sendAuthEmail({
+  await sendAuthEmail({
     to: input.to,
     subject: "Your secure sign-in link",
     html: `<p>Use this one-time link to sign in:</p><p><a href="${link}">Sign in to PropMan</a></p><p>This link expires in 15 minutes.</p>`,
@@ -92,7 +100,7 @@ export async function sendMagicLinkEmail(input: { to: string; token: string; rol
 export async function sendRecoveryEmail(input: { to: string; token: string }): Promise<void> {
   const base = getAppBaseUrl();
   const link = `${base}/login?mode=recovery&recoveryToken=${encodeURIComponent(input.token)}`;
-  return sendAuthEmail({
+  await sendAuthEmail({
     to: input.to,
     subject: "Account recovery request",
     html: `<p>An account recovery was requested for your account.</p><p><a href="${link}">Continue recovery</a></p><p>For security, recovery has a short cooldown before completion.</p>`,

@@ -54,6 +54,11 @@ Update `.env` with your configuration:
 - **AI_INTEGRATIONS_OPENAI_API_KEY**: OpenAI API key (for AI features)
 - **AI_INTEGRATIONS_OPENAI_BASE_URL**: OpenAI API base URL (defaults to OpenAI)
 - **PORT**: Server port (defaults to 5001)
+- **REQUIRE_EMAIL_VERIFICATION**: Require verified email before login (`true` recommended)
+- **AUTH_EMAIL_PROVIDER**: Email provider for auth tokens (`resend`)
+- **RESEND_API_KEY**: Resend API key for verification/reset/magic-link/recovery emails
+- **AUTH_EMAIL_FROM**: Sender identity for auth emails (must be verified in provider)
+- **PUBLIC_APP_URL**: Public base URL used in emailed links (e.g. `https://app.example.com`)
 
 ### 2. Database Setup
 
