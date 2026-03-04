@@ -21,6 +21,19 @@
 - `SESSION_IDLE_TIMEOUT_MS=1800000` (30m)
 - `ENABLE_PASSKEYS=true` (once full WebAuthn ceremony wiring is complete)
 
+### Email Delivery for Auth Tokens
+
+- `AUTH_EMAIL_PROVIDER=resend`
+- `RESEND_API_KEY=...`
+- `AUTH_EMAIL_FROM="PropMan Security <security@yourdomain.com>"`
+- `PUBLIC_APP_URL=https://your-domain.com`
+
+Auth flows now send real emails for:
+- Email verification
+- Magic-link sign-in
+- Password reset
+- Account recovery
+
 ## Authentication & Access
 
 - Enforce role checks on sensitive routes (manager-only actions).

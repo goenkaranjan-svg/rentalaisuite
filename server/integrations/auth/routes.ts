@@ -35,6 +35,12 @@ import {
   clearFailedLogins,
 } from "./security";
 import { removeSession, sessionsForUser } from "./sessionRegistry";
+import {
+  sendMagicLinkEmail,
+  sendPasswordResetEmail,
+  sendRecoveryEmail,
+  sendVerificationEmail,
+} from "./mailer";
 
 const signupSchema = z.object({
   email: z.string().email(),
@@ -230,6 +236,9 @@ export function registerAuthRoutes(app: Express): void {
       const payload: Record<string, unknown> = {
         message: "Account created. Verify your email before first login.",
       };
+      if (user.email) {
+        await sendVerificationEmail({ to: user.email, token: verificationToken });
+      }
       if (process.env.NODE_ENV !== "production") payload.verificationToken = verificationToken;
       return res.status(201).json(payload);
     } catch (error) {
@@ -361,6 +370,9 @@ export function registerAuthRoutes(app: Express): void {
       const payload: Record<string, unknown> = {
         message: "Password reset link generated.",
       };
+      if (user.email) {
+        await sendPasswordResetEmail({ to: user.email, token });
+      }
       if (process.env.NODE_ENV !== "production") {
         payload.resetToken = token;
         payload.recoveryToken = recoveryToken;
@@ -425,6 +437,19 @@ export function registerAuthRoutes(app: Express): void {
     }
   });
 
+  app.get("/api/auth/verify-email", strictAuthLimiter, async (req, res) => {
+    try {
+      const token = String(req.query?.token ?? "");
+      if (!token) return res.status(400).json({ message: "Missing token." });
+      const userId = consumeVerificationToken(token);
+      if (!userId) return res.status(400).json({ message: "Invalid or expired verification token." });
+      await authStorage.markEmailVerified(userId);
+      return res.redirect("/login?verified=true");
+    } catch (error) {
+      return res.status(500).json({ message: mapAuthDbError(error) });
+    }
+  });
+
   app.post("/api/auth/magic-link/request", strictAuthLimiter, async (req, res) => {
     try {
       const input = magicLinkRequestSchema.parse(req.body);
@@ -432,6 +457,9 @@ export function registerAuthRoutes(app: Express): void {
       const response: Record<string, unknown> = { message: "If the account exists, a magic link has been generated." };
       if (!user) return res.json(response);
       const token = createMagicLinkToken(user.id);
+      if (user.email) {
+        await sendMagicLinkEmail({ to: user.email, token, role: user.role as "manager" | "tenant" | "investor" });
+      }
       if (process.env.NODE_ENV !== "production") response.magicLinkToken = token;
       return res.json(response);
     } catch (error) {
@@ -451,6 +479,27 @@ export function registerAuthRoutes(app: Express): void {
       return establishSession(req, res, { id: user.id, email: user.email, role: user.role });
     } catch (error) {
       if (error instanceof z.ZodError) return res.status(400).json({ message: "Invalid request." });
+      return res.status(500).json({ message: mapAuthDbError(error) });
+    }
+  });
+
+  app.get("/api/auth/magic-link/consume", strictAuthLimiter, async (req: any, res) => {
+    try {
+      const token = String(req.query?.token ?? "");
+      const role = typeof req.query?.role === "string" ? req.query.role : undefined;
+      const userId = consumeMagicLinkToken(token);
+      if (!userId) return res.status(400).json({ message: "Invalid or expired magic link." });
+      const user = await authStorage.getUser(userId);
+      if (!user) return res.status(404).json({ message: "User not found." });
+      if (role && user.role !== role) return res.status(403).json({ message: "Role mismatch for magic-link sign in." });
+      return req.login(buildLocalSessionUser(user), (err: unknown) => {
+        if (err) return res.status(500).json({ message: "Failed to create session." });
+        req.session.createdAt = Date.now();
+        req.session.lastActivityAt = Date.now();
+        req.session.securityBinding = deviceFingerprint(getClientIp(req), String(req.headers["user-agent"] || "unknown"));
+        return res.redirect("/");
+      });
+    } catch (error) {
       return res.status(500).json({ message: mapAuthDbError(error) });
     }
   });
@@ -616,6 +665,9 @@ export function registerAuthRoutes(app: Express): void {
       const payload: Record<string, unknown> = { message: "If the account exists, recovery has started." };
       if (!user) return res.json(payload);
       const token = createRecoveryToken(user.id);
+      if (user.email) {
+        await sendRecoveryEmail({ to: user.email, token });
+      }
       if (process.env.NODE_ENV !== "production") payload.recoveryToken = token;
       return res.json(payload);
     } catch {
