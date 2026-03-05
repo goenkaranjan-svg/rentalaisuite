@@ -2,9 +2,9 @@ import { useMaintenanceRequests, useUpdateMaintenanceRequest, useAnalyzeMaintena
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Bot, CheckCircle, Clock, AlertCircle } from "lucide-react";
+import { Bot, Clock3, Wrench } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { format } from "date-fns";
+import { format, formatDistanceToNowStrict } from "date-fns";
 
 export default function Maintenance() {
   const { data: requests, isLoading } = useMaintenanceRequests();
@@ -17,14 +17,6 @@ export default function Maintenance() {
       case 'emergency': return 'bg-red-500 text-white border-red-600 animate-pulse';
       case 'medium': return 'bg-orange-100 text-orange-700 border-orange-200';
       default: return 'bg-blue-100 text-blue-700 border-blue-200';
-    }
-  };
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'completed': return <CheckCircle className="w-4 h-4 text-green-500" />;
-      case 'in_progress': return <Clock className="w-4 h-4 text-orange-500" />;
-      default: return <AlertCircle className="w-4 h-4 text-slate-400" />;
     }
   };
 
@@ -60,6 +52,32 @@ export default function Maintenance() {
                     </div>
                     <h3 className="text-lg font-bold text-slate-900 mb-2">{req.title}</h3>
                     <p className="text-slate-600 text-sm mb-4">{req.description}</p>
+
+                    <div className="mb-4 flex flex-wrap items-center gap-2 text-xs">
+                      <Badge variant="outline" className="capitalize">
+                        {req.category || "general"}
+                      </Badge>
+                      {req.assignedVendor ? (
+                        <Badge variant="secondary" className="inline-flex items-center gap-1">
+                          <Wrench className="h-3 w-3" />
+                          {req.assignedVendor}
+                        </Badge>
+                      ) : null}
+                      {req.assignmentNote ? (
+                        <span className="text-slate-500">{req.assignmentNote}</span>
+                      ) : null}
+                      {req.slaDueAt ? (
+                        <Badge variant="outline" className="inline-flex items-center gap-1">
+                          <Clock3 className="h-3 w-3" />
+                          SLA {formatDistanceToNowStrict(new Date(req.slaDueAt), { addSuffix: true })}
+                        </Badge>
+                      ) : null}
+                      {req.escalatedAt ? (
+                        <Badge className="bg-red-600 text-white hover:bg-red-600">
+                          Escalated
+                        </Badge>
+                      ) : null}
+                    </div>
                     
                     {req.aiAnalysis && (
                       <div className="bg-blue-50 border border-blue-100 p-3 rounded-lg flex gap-3 text-sm text-blue-800">

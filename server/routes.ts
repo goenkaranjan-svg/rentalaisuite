@@ -60,6 +60,7 @@ const RENT_OVERDUE_SCAN_INTERVAL_MS = DAILY_SCAN_INTERVAL_MS;
 const DEFAULT_RENT_OVERDUE_NOTIFICATION_DAYS = 5;
 const LEASE_EXPIRY_SCAN_INTERVAL_MS = DAILY_SCAN_INTERVAL_MS;
 const DEFAULT_LEASE_EXPIRY_NOTIFICATION_DAYS = 30;
+const MAINTENANCE_ESCALATION_SCAN_INTERVAL_MS = DAILY_SCAN_INTERVAL_MS;
 
 type OverdueNotificationCandidate = {
   leaseId: number;
@@ -79,9 +80,117 @@ type LeaseExpiryNotificationCandidate = {
   daysUntilEnd: number;
 };
 
+type MaintenanceCategory = "plumbing" | "electrical" | "hvac" | "appliance" | "pest" | "security" | "general";
+
+type VendorProfile = {
+  name: string;
+  categories: MaintenanceCategory[];
+  states?: string[];
+  onCall?: boolean;
+};
+
 function isMissingRelationError(error: unknown): boolean {
   const code = (error as any)?.code;
   return code === "42P01";
+}
+
+const MAINTENANCE_TRIAGE_RULES: Array<{
+  category: MaintenanceCategory;
+  priority: "low" | "medium" | "high" | "emergency";
+  keywords: string[];
+}> = [
+  {
+    category: "security",
+    priority: "emergency",
+    keywords: ["fire", "smoke", "gas leak", "carbon monoxide", "break in", "intruder", "burst pipe", "flood"],
+  },
+  {
+    category: "electrical",
+    priority: "high",
+    keywords: ["power outage", "no power", "sparking", "burning smell", "breaker", "outlet", "short circuit"],
+  },
+  {
+    category: "hvac",
+    priority: "high",
+    keywords: ["no heat", "heater", "furnace", "ac not working", "air conditioning", "hvac", "thermostat"],
+  },
+  {
+    category: "plumbing",
+    priority: "high",
+    keywords: ["leak", "water", "toilet", "drain", "sewer", "clog", "pipe", "sink", "shower"],
+  },
+  {
+    category: "pest",
+    priority: "medium",
+    keywords: ["pest", "roach", "rodent", "mouse", "rat", "bed bug", "termite"],
+  },
+  {
+    category: "appliance",
+    priority: "medium",
+    keywords: ["refrigerator", "fridge", "oven", "stove", "dishwasher", "washer", "dryer", "microwave"],
+  },
+];
+
+const AUTO_ASSIGN_VENDOR_POOL: VendorProfile[] = [
+  { name: "RapidFix Plumbing", categories: ["plumbing"], states: ["GA", "CA", "TX"], onCall: true },
+  { name: "GridLine Electric", categories: ["electrical"], states: ["GA", "CA", "TX"], onCall: true },
+  { name: "Comfort HVAC Services", categories: ["hvac"], states: ["GA", "CA", "TX"], onCall: true },
+  { name: "Home Appliance Response", categories: ["appliance"], states: ["GA", "CA", "TX"] },
+  { name: "PestShield Control", categories: ["pest"], states: ["GA", "CA", "TX"] },
+  { name: "SafeAccess Property Support", categories: ["security", "general"], onCall: true },
+];
+
+function getSlaHoursForPriority(priority: string): number {
+  switch (priority) {
+    case "emergency":
+      return 4;
+    case "high":
+      return 24;
+    case "medium":
+      return 72;
+    default:
+      return 168;
+  }
+}
+
+function triageMaintenanceRequest(title: string, description: string) {
+  const text = `${title} ${description}`.toLowerCase();
+  const matched = MAINTENANCE_TRIAGE_RULES.find((rule) =>
+    rule.keywords.some((keyword) => text.includes(keyword)),
+  );
+  const category: MaintenanceCategory = matched?.category ?? "general";
+  const priority = matched?.priority ?? "medium";
+  const slaHours = getSlaHoursForPriority(priority);
+  return {
+    category,
+    priority,
+    slaHours,
+    summary: `Auto-triaged as ${priority} priority (${category}). SLA target: ${slaHours}h.`,
+  };
+}
+
+function autoAssignVendor(params: { category: MaintenanceCategory; propertyState?: string | null }) {
+  const propertyState = (params.propertyState || "").toUpperCase();
+  const categoryMatches = AUTO_ASSIGN_VENDOR_POOL.filter((vendor) =>
+    vendor.categories.includes(params.category),
+  );
+  const stateMatch = categoryMatches.find(
+    (vendor) => vendor.states && propertyState && vendor.states.includes(propertyState),
+  );
+  const onCallMatch = categoryMatches.find((vendor) => vendor.onCall);
+  const chosen = stateMatch ?? onCallMatch ?? categoryMatches[0] ?? AUTO_ASSIGN_VENDOR_POOL[0];
+  const note = stateMatch
+    ? "Auto-assigned by trade and property state."
+    : onCallMatch
+      ? "Auto-assigned to on-call vendor by trade."
+      : "Auto-assigned to default vendor queue.";
+  return { vendorName: chosen.name, note };
+}
+
+function getEscalatedPriority(priority: string): "medium" | "high" | "emergency" {
+  if (priority === "low") return "medium";
+  if (priority === "medium") return "high";
+  return "emergency";
 }
 
 const leaseSigningCompleteSchema = z.object({
@@ -670,6 +779,76 @@ export async function registerRoutes(
   setTimeout(() => {
     void triggerLeaseExpiryScan();
   }, 15_000);
+
+  const triggerMaintenanceEscalationScan = async (forcedManagerId?: string) => {
+    const now = new Date();
+    const requests = await storage.getMaintenanceRequests();
+    const openRequests = requests.filter(
+      (request) =>
+        (request.status === "open" || request.status === "in_progress") &&
+        request.slaDueAt &&
+        new Date(request.slaDueAt).getTime() <= now.getTime() &&
+        !request.escalatedAt,
+    );
+
+    const escalatedByManager = new Map<string, Array<{ id: number; propertyAddress: string; priority: string }>>();
+
+    for (const request of openRequests) {
+      const property = await storage.getProperty(request.propertyId);
+      if (!property) continue;
+      if (forcedManagerId && property.managerId !== forcedManagerId) continue;
+
+      const nextPriority = getEscalatedPriority(request.priority);
+      const slaDueAt = request.slaDueAt ?? now;
+      const escalationSummary = `SLA breached on ${new Date(slaDueAt).toLocaleString()}. Priority escalated to ${nextPriority}.`;
+      const mergedAnalysis = request.aiAnalysis
+        ? `${request.aiAnalysis}\nAutomation: ${escalationSummary}`
+        : `Automation: ${escalationSummary}`;
+
+      await storage.updateMaintenanceRequest(request.id, {
+        priority: nextPriority,
+        escalatedAt: now,
+        aiAnalysis: mergedAnalysis,
+      });
+
+      const managerItems = escalatedByManager.get(property.managerId) ?? [];
+      managerItems.push({
+        id: request.id,
+        propertyAddress: property.address,
+        priority: nextPriority,
+      });
+      escalatedByManager.set(property.managerId, managerItems);
+    }
+
+    for (const [managerId, items] of Array.from(escalatedByManager.entries())) {
+      try {
+        const manager = await storage.getUser(managerId);
+        if (!manager?.email) continue;
+        const subject = `Maintenance SLA Escalations: ${items.length} request${items.length === 1 ? "" : "s"}`;
+        const htmlLines = items
+          .map((item) => `Request #${item.id} (${item.propertyAddress}) escalated to ${item.priority}.`)
+          .join("<br/>");
+        await sendAuthEmail({
+          to: manager.email,
+          subject,
+          html: `<p>The following maintenance requests breached SLA and were escalated automatically:</p><p>${htmlLines}</p>`,
+          text: `The following maintenance requests breached SLA and were escalated automatically:\n${items
+            .map((item) => `Request #${item.id} (${item.propertyAddress}) escalated to ${item.priority}.`)
+            .join("\n")}`,
+        });
+      } catch (error) {
+        console.error(`Failed to send maintenance escalation email for manager ${managerId}:`, error);
+      }
+    }
+  };
+
+  const maintenanceEscalationInterval = setInterval(() => {
+    void triggerMaintenanceEscalationScan();
+  }, MAINTENANCE_ESCALATION_SCAN_INTERVAL_MS);
+  httpServer.on("close", () => clearInterval(maintenanceEscalationInterval));
+  setTimeout(() => {
+    void triggerMaintenanceEscalationScan();
+  }, 20_000);
 
   const getManagerScopedData = async (managerId: string) => {
     const managerProperties = await storage.getPropertiesByManager(managerId);
@@ -1444,11 +1623,27 @@ export async function registerRoutes(
     return res.json({ message: "Lease expiry scan completed." });
   });
 
+  app.post("/api/internal/jobs/maintenance-escalation-scan", async (req, res) => {
+    const expectedSecret = process.env.CRON_SECRET;
+    const providedSecret = String(req.headers["x-cron-secret"] || "");
+    if (process.env.NODE_ENV === "production" && !expectedSecret) {
+      return res.status(503).json({ message: "CRON_SECRET is not configured." });
+    }
+    if (expectedSecret && providedSecret !== expectedSecret) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+    await triggerMaintenanceEscalationScan();
+    return res.json({ message: "Maintenance escalation scan completed." });
+  });
+
   // === Maintenance ===
   app.get(api.maintenance.list.path, isAuthenticated, async (req: any, res) => {
     const userId = req.user?.claims?.sub;
     if (!userId) return res.status(401).json({ message: "Unauthorized" });
     const dbUser = await storage.getUser(userId);
+    if (dbUser?.role === "manager") {
+      await triggerMaintenanceEscalationScan(userId);
+    }
     const requests = await storage.getMaintenanceRequests();
 
     if (dbUser?.role === "manager") {
@@ -1469,7 +1664,32 @@ export async function registerRoutes(
       if (dbUser?.role !== "manager" && input.tenantId !== userId) {
         return res.status(403).json({ message: "Forbidden" });
       }
-      const request = await storage.createMaintenanceRequest(input);
+
+      const property = await storage.getProperty(input.propertyId);
+      if (!property) {
+        return res.status(404).json({ message: "Property not found" });
+      }
+
+      if (dbUser?.role === "manager" && property.managerId !== userId) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+
+      const triage = triageMaintenanceRequest(input.title, input.description);
+      const slaDueAt = new Date(Date.now() + triage.slaHours * 60 * 60 * 1000);
+      const assignment = autoAssignVendor({
+        category: triage.category,
+        propertyState: property.state,
+      });
+
+      const request = await storage.createMaintenanceRequest({
+        ...input,
+        category: triage.category,
+        priority: triage.priority,
+        slaDueAt,
+        assignedVendor: assignment.vendorName,
+        assignmentNote: assignment.note,
+        aiAnalysis: triage.summary,
+      });
       res.status(201).json(request);
     } catch (err) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.message });

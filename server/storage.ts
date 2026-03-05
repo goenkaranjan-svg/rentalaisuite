@@ -7,7 +7,7 @@ import {
   leaseSigningRequests,
   type User, type Property, type Lease, type MaintenanceRequest, 
   type Payment, type Screening, type ListingMappingTemplate, type InsertProperty, type InsertLease, 
-  type InsertMaintenanceRequest, type InsertPayment, type InsertScreening, type InsertListingMappingTemplate,
+  type MaintenanceRequestInsert, type InsertPayment, type InsertScreening, type InsertListingMappingTemplate,
   type StrMarketListing, type InsertStrMarketListing,
   type ManagerRentNotificationSettings, type UpsertManagerRentNotificationSettings,
   type LeaseSigningRequest, type InsertLeaseSigningRequest,
@@ -40,7 +40,7 @@ export interface IStorage {
   getMaintenanceRequests(): Promise<MaintenanceRequest[]>;
   getMaintenanceRequestsByTenant(tenantId: string): Promise<MaintenanceRequest[]>;
   getMaintenanceRequestsByProperty(propertyId: number): Promise<MaintenanceRequest[]>;
-  createMaintenanceRequest(request: InsertMaintenanceRequest): Promise<MaintenanceRequest>;
+  createMaintenanceRequest(request: MaintenanceRequestInsert): Promise<MaintenanceRequest>;
   getMaintenanceRequest(id: number): Promise<MaintenanceRequest | undefined>;
   updateMaintenanceRequest(id: number, request: Partial<MaintenanceRequest>): Promise<MaintenanceRequest>;
 
@@ -187,7 +187,7 @@ export class DatabaseStorage implements IStorage {
   async getMaintenanceRequestsByProperty(propertyId: number) {
     return await db.select().from(maintenanceRequests).where(eq(maintenanceRequests.propertyId, propertyId)).orderBy(desc(maintenanceRequests.createdAt));
   }
-  async createMaintenanceRequest(insertRequest: InsertMaintenanceRequest) {
+  async createMaintenanceRequest(insertRequest: MaintenanceRequestInsert) {
     const [request] = await db.insert(maintenanceRequests).values(insertRequest).returning();
     return request;
   }

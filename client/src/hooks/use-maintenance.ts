@@ -41,12 +41,12 @@ export function useCreateMaintenanceRequest() {
   });
 }
 
-export function useAnalyzeMaintenance(id: number) {
+export function useAnalyzeMaintenance() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: async () => {
+    mutationFn: async (id: number) => {
       const url = buildUrl(api.maintenance.analyze.path, { id });
       const res = await fetch(url, {
         method: api.maintenance.analyze.method,

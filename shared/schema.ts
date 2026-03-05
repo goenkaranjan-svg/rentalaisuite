@@ -65,8 +65,13 @@ export const maintenanceRequests = pgTable("maintenance_requests", {
   tenantId: varchar("tenant_id").notNull().references(() => users.id), // Links to users.id
   title: text("title").notNull(),
   description: text("description").notNull(),
+  category: text("category").notNull().default("general"), // plumbing, electrical, hvac, appliance, pest, security, general
   priority: text("priority").notNull().default("medium"), // low, medium, high, emergency
   status: text("status").notNull().default("open"), // open, in_progress, completed, rejected
+  slaDueAt: timestamp("sla_due_at"),
+  escalatedAt: timestamp("escalated_at"),
+  assignedVendor: text("assigned_vendor"),
+  assignmentNote: text("assignment_note"),
   aiAnalysis: text("ai_analysis"), // AI categorization/suggestion
   createdAt: timestamp("created_at").defaultNow(),
 });
@@ -232,7 +237,16 @@ export const insertLeaseSchema = createInsertSchema(leases, {
   endDate: z.coerce.date(),
   rentAmount: z.union([z.string(), z.number()]).transform((v) => v.toString()),
 }).omit({ id: true, createdAt: true });
-export const insertMaintenanceRequestSchema = createInsertSchema(maintenanceRequests).omit({ id: true, createdAt: true, aiAnalysis: true });
+export const insertMaintenanceRequestSchema = createInsertSchema(maintenanceRequests).omit({
+  id: true,
+  createdAt: true,
+  aiAnalysis: true,
+  category: true,
+  slaDueAt: true,
+  escalatedAt: true,
+  assignedVendor: true,
+  assignmentNote: true,
+});
 export const insertPaymentSchema = createInsertSchema(payments).omit({ id: true, date: true });
 export const insertScreeningSchema = createInsertSchema(screenings).omit({ id: true, createdAt: true });
 export const insertListingMappingTemplateSchema = createInsertSchema(listingMappingTemplates).omit({ id: true, createdAt: true });
@@ -262,6 +276,7 @@ export type LeaseSigningRequest = typeof leaseSigningRequests.$inferSelect;
 export type InsertLeaseSigningRequest = z.infer<typeof insertLeaseSigningRequestSchema>;
 
 export type MaintenanceRequest = typeof maintenanceRequests.$inferSelect;
+export type MaintenanceRequestInsert = typeof maintenanceRequests.$inferInsert;
 export type InsertMaintenanceRequest = z.infer<typeof insertMaintenanceRequestSchema>;
 
 export type Payment = typeof payments.$inferSelect;
