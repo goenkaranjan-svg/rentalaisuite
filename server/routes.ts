@@ -1109,9 +1109,26 @@ export async function registerRoutes(
     res.json(leaseList);
   });
 
-  app.post(api.leases.create.path, async (req, res) => {
+  app.post(api.leases.create.path, isAuthenticated, async (req: any, res) => {
     try {
+      const userId = req.user?.claims?.sub;
+      if (!userId) return res.status(401).json({ message: "Unauthorized" });
+      const dbUser = await storage.getUser(userId);
+      if (dbUser?.role !== "manager") {
+        return res.status(403).json({ message: "Only managers can create leases." });
+      }
+
       const input = api.leases.create.input.parse(req.body);
+      const property = await storage.getProperty(input.propertyId);
+      if (!property) return res.status(404).json({ message: "Property not found." });
+      if (property.managerId !== userId) {
+        return res.status(403).json({ message: "You can only create leases for your own properties." });
+      }
+      const tenant = await storage.getUser(input.tenantId);
+      if (!tenant || tenant.role !== "tenant") {
+        return res.status(400).json({ message: "Selected tenant is invalid." });
+      }
+
       const lease = await storage.createLease(input);
       res.status(201).json(lease);
     } catch (err) {

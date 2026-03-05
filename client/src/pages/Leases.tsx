@@ -19,6 +19,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -131,7 +132,9 @@ export default function Leases() {
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            {properties?.filter(p => p.status === 'available').map((prop) => (
+                            {properties
+                              ?.filter((p) => p.status === "available" && p.managerId === user?.id)
+                              .map((prop) => (
                               <SelectItem key={prop.id} value={prop.id.toString()}>
                                 {prop.address}
                               </SelectItem>

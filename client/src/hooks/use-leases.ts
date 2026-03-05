@@ -174,6 +174,14 @@ export function useLeaseExpiryNotificationSettings(enabled = true) {
     enabled,
     queryFn: async () => {
       const res = await fetch(api.leases.expiryNotificationSettings.path, { credentials: "include" });
+      if (res.status === 503 || res.status === 404 || res.status === 403) {
+        return {
+          managerId: "",
+          enabled: true,
+          daysBeforeExpiry: 30,
+          updatedAt: null,
+        };
+      }
       if (!res.ok) throw new Error("Failed to fetch lease expiry notification settings");
       return await res.json();
     },
