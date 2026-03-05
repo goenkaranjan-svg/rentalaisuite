@@ -61,6 +61,11 @@ const DEFAULT_RENT_OVERDUE_NOTIFICATION_DAYS = 5;
 const LEASE_EXPIRY_SCAN_INTERVAL_MS = DAILY_SCAN_INTERVAL_MS;
 const DEFAULT_LEASE_EXPIRY_NOTIFICATION_DAYS = 30;
 const MAINTENANCE_ESCALATION_SCAN_INTERVAL_MS = DAILY_SCAN_INTERVAL_MS;
+const DEFAULT_MAINTENANCE_AUTOMATION_SETTINGS = {
+  autoTriageEnabled: true,
+  autoEscalationEnabled: true,
+  autoVendorAssignmentEnabled: true,
+} as const;
 
 type OverdueNotificationCandidate = {
   leaseId: number;
@@ -523,6 +528,26 @@ export async function registerRoutes(
     };
   };
 
+  const getManagerMaintenanceAutomationSettings = async (managerId: string) => {
+    const existing = await storage.getManagerMaintenanceAutomationSettings(managerId);
+    if (existing) {
+      return {
+        managerId: existing.managerId,
+        autoTriageEnabled: existing.autoTriageEnabled,
+        autoEscalationEnabled: existing.autoEscalationEnabled,
+        autoVendorAssignmentEnabled: existing.autoVendorAssignmentEnabled,
+        updatedAt: existing.updatedAt,
+      };
+    }
+    return {
+      managerId,
+      autoTriageEnabled: DEFAULT_MAINTENANCE_AUTOMATION_SETTINGS.autoTriageEnabled,
+      autoEscalationEnabled: DEFAULT_MAINTENANCE_AUTOMATION_SETTINGS.autoEscalationEnabled,
+      autoVendorAssignmentEnabled: DEFAULT_MAINTENANCE_AUTOMATION_SETTINGS.autoVendorAssignmentEnabled,
+      updatedAt: null as Date | null,
+    };
+  };
+
   const getOverdueRentCandidatesForManager = async (
     managerId: string,
     thresholdDays: number,
@@ -781,64 +806,74 @@ export async function registerRoutes(
   }, 15_000);
 
   const triggerMaintenanceEscalationScan = async (forcedManagerId?: string) => {
-    const now = new Date();
-    const requests = await storage.getMaintenanceRequests();
-    const openRequests = requests.filter(
-      (request) =>
-        (request.status === "open" || request.status === "in_progress") &&
-        request.slaDueAt &&
-        new Date(request.slaDueAt).getTime() <= now.getTime() &&
-        !request.escalatedAt,
-    );
+    try {
+      const now = new Date();
+      const requests = await storage.getMaintenanceRequests();
+      const openRequests = requests.filter(
+        (request) =>
+          (request.status === "open" || request.status === "in_progress") &&
+          request.slaDueAt &&
+          new Date(request.slaDueAt).getTime() <= now.getTime() &&
+          !request.escalatedAt,
+      );
 
-    const escalatedByManager = new Map<string, Array<{ id: number; propertyAddress: string; priority: string }>>();
+      const escalatedByManager = new Map<string, Array<{ id: number; propertyAddress: string; priority: string }>>();
 
-    for (const request of openRequests) {
-      const property = await storage.getProperty(request.propertyId);
-      if (!property) continue;
-      if (forcedManagerId && property.managerId !== forcedManagerId) continue;
+      for (const request of openRequests) {
+        const property = await storage.getProperty(request.propertyId);
+        if (!property) continue;
+        if (forcedManagerId && property.managerId !== forcedManagerId) continue;
+        const managerSettings = await getManagerMaintenanceAutomationSettings(property.managerId);
+        if (!managerSettings.autoEscalationEnabled) continue;
 
-      const nextPriority = getEscalatedPriority(request.priority);
-      const slaDueAt = request.slaDueAt ?? now;
-      const escalationSummary = `SLA breached on ${new Date(slaDueAt).toLocaleString()}. Priority escalated to ${nextPriority}.`;
-      const mergedAnalysis = request.aiAnalysis
-        ? `${request.aiAnalysis}\nAutomation: ${escalationSummary}`
-        : `Automation: ${escalationSummary}`;
+        const nextPriority = getEscalatedPriority(request.priority);
+        const slaDueAt = request.slaDueAt ?? now;
+        const escalationSummary = `SLA breached on ${new Date(slaDueAt).toLocaleString()}. Priority escalated to ${nextPriority}.`;
+        const mergedAnalysis = request.aiAnalysis
+          ? `${request.aiAnalysis}\nAutomation: ${escalationSummary}`
+          : `Automation: ${escalationSummary}`;
 
-      await storage.updateMaintenanceRequest(request.id, {
-        priority: nextPriority,
-        escalatedAt: now,
-        aiAnalysis: mergedAnalysis,
-      });
-
-      const managerItems = escalatedByManager.get(property.managerId) ?? [];
-      managerItems.push({
-        id: request.id,
-        propertyAddress: property.address,
-        priority: nextPriority,
-      });
-      escalatedByManager.set(property.managerId, managerItems);
-    }
-
-    for (const [managerId, items] of Array.from(escalatedByManager.entries())) {
-      try {
-        const manager = await storage.getUser(managerId);
-        if (!manager?.email) continue;
-        const subject = `Maintenance SLA Escalations: ${items.length} request${items.length === 1 ? "" : "s"}`;
-        const htmlLines = items
-          .map((item) => `Request #${item.id} (${item.propertyAddress}) escalated to ${item.priority}.`)
-          .join("<br/>");
-        await sendAuthEmail({
-          to: manager.email,
-          subject,
-          html: `<p>The following maintenance requests breached SLA and were escalated automatically:</p><p>${htmlLines}</p>`,
-          text: `The following maintenance requests breached SLA and were escalated automatically:\n${items
-            .map((item) => `Request #${item.id} (${item.propertyAddress}) escalated to ${item.priority}.`)
-            .join("\n")}`,
+        await storage.updateMaintenanceRequest(request.id, {
+          priority: nextPriority,
+          escalatedAt: now,
+          aiAnalysis: mergedAnalysis,
         });
-      } catch (error) {
-        console.error(`Failed to send maintenance escalation email for manager ${managerId}:`, error);
+
+        const managerItems = escalatedByManager.get(property.managerId) ?? [];
+        managerItems.push({
+          id: request.id,
+          propertyAddress: property.address,
+          priority: nextPriority,
+        });
+        escalatedByManager.set(property.managerId, managerItems);
       }
+
+      for (const [managerId, items] of Array.from(escalatedByManager.entries())) {
+        try {
+          const manager = await storage.getUser(managerId);
+          if (!manager?.email) continue;
+          const subject = `Maintenance SLA Escalations: ${items.length} request${items.length === 1 ? "" : "s"}`;
+          const htmlLines = items
+            .map((item) => `Request #${item.id} (${item.propertyAddress}) escalated to ${item.priority}.`)
+            .join("<br/>");
+          await sendAuthEmail({
+            to: manager.email,
+            subject,
+            html: `<p>The following maintenance requests breached SLA and were escalated automatically:</p><p>${htmlLines}</p>`,
+            text: `The following maintenance requests breached SLA and were escalated automatically:\n${items
+              .map((item) => `Request #${item.id} (${item.propertyAddress}) escalated to ${item.priority}.`)
+              .join("\n")}`,
+          });
+        } catch (error) {
+          console.error(`Failed to send maintenance escalation email for manager ${managerId}:`, error);
+        }
+      }
+    } catch (error) {
+      if (isMissingRelationError(error)) {
+        console.warn("Maintenance automation settings table is missing. Run migrations (npm run db:push) to enable settings menu.");
+        return;
+      }
+      throw error;
     }
   };
 
@@ -1637,6 +1672,63 @@ export async function registerRoutes(
   });
 
   // === Maintenance ===
+  app.get(api.maintenance.automationSettings.path, isAuthenticated, async (req: any, res) => {
+    const userId = req.user?.claims?.sub;
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+    const user = await storage.getUser(userId);
+    if (user?.role !== "manager") {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+    try {
+      const settings = await getManagerMaintenanceAutomationSettings(userId);
+      return res.json({
+        managerId: settings.managerId,
+        autoTriageEnabled: settings.autoTriageEnabled,
+        autoEscalationEnabled: settings.autoEscalationEnabled,
+        autoVendorAssignmentEnabled: settings.autoVendorAssignmentEnabled,
+        updatedAt: settings.updatedAt ? settings.updatedAt.toISOString() : null,
+      });
+    } catch (error) {
+      if (isMissingRelationError(error)) {
+        return res.status(503).json({ message: "Maintenance settings table is missing. Run database migrations first." });
+      }
+      return res.status(500).json({ message: "Failed to load maintenance settings." });
+    }
+  });
+
+  app.put(api.maintenance.updateAutomationSettings.path, isAuthenticated, async (req: any, res) => {
+    const userId = req.user?.claims?.sub;
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+    const user = await storage.getUser(userId);
+    if (user?.role !== "manager") {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+    try {
+      const input = api.maintenance.updateAutomationSettings.input.parse(req.body);
+      const settings = await storage.upsertManagerMaintenanceAutomationSettings({
+        managerId: userId,
+        autoTriageEnabled: input.autoTriageEnabled,
+        autoEscalationEnabled: input.autoEscalationEnabled,
+        autoVendorAssignmentEnabled: input.autoVendorAssignmentEnabled,
+      });
+      return res.json({
+        managerId: settings.managerId,
+        autoTriageEnabled: settings.autoTriageEnabled,
+        autoEscalationEnabled: settings.autoEscalationEnabled,
+        autoVendorAssignmentEnabled: settings.autoVendorAssignmentEnabled,
+        updatedAt: settings.updatedAt ? settings.updatedAt.toISOString() : null,
+      });
+    } catch (error) {
+      if (isMissingRelationError(error)) {
+        return res.status(503).json({ message: "Maintenance settings table is missing. Run database migrations first." });
+      }
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: error.errors[0]?.message ?? "Invalid settings payload." });
+      }
+      return res.status(500).json({ message: "Failed to update maintenance settings." });
+    }
+  });
+
   app.get(api.maintenance.list.path, isAuthenticated, async (req: any, res) => {
     const userId = req.user?.claims?.sub;
     if (!userId) return res.status(401).json({ message: "Unauthorized" });
@@ -1674,21 +1766,29 @@ export async function registerRoutes(
         return res.status(403).json({ message: "Forbidden" });
       }
 
+      const managerSettings = await getManagerMaintenanceAutomationSettings(property.managerId);
       const triage = triageMaintenanceRequest(input.title, input.description);
-      const slaDueAt = new Date(Date.now() + triage.slaHours * 60 * 60 * 1000);
-      const assignment = autoAssignVendor({
-        category: triage.category,
-        propertyState: property.state,
-      });
+      const resolvedCategory = managerSettings.autoTriageEnabled ? triage.category : "general";
+      const resolvedPriority = managerSettings.autoTriageEnabled ? triage.priority : (input.priority || "medium");
+      const slaDueAt = new Date(Date.now() + getSlaHoursForPriority(resolvedPriority) * 60 * 60 * 1000);
+      const assignment = managerSettings.autoVendorAssignmentEnabled
+        ? autoAssignVendor({
+            category: resolvedCategory,
+            propertyState: property.state,
+          })
+        : null;
+      const automationSummary = managerSettings.autoTriageEnabled
+        ? triage.summary
+        : "Automation: Auto-triage disabled by manager settings.";
 
       const request = await storage.createMaintenanceRequest({
         ...input,
-        category: triage.category,
-        priority: triage.priority,
+        category: resolvedCategory,
+        priority: resolvedPriority,
         slaDueAt,
-        assignedVendor: assignment.vendorName,
-        assignmentNote: assignment.note,
-        aiAnalysis: triage.summary,
+        assignedVendor: assignment?.vendorName ?? null,
+        assignmentNote: assignment?.note ?? "Auto-assignment disabled by manager settings.",
+        aiAnalysis: automationSummary,
       });
       res.status(201).json(request);
     } catch (err) {

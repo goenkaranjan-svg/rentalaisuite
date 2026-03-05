@@ -3,6 +3,14 @@ import { api, buildUrl } from "@shared/routes";
 import { type InsertMaintenanceRequest, type MaintenanceRequest } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 
+export type MaintenanceAutomationSettings = {
+  managerId: string;
+  autoTriageEnabled: boolean;
+  autoEscalationEnabled: boolean;
+  autoVendorAssignmentEnabled: boolean;
+  updatedAt: string | null;
+};
+
 export function useMaintenanceRequests(status?: string) {
   const queryParams = status ? `?status=${status}` : "";
   
@@ -12,6 +20,43 @@ export function useMaintenanceRequests(status?: string) {
       const res = await fetch(api.maintenance.list.path + queryParams, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch maintenance requests");
       return await res.json();
+    },
+  });
+}
+
+export function useMaintenanceAutomationSettings(enabled = true) {
+  return useQuery<MaintenanceAutomationSettings>({
+    queryKey: [api.maintenance.automationSettings.path],
+    enabled,
+    queryFn: async () => {
+      const res = await fetch(api.maintenance.automationSettings.path, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to load maintenance settings");
+      return await res.json();
+    },
+  });
+}
+
+export function useUpdateMaintenanceAutomationSettings() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async (data: Omit<MaintenanceAutomationSettings, "managerId" | "updatedAt">) => {
+      const res = await fetch(api.maintenance.updateAutomationSettings.path, {
+        method: api.maintenance.updateAutomationSettings.method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to save maintenance settings");
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [api.maintenance.automationSettings.path] });
+      toast({ title: "Settings Updated", description: "Maintenance automation settings saved." });
+    },
+    onError: (error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
     },
   });
 }

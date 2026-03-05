@@ -4,6 +4,7 @@ import {
   users, properties, leases, maintenanceRequests, payments, screenings, listingMappingTemplates, strMarketListings,
   managerRentNotificationSettings, rentOverdueNotificationHistory,
   managerLeaseExpiryNotificationSettings, leaseExpiryNotificationHistory,
+  managerMaintenanceAutomationSettings,
   leaseSigningRequests,
   type User, type Property, type Lease, type MaintenanceRequest, 
   type Payment, type Screening, type ListingMappingTemplate, type InsertProperty, type InsertLease, 
@@ -11,7 +12,8 @@ import {
   type StrMarketListing, type InsertStrMarketListing,
   type ManagerRentNotificationSettings, type UpsertManagerRentNotificationSettings,
   type LeaseSigningRequest, type InsertLeaseSigningRequest,
-  type ManagerLeaseExpiryNotificationSettings, type UpsertManagerLeaseExpiryNotificationSettings
+  type ManagerLeaseExpiryNotificationSettings, type UpsertManagerLeaseExpiryNotificationSettings,
+  type ManagerMaintenanceAutomationSettings, type UpsertManagerMaintenanceAutomationSettings
 } from "@shared/schema";
 import { and, eq, desc } from "drizzle-orm";
 
@@ -43,6 +45,10 @@ export interface IStorage {
   createMaintenanceRequest(request: MaintenanceRequestInsert): Promise<MaintenanceRequest>;
   getMaintenanceRequest(id: number): Promise<MaintenanceRequest | undefined>;
   updateMaintenanceRequest(id: number, request: Partial<MaintenanceRequest>): Promise<MaintenanceRequest>;
+  getManagerMaintenanceAutomationSettings(managerId: string): Promise<ManagerMaintenanceAutomationSettings | undefined>;
+  upsertManagerMaintenanceAutomationSettings(
+    settings: UpsertManagerMaintenanceAutomationSettings,
+  ): Promise<ManagerMaintenanceAutomationSettings>;
 
   // Payments
   getPayments(): Promise<Payment[]>;
@@ -198,6 +204,29 @@ export class DatabaseStorage implements IStorage {
   async updateMaintenanceRequest(id: number, update: Partial<MaintenanceRequest>) {
     const [request] = await db.update(maintenanceRequests).set(update).where(eq(maintenanceRequests.id, id)).returning();
     return request;
+  }
+  async getManagerMaintenanceAutomationSettings(managerId: string) {
+    const [settings] = await db
+      .select()
+      .from(managerMaintenanceAutomationSettings)
+      .where(eq(managerMaintenanceAutomationSettings.managerId, managerId));
+    return settings;
+  }
+  async upsertManagerMaintenanceAutomationSettings(settings: UpsertManagerMaintenanceAutomationSettings) {
+    const [upserted] = await db
+      .insert(managerMaintenanceAutomationSettings)
+      .values(settings)
+      .onConflictDoUpdate({
+        target: managerMaintenanceAutomationSettings.managerId,
+        set: {
+          autoTriageEnabled: settings.autoTriageEnabled,
+          autoEscalationEnabled: settings.autoEscalationEnabled,
+          autoVendorAssignmentEnabled: settings.autoVendorAssignmentEnabled,
+          updatedAt: new Date(),
+        },
+      })
+      .returning();
+    return upserted;
   }
 
   // Payments

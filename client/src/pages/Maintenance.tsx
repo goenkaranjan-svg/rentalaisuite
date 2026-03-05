@@ -1,15 +1,34 @@
-import { useMaintenanceRequests, useUpdateMaintenanceRequest, useAnalyzeMaintenance } from "@/hooks/use-maintenance";
+import {
+  useMaintenanceRequests,
+  useUpdateMaintenanceRequest,
+  useAnalyzeMaintenance,
+  useMaintenanceAutomationSettings,
+  useUpdateMaintenanceAutomationSettings,
+} from "@/hooks/use-maintenance";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Bot, Clock3, Wrench } from "lucide-react";
+import { Bot, Clock3, Settings2, Wrench } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { format, formatDistanceToNowStrict } from "date-fns";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Switch } from "@/components/ui/switch";
+import { useAuth } from "@/hooks/use-auth";
+import { useEffect, useRef, useState } from "react";
 
 export default function Maintenance() {
+  const { user } = useAuth();
+  const isManager = user?.role === "manager";
   const { data: requests, isLoading } = useMaintenanceRequests();
+  const { data: automationSettings } = useMaintenanceAutomationSettings(isManager);
+  const { mutate: updateAutomationSettings, isPending: isSavingAutomationSettings } = useUpdateMaintenanceAutomationSettings();
   const { mutate: updateStatus } = useUpdateMaintenanceRequest();
   const { mutate: analyze, isPending: isAnalyzing } = useAnalyzeMaintenance();
+  const [autoTriageEnabled, setAutoTriageEnabled] = useState(true);
+  const [autoEscalationEnabled, setAutoEscalationEnabled] = useState(true);
+  const [autoVendorAssignmentEnabled, setAutoVendorAssignmentEnabled] = useState(true);
+  const [automationSettingsReady, setAutomationSettingsReady] = useState(false);
+  const lastSavedAutomationSettingsRef = useRef<string | null>(null);
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
@@ -20,6 +39,49 @@ export default function Maintenance() {
     }
   };
 
+  useEffect(() => {
+    if (!automationSettings) return;
+    setAutoTriageEnabled(automationSettings.autoTriageEnabled);
+    setAutoEscalationEnabled(automationSettings.autoEscalationEnabled);
+    setAutoVendorAssignmentEnabled(automationSettings.autoVendorAssignmentEnabled);
+    lastSavedAutomationSettingsRef.current = [
+      automationSettings.autoTriageEnabled,
+      automationSettings.autoEscalationEnabled,
+      automationSettings.autoVendorAssignmentEnabled,
+    ].join(":");
+    setAutomationSettingsReady(true);
+  }, [automationSettings]);
+
+  useEffect(() => {
+    if (!isManager || !automationSettingsReady) return;
+    const signature = [autoTriageEnabled, autoEscalationEnabled, autoVendorAssignmentEnabled].join(":");
+    if (signature === lastSavedAutomationSettingsRef.current) return;
+
+    const timer = setTimeout(() => {
+      updateAutomationSettings(
+        {
+          autoTriageEnabled,
+          autoEscalationEnabled,
+          autoVendorAssignmentEnabled,
+        },
+        {
+          onSuccess: () => {
+            lastSavedAutomationSettingsRef.current = signature;
+          },
+        },
+      );
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [
+    autoEscalationEnabled,
+    autoTriageEnabled,
+    autoVendorAssignmentEnabled,
+    automationSettingsReady,
+    isManager,
+    updateAutomationSettings,
+  ]);
+
   return (
     <div className="space-y-8 animate-in">
       <div className="flex items-center justify-between gap-4">
@@ -27,6 +89,37 @@ export default function Maintenance() {
           <h1 className="text-3xl font-bold font-display text-slate-900">Maintenance Requests</h1>
           <p className="text-slate-500 mt-1">Track and manage property repairs.</p>
         </div>
+        {isManager && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-9 w-9 border-slate-200 bg-white text-slate-600"
+                aria-label="Maintenance settings"
+              >
+                <Settings2 className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-80 p-3 space-y-2">
+              <div className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50/60 px-3 py-2">
+                <span className="text-sm text-slate-700">Enable auto-triage</span>
+                <Switch checked={autoTriageEnabled} onCheckedChange={setAutoTriageEnabled} />
+              </div>
+              <div className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50/60 px-3 py-2">
+                <span className="text-sm text-slate-700">Enable SLA escalations</span>
+                <Switch checked={autoEscalationEnabled} onCheckedChange={setAutoEscalationEnabled} />
+              </div>
+              <div className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50/60 px-3 py-2">
+                <span className="text-sm text-slate-700">Enable vendor auto-assignment</span>
+                <Switch checked={autoVendorAssignmentEnabled} onCheckedChange={setAutoVendorAssignmentEnabled} />
+              </div>
+              <p className="text-[11px] text-slate-500">
+                {isSavingAutomationSettings ? "Saving..." : "Changes are saved automatically."}
+              </p>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
       </div>
 
       <div className="grid gap-4">

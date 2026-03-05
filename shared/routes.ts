@@ -8,7 +8,8 @@ import {
   insertScreeningSchema, screenings,
   strMarketListings,
   upsertManagerRentNotificationSettingsSchema,
-  upsertManagerLeaseExpiryNotificationSettingsSchema
+  upsertManagerLeaseExpiryNotificationSettingsSchema,
+  upsertManagerMaintenanceAutomationSettingsSchema
 } from './schema';
 
 // Shared error schemas
@@ -424,7 +425,38 @@ export const api = {
         200: z.custom<typeof maintenanceRequests.$inferSelect>(),
         404: errorSchemas.notFound,
       }
-    }
+    },
+    automationSettings: {
+      method: "GET" as const,
+      path: "/api/maintenance/automation-settings" as const,
+      responses: {
+        200: z.object({
+          managerId: z.string(),
+          autoTriageEnabled: z.boolean(),
+          autoEscalationEnabled: z.boolean(),
+          autoVendorAssignmentEnabled: z.boolean(),
+          updatedAt: z.string().nullable(),
+        }),
+      },
+    },
+    updateAutomationSettings: {
+      method: "PUT" as const,
+      path: "/api/maintenance/automation-settings" as const,
+      input: upsertManagerMaintenanceAutomationSettingsSchema.pick({
+        autoTriageEnabled: true,
+        autoEscalationEnabled: true,
+        autoVendorAssignmentEnabled: true,
+      }),
+      responses: {
+        200: z.object({
+          managerId: z.string(),
+          autoTriageEnabled: z.boolean(),
+          autoEscalationEnabled: z.boolean(),
+          autoVendorAssignmentEnabled: z.boolean(),
+          updatedAt: z.string().nullable(),
+        }),
+      },
+    },
   },
   payments: {
     list: {

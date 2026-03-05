@@ -124,6 +124,16 @@ export const managerLeaseExpiryNotificationSettings = pgTable("manager_lease_exp
   primaryKey({ columns: [table.managerId] }),
 ]);
 
+export const managerMaintenanceAutomationSettings = pgTable("manager_maintenance_automation_settings", {
+  managerId: varchar("manager_id").notNull().references(() => users.id),
+  autoTriageEnabled: boolean("auto_triage_enabled").notNull().default(true),
+  autoEscalationEnabled: boolean("auto_escalation_enabled").notNull().default(true),
+  autoVendorAssignmentEnabled: boolean("auto_vendor_assignment_enabled").notNull().default(true),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  primaryKey({ columns: [table.managerId] }),
+]);
+
 export const leaseExpiryNotificationHistory = pgTable(
   "lease_expiry_notification_history",
   {
@@ -257,6 +267,7 @@ export const upsertManagerRentNotificationSettingsSchema = createInsertSchema(ma
 export const upsertManagerLeaseExpiryNotificationSettingsSchema = createInsertSchema(managerLeaseExpiryNotificationSettings, {
   daysBeforeExpiry: z.coerce.number().int().min(1).max(365),
 }).omit({ updatedAt: true });
+export const upsertManagerMaintenanceAutomationSettingsSchema = createInsertSchema(managerMaintenanceAutomationSettings).omit({ updatedAt: true });
 export const insertLeaseSigningRequestSchema = createInsertSchema(leaseSigningRequests).omit({
   id: true,
   createdAt: true,
@@ -291,6 +302,9 @@ export type ManagerLeaseExpiryNotificationSettings = typeof managerLeaseExpiryNo
 export type UpsertManagerLeaseExpiryNotificationSettings = z.infer<typeof upsertManagerLeaseExpiryNotificationSettingsSchema>;
 
 export type LeaseExpiryNotificationHistory = typeof leaseExpiryNotificationHistory.$inferSelect;
+
+export type ManagerMaintenanceAutomationSettings = typeof managerMaintenanceAutomationSettings.$inferSelect;
+export type UpsertManagerMaintenanceAutomationSettings = z.infer<typeof upsertManagerMaintenanceAutomationSettingsSchema>;
 
 export type Screening = typeof screenings.$inferSelect;
 export type InsertScreening = z.infer<typeof insertScreeningSchema>;
