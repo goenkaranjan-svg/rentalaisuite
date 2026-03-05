@@ -263,7 +263,7 @@ export default function ListingExports() {
                     ))}
                   </SelectContent>
                 </Select>
-                <div className="flex gap-2">
+                <div className="flex gap-2 justify-end">
                   <Button
                     variant="outline"
                     type="button"
@@ -306,7 +306,7 @@ export default function ListingExports() {
                   <Button
                     variant="destructive"
                     type="button"
-                    className="flex-1"
+                    className="shrink-0"
                     disabled={deleteTemplate.isPending || !selectedTemplateId}
                     onClick={() =>
                       deleteTemplate.mutate(Number(selectedTemplateId), {

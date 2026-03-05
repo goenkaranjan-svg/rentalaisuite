@@ -213,7 +213,13 @@ export default function Login() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -8 }}
                 transition={{ duration: 0.22 }}
-                className="inline-block"
+                className={`inline-block bg-clip-text text-transparent ${
+                  heroWordIndex === 0
+                    ? "bg-gradient-to-r from-emerald-300 to-emerald-400"
+                    : heroWordIndex === 1
+                    ? "bg-gradient-to-r from-sky-300 to-sky-400"
+                    : "bg-gradient-to-r from-amber-300 to-orange-400"
+                }`}
               >
                 {["Manage", "Rent", "Invest"][heroWordIndex]}
               </motion.span>
