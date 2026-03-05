@@ -205,7 +205,7 @@ export default function Login() {
             <span className="text-2xl font-bold font-display">RentalMgmt.AI</span>
           </div>
           <h1 className="text-[44px] font-bold font-display leading-[1.05] mb-5 tracking-tight">
-            <span>A Smater Way to </span>
+            <span className="text-slate-200/90">A Smarter Way to </span>
             <AnimatePresence mode="wait" initial={false}>
               <motion.span
                 key={heroWordIndex}
@@ -238,7 +238,8 @@ export default function Login() {
           transition={{ duration: 0.35, ease: "easeOut" }}
           className="w-full max-w-[430px]"
         >
-        <Card className="login-auth-card w-full border-white/15 bg-slate-950/75 shadow-[0_8px_28px_rgba(2,6,23,0.45)] backdrop-blur-md">
+        <div className="rounded-3xl bg-gradient-to-br from-emerald-400/70 via-emerald-500/10 to-sky-500/60 p-[1.2px] shadow-[0_18px_60px_rgba(15,23,42,0.95)]">
+        <Card className="login-auth-card w-full rounded-[1.6rem] border border-white/10 bg-slate-950/85 shadow-[0_18px_60px_rgba(15,23,42,0.95)] backdrop-blur-xl">
           <CardHeader className="space-y-3 px-5 pt-5 pb-4 sm:space-y-4 sm:px-7 sm:pt-7 sm:pb-5">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 lg:hidden">
@@ -334,7 +335,7 @@ export default function Login() {
                 )}
                 <Button
                   variant="outline"
-                  className="w-full h-11 border-slate-200 bg-white"
+                  className="passkey-button w-full h-11 border-slate-200 bg-white"
                   onClick={handlePasskeyLogin}
                   disabled={isLoggingInWithPasskey}
                 >
@@ -516,6 +517,7 @@ export default function Login() {
             </p>
           </CardContent>
         </Card>
+        </div>
         </motion.div>
       </div>
       </div>

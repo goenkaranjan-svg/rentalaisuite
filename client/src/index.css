@@ -180,10 +180,25 @@
 
   .login-auth-card,
   .login-auth-card * {
+    color: rgb(226 232 240);
+  }
+
+  .dark .login-auth-card,
+  .dark .login-auth-card * {
     color: rgb(241 245 249);
   }
 
+  .login-auth-card .passkey-button {
+    color: rgb(15 23 42) !important;
+  }
+
   .login-auth-card input {
+    color: rgb(15 23 42) !important;
+    background-color: rgb(248 250 252) !important;
+    border-color: rgb(209 213 219) !important;
+  }
+
+  .dark .login-auth-card input {
     color: rgb(241 245 249) !important;
     background-color: rgb(15 23 42 / 0.88) !important;
     border-color: rgb(71 85 105) !important;
@@ -194,6 +209,6 @@
   }
 
   .login-auth-card label {
-    color: rgb(226 232 240) !important;
+    color: inherit !important;
   }
 }
