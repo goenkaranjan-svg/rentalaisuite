@@ -1,4 +1,11 @@
-import { useLeases, useCreateLease, useGenerateLeaseDoc } from "@/hooks/use-leases";
+import {
+  useLeases,
+  useCreateLease,
+  useGenerateLeaseDoc,
+  useSendLeaseForSigning,
+  useLeaseExpiryNotificationSettings,
+  useUpdateLeaseExpiryNotificationSettings,
+} from "@/hooks/use-leases";
 import { useProperties } from "@/hooks/use-properties";
 import { useTenants } from "@/hooks/use-auth";
 import { useLeaseRenewalPipeline } from "@/hooks/use-insights";
@@ -6,12 +13,13 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { FileText, Plus, Download, Wand2, Loader2, RefreshCw } from "lucide-react";
+import { FileText, Plus, Download, Wand2, Loader2, RefreshCw, Send } from "lucide-react";
 import { format } from "date-fns";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertLeaseSchema } from "@shared/schema";
@@ -25,12 +33,23 @@ export default function Leases() {
   const { data: tenants } = useTenants();
   const { mutate: createLease, isPending: isCreating } = useCreateLease();
   const { mutate: generateDoc, isPending: isGenerating } = useGenerateLeaseDoc();
+  const { mutate: sendForSigning, isPending: isSendingForSigning } = useSendLeaseForSigning();
+  const { data: leaseExpirySettings } = useLeaseExpiryNotificationSettings(user?.role === "manager");
+  const { mutate: updateLeaseExpirySettings, isPending: isSavingLeaseExpirySettings } = useUpdateLeaseExpiryNotificationSettings();
   const { data: pipeline } = useLeaseRenewalPipeline();
   const [open, setOpen] = useState(false);
+  const [leaseExpiryEnabled, setLeaseExpiryEnabled] = useState(true);
+  const [leaseExpiryDays, setLeaseExpiryDays] = useState("30");
 
   useEffect(() => {
     refetch();
   }, [open, refetch]);
+
+  useEffect(() => {
+    if (!leaseExpirySettings) return;
+    setLeaseExpiryEnabled(leaseExpirySettings.enabled);
+    setLeaseExpiryDays(String(leaseExpirySettings.daysBeforeExpiry));
+  }, [leaseExpirySettings]);
 
   const form = useForm({
     resolver: zodResolver(insertLeaseSchema),
@@ -50,6 +69,14 @@ export default function Leases() {
         setOpen(false);
         form.reset();
       },
+    });
+  };
+
+  const handleSaveLeaseExpirySettings = () => {
+    const parsed = Number(leaseExpiryDays);
+    updateLeaseExpirySettings({
+      enabled: leaseExpiryEnabled,
+      daysBeforeExpiry: Number.isFinite(parsed) ? Math.min(365, Math.max(1, Math.floor(parsed))) : 30,
     });
   };
 
@@ -196,6 +223,33 @@ export default function Leases() {
         </div>
       </div>
 
+      {user?.role === "manager" && (
+        <Card className="border-slate-200 shadow-sm p-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+            <div className="space-y-2">
+              <Label>Enable lease expiry reminders</Label>
+              <div className="h-10 flex items-center">
+                <Switch checked={leaseExpiryEnabled} onCheckedChange={setLeaseExpiryEnabled} />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Remind before N days</Label>
+              <Input
+                type="number"
+                min={1}
+                max={365}
+                value={leaseExpiryDays}
+                onChange={(e) => setLeaseExpiryDays(e.target.value)}
+                placeholder="30"
+              />
+            </div>
+            <Button onClick={handleSaveLeaseExpirySettings} disabled={isSavingLeaseExpirySettings}>
+              {isSavingLeaseExpirySettings ? "Saving..." : "Save Reminder Settings"}
+            </Button>
+          </div>
+        </Card>
+      )}
+
       <Card className="border-slate-200 shadow-sm overflow-hidden">
         <Table>
           <TableHeader className="bg-slate-50">
@@ -266,6 +320,18 @@ export default function Leases() {
                       {isGenerating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Wand2 className="w-3 h-3" />}
                       {lease.draftText ? 'Regenerate AI' : 'AI Generate'}
                     </Button>
+                    {user?.role === "manager" && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 gap-2 text-xs border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+                        onClick={() => sendForSigning(lease.id)}
+                        disabled={isSendingForSigning}
+                      >
+                        {isSendingForSigning ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
+                        Send for Sign
+                      </Button>
+                    )}
                   </div>
                 </TableCell>
               </TableRow>

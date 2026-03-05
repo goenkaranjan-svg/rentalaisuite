@@ -103,6 +103,14 @@ export default function Login() {
   const handleSignIn = async () => {
     try {
       const signedInUser = await login({ email, password, role });
+      if ((signedInUser as any)?.mfaRequired) {
+        toast({ title: "MFA required", description: "Complete multi-factor verification to finish signing in." });
+        return;
+      }
+      if (!(signedInUser as any)?.id) {
+        toast({ title: "Sign in pending", description: "Additional verification is required before sign-in can complete." });
+        return;
+      }
       setShowResendVerification(false);
       toast({ title: "Signed in", description: "Welcome back." });
       redirectByRole((signedInUser as any)?.role ?? role);
@@ -155,6 +163,10 @@ export default function Login() {
   const handlePasskeyLogin = async () => {
     try {
       const passkeyUser = await loginWithPasskey();
+      if (!(passkeyUser as any)?.id) {
+        toast({ title: "Passkey sign-in pending", description: "Additional verification is required before sign-in can complete." });
+        return;
+      }
       toast({ title: "Signed in", description: "Authenticated with passkey." });
       redirectByRole((passkeyUser as any)?.role);
     } catch (error: any) {

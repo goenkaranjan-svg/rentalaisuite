@@ -6,12 +6,14 @@ import { api } from "@shared/routes";
 import { z } from "zod";
 import { setupAuth, registerAuthRoutes, isAuthenticated } from "./integrations/auth";
 import { sendAuthEmail } from "./integrations/auth/mailer";
+import { hashToken } from "./integrations/auth/crypto";
 import { registerChatRoutes } from "./integrations/chat";
 import { registerImageRoutes } from "./integrations/image";
 import { seedDatabase } from "./seed";
 import OpenAI from "openai";
 import { scrapePublicStrListings } from "./services/str-market";
 import type { Request, Response, NextFunction } from "express";
+import { randomBytes } from "node:crypto";
 
 // Initialize OpenAI for backend logic (Lease gen, Maintenance analysis)
 // Use placeholder when no key is set so app can start; AI routes will check and return friendly error
@@ -39,9 +41,25 @@ function toMoney(value: string | number): string {
   return numeric.toFixed(2);
 }
 
+function getPublicAppBaseUrl(): string {
+  const fromEnv =
+    process.env.PUBLIC_APP_URL ||
+    process.env.APP_BASE_URL ||
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:5001");
+  try {
+    const parsed = new URL(fromEnv.includes("://") ? fromEnv : `https://${fromEnv}`);
+    return parsed.origin;
+  } catch {
+    return "http://localhost:5001";
+  }
+}
+
 const STEP_UP_TTL_MS = 10 * 60 * 1000;
-const RENT_OVERDUE_SCAN_INTERVAL_MS = 60 * 60 * 1000;
+const DAILY_SCAN_INTERVAL_MS = 24 * 60 * 60 * 1000;
+const RENT_OVERDUE_SCAN_INTERVAL_MS = DAILY_SCAN_INTERVAL_MS;
 const DEFAULT_RENT_OVERDUE_NOTIFICATION_DAYS = 5;
+const LEASE_EXPIRY_SCAN_INTERVAL_MS = DAILY_SCAN_INTERVAL_MS;
+const DEFAULT_LEASE_EXPIRY_NOTIFICATION_DAYS = 30;
 
 type OverdueNotificationCandidate = {
   leaseId: number;
@@ -52,6 +70,24 @@ type OverdueNotificationCandidate = {
   balance: number;
   monthKey: string;
 };
+
+type LeaseExpiryNotificationCandidate = {
+  leaseId: number;
+  leaseEndDateKey: string;
+  propertyAddress: string;
+  tenantName: string;
+  daysUntilEnd: number;
+};
+
+function isMissingRelationError(error: unknown): boolean {
+  const code = (error as any)?.code;
+  return code === "42P01";
+}
+
+const leaseSigningCompleteSchema = z.object({
+  token: z.string().min(20),
+  fullName: z.string().min(2).max(120),
+});
 
 const requireStepUpAuth = (req: Request & any, res: Response, next: NextFunction) => {
   const verifiedAt = Number(req.session?.stepUpVerifiedAt || 0);
@@ -336,6 +372,12 @@ export async function registerRoutes(
     return Math.min(60, Math.max(1, Math.floor(parsed)));
   };
 
+  const normalizeLeaseExpiryDays = (value: unknown) => {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return DEFAULT_LEASE_EXPIRY_NOTIFICATION_DAYS;
+    return Math.min(365, Math.max(1, Math.floor(parsed)));
+  };
+
   const getManagerNotificationSettings = async (managerId: string) => {
     const existing = await storage.getManagerRentNotificationSettings(managerId);
     if (existing) {
@@ -350,6 +392,24 @@ export async function registerRoutes(
       managerId,
       enabled: true,
       overdueDays: normalizeOverdueDays(process.env.RENT_OVERDUE_NOTIFICATION_DEFAULT_DAYS),
+      updatedAt: null as Date | null,
+    };
+  };
+
+  const getManagerLeaseExpirySettings = async (managerId: string) => {
+    const existing = await storage.getManagerLeaseExpiryNotificationSettings(managerId);
+    if (existing) {
+      return {
+        managerId: existing.managerId,
+        enabled: existing.enabled,
+        daysBeforeExpiry: normalizeLeaseExpiryDays(existing.daysBeforeExpiry),
+        updatedAt: existing.updatedAt,
+      };
+    }
+    return {
+      managerId,
+      enabled: true,
+      daysBeforeExpiry: normalizeLeaseExpiryDays(process.env.LEASE_EXPIRY_NOTIFICATION_DEFAULT_DAYS),
       updatedAt: null as Date | null,
     };
   };
@@ -462,13 +522,109 @@ export async function registerRoutes(
     }
   };
 
+  const getLeaseExpiryCandidatesForManager = async (
+    managerId: string,
+    thresholdDays: number,
+    now: Date,
+  ): Promise<LeaseExpiryNotificationCandidate[]> => {
+    const managerLeases = (await storage.getLeasesByManager(managerId)).filter((lease) => lease.status === "active");
+    if (managerLeases.length === 0) return [];
+
+    const managerProperties = await storage.getPropertiesByManager(managerId);
+    const propertyAddressById = new Map<number, string>();
+    managerProperties.forEach((property) => {
+      propertyAddressById.set(property.id, `${property.address}, ${property.city}, ${property.state} ${property.zipCode}`.trim());
+    });
+
+    const tenantIds = Array.from(new Set(managerLeases.map((lease) => lease.tenantId)));
+    const tenantNameById = new Map<string, string>();
+    for (const tenantId of tenantIds) {
+      const tenant = await storage.getUser(tenantId);
+      const displayName = [tenant?.firstName, tenant?.lastName].filter(Boolean).join(" ").trim();
+      tenantNameById.set(tenantId, displayName || tenant?.email || tenantId);
+    }
+
+    const candidates: LeaseExpiryNotificationCandidate[] = [];
+    for (const lease of managerLeases) {
+      const endDate = new Date(lease.endDate);
+      const leaseEndDateKey = endDate.toISOString().slice(0, 10);
+      const daysUntilEnd = Math.ceil((endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+      if (daysUntilEnd < 0 || daysUntilEnd > thresholdDays) continue;
+
+      const alreadySent = await storage.hasSentLeaseExpiryNotification(managerId, lease.id, leaseEndDateKey, thresholdDays);
+      if (alreadySent) continue;
+
+      candidates.push({
+        leaseId: lease.id,
+        leaseEndDateKey,
+        propertyAddress: propertyAddressById.get(lease.propertyId) || `Property #${lease.propertyId}`,
+        tenantName: tenantNameById.get(lease.tenantId) || lease.tenantId,
+        daysUntilEnd,
+      });
+    }
+    return candidates;
+  };
+
+  const sendLeaseExpiryNotifications = async (forcedManagerId?: string) => {
+    const now = new Date();
+    const managerIds = forcedManagerId
+      ? [forcedManagerId]
+      : Array.from(new Set((await storage.getProperties()).map((property) => property.managerId)));
+
+    for (const managerId of managerIds) {
+      try {
+        const manager = await storage.getUser(managerId);
+        if (!manager?.email) continue;
+
+        const settings = await getManagerLeaseExpirySettings(managerId);
+        if (!settings.enabled) continue;
+        const thresholdDays = normalizeLeaseExpiryDays(settings.daysBeforeExpiry);
+        const candidates = await getLeaseExpiryCandidatesForManager(managerId, thresholdDays, now);
+        if (candidates.length === 0) continue;
+
+        const lines = candidates
+          .map((item) => `Lease #${item.leaseId} (${item.propertyAddress}) - Tenant: ${item.tenantName} - Ends in ${item.daysUntilEnd} day(s)`)
+          .join("<br/>");
+        const subject = `Lease expiry reminder: ${candidates.length} lease${candidates.length === 1 ? "" : "s"} ending soon`;
+
+        const delivery = await sendAuthEmail({
+          to: manager.email,
+          subject,
+          html: `<p>These leases are within ${thresholdDays} day(s) of expiry.</p><p>${lines}</p><p>Open Lease Management in PropMan to take action.</p>`,
+          text: `These leases are within ${thresholdDays} day(s) of expiry.\n${candidates
+            .map((item) => `Lease #${item.leaseId} - ${item.propertyAddress} - ${item.tenantName} - Ends in ${item.daysUntilEnd} day(s)`)
+            .join("\n")}\nOpen Lease Management in PropMan to take action.`,
+        });
+
+        for (const item of candidates) {
+          await storage.markLeaseExpiryNotificationSent(managerId, item.leaseId, item.leaseEndDateKey, thresholdDays);
+        }
+
+        console.log(
+          `[leases] expiry reminder queued for manager ${manager.email} (${candidates.length} lease(s)) via ${delivery.provider}${
+            delivery.id ? ` (${delivery.id})` : ""
+          }`,
+        );
+      } catch (error) {
+        console.error(`Failed to send lease expiry notification for manager ${managerId}:`, error);
+      }
+    }
+  };
+
   let rentOverdueScanInFlight: Promise<void> | null = null;
+  let rentOverdueSchemaReady = true;
   const triggerRentOverdueScan = (forcedManagerId?: string) => {
+    if (!rentOverdueSchemaReady) return Promise.resolve();
     if (rentOverdueScanInFlight) return rentOverdueScanInFlight;
     rentOverdueScanInFlight = (async () => {
       try {
         await sendRentOverdueNotifications(forcedManagerId);
       } catch (error) {
+        if (isMissingRelationError(error)) {
+          rentOverdueSchemaReady = false;
+          console.warn("Rent overdue notification tables are missing. Run migrations (npm run db:push) to enable this feature.");
+          return;
+        }
         console.error("Rent overdue notification scan failed:", error);
       } finally {
         rentOverdueScanInFlight = null;
@@ -484,6 +640,36 @@ export async function registerRoutes(
   setTimeout(() => {
     void triggerRentOverdueScan();
   }, 10_000);
+
+  let leaseExpiryScanInFlight: Promise<void> | null = null;
+  let leaseExpirySchemaReady = true;
+  const triggerLeaseExpiryScan = (forcedManagerId?: string) => {
+    if (!leaseExpirySchemaReady) return Promise.resolve();
+    if (leaseExpiryScanInFlight) return leaseExpiryScanInFlight;
+    leaseExpiryScanInFlight = (async () => {
+      try {
+        await sendLeaseExpiryNotifications(forcedManagerId);
+      } catch (error) {
+        if (isMissingRelationError(error)) {
+          leaseExpirySchemaReady = false;
+          console.warn("Lease expiry notification tables are missing. Run migrations (npm run db:push) to enable this feature.");
+          return;
+        }
+        console.error("Lease expiry notification scan failed:", error);
+      } finally {
+        leaseExpiryScanInFlight = null;
+      }
+    })();
+    return leaseExpiryScanInFlight;
+  };
+
+  const leaseExpiryInterval = setInterval(() => {
+    void triggerLeaseExpiryScan();
+  }, LEASE_EXPIRY_SCAN_INTERVAL_MS);
+  httpServer.on("close", () => clearInterval(leaseExpiryInterval));
+  setTimeout(() => {
+    void triggerLeaseExpiryScan();
+  }, 15_000);
 
   const getManagerScopedData = async (managerId: string) => {
     const managerProperties = await storage.getPropertiesByManager(managerId);
@@ -914,7 +1100,7 @@ export async function registerRoutes(
 
     let leaseList;
     if (dbUser?.role === "manager") {
-      leaseList = await storage.getLeases();
+      leaseList = await storage.getLeasesByManager(userId);
     } else {
       leaseList = await storage.getLeasesByTenant(userId);
     }
@@ -1001,6 +1187,231 @@ export async function registerRoutes(
 
       res.status(500).json({ message: "AI generation failed" });
     }
+  });
+
+  app.post(api.leases.sendForSigning.path, isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user?.claims?.sub;
+      if (!userId) return res.status(401).json({ message: "Unauthorized" });
+      const manager = await storage.getUser(userId);
+      if (!manager || manager.role !== "manager") return res.status(403).json({ message: "Only managers can send leases for signing." });
+
+      const leaseId = Number(req.params.id);
+      const lease = await storage.getLease(leaseId);
+      if (!lease) return res.status(404).json({ message: "Lease not found" });
+      const property = await storage.getProperty(lease.propertyId);
+      if (!property || property.managerId !== userId) {
+        return res.status(403).json({ message: "Forbidden: you can only send signing requests for your own properties." });
+      }
+
+      const tenant = await storage.getUser(lease.tenantId);
+      if (!tenant?.email) return res.status(400).json({ message: "Tenant email is missing." });
+
+      const rawToken = randomBytes(32).toString("hex");
+      const tokenHash = hashToken(rawToken);
+      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+      const signingRequest = await storage.createLeaseSigningRequest({
+        leaseId: lease.id,
+        managerId: userId,
+        tenantId: lease.tenantId,
+        tenantEmail: tenant.email,
+        tokenHash,
+        status: "pending",
+        expiresAt,
+      });
+
+      const signingLink = `${getPublicAppBaseUrl()}/lease-sign/${encodeURIComponent(rawToken)}`;
+      await sendAuthEmail({
+        to: tenant.email,
+        subject: "Lease ready for your signature",
+        html: `<p>Your lease is ready to sign for <strong>${property.address}</strong>.</p><p><a href="${signingLink}">Review & Sign Lease</a></p><p>This secure link expires on ${expiresAt.toLocaleString()}.</p>`,
+        text: `Your lease is ready for signature.\nProperty: ${property.address}\nSign here: ${signingLink}\nThis link expires on ${expiresAt.toISOString()}.`,
+      });
+
+      return res.json({
+        leaseId: lease.id,
+        status: signingRequest.status,
+        expiresAt: expiresAt.toISOString(),
+        sentTo: tenant.email,
+        signingLink: process.env.NODE_ENV !== "production" ? signingLink : undefined,
+      });
+    } catch (error) {
+      if (isMissingRelationError(error)) {
+        return res.status(503).json({ message: "Lease signing tables are missing. Run database migrations first." });
+      }
+      console.error("Lease signing request error:", error);
+      return res.status(500).json({ message: "Failed to send lease for signing." });
+    }
+  });
+
+  app.get(api.leases.signingStatus.path, isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user?.claims?.sub;
+      if (!userId) return res.status(401).json({ message: "Unauthorized" });
+      const dbUser = await storage.getUser(userId);
+      if (!dbUser) return res.status(401).json({ message: "Unauthorized" });
+
+      const leaseId = Number(req.params.id);
+      const lease = await storage.getLease(leaseId);
+      if (!lease) return res.status(404).json({ message: "Lease not found" });
+      const property = await storage.getProperty(lease.propertyId);
+      const isManagerAllowed = dbUser.role === "manager" && property?.managerId === userId;
+      const isTenantAllowed = dbUser.role === "tenant" && lease.tenantId === userId;
+      if (!isManagerAllowed && !isTenantAllowed) return res.status(403).json({ message: "Forbidden" });
+
+      const signing = await storage.getLatestLeaseSigningRequestByLease(lease.id);
+      return res.json({
+        leaseId: lease.id,
+        status: signing?.status ?? "not_requested",
+        createdAt: signing?.createdAt ? new Date(signing.createdAt).toISOString() : null,
+        expiresAt: signing?.expiresAt ? new Date(signing.expiresAt).toISOString() : null,
+        signedAt: signing?.signedAt ? new Date(signing.signedAt).toISOString() : null,
+        signedFullName: signing?.signedFullName ?? null,
+        tenantEmail: signing?.tenantEmail ?? null,
+      });
+    } catch (error) {
+      if (isMissingRelationError(error)) {
+        return res.status(503).json({ message: "Lease signing tables are missing. Run database migrations first." });
+      }
+      return res.status(500).json({ message: "Failed to fetch signing status." });
+    }
+  });
+
+  app.get(api.leases.signingValidate.path, async (req, res) => {
+    try {
+      const input = api.leases.signingValidate.input.parse(req.query ?? {});
+      const signing = await storage.getLeaseSigningRequestByTokenHash(hashToken(input.token));
+      if (!signing) return res.json({ valid: false });
+
+      const now = Date.now();
+      const expired = new Date(signing.expiresAt).getTime() < now;
+      if (signing.status !== "pending" || expired) {
+        return res.json({
+          valid: false,
+          leaseId: signing.leaseId,
+          status: expired ? "expired" : signing.status,
+          expiresAt: new Date(signing.expiresAt).toISOString(),
+        });
+      }
+
+      const lease = await storage.getLease(signing.leaseId);
+      const property = lease ? await storage.getProperty(lease.propertyId) : undefined;
+      return res.json({
+        valid: true,
+        leaseId: signing.leaseId,
+        status: signing.status,
+        expiresAt: new Date(signing.expiresAt).toISOString(),
+        propertyAddress: property ? `${property.address}, ${property.city}, ${property.state}` : undefined,
+        rentAmount: lease ? Number(lease.rentAmount) : undefined,
+        tenantEmail: signing.tenantEmail,
+      });
+    } catch {
+      return res.status(400).json({ valid: false });
+    }
+  });
+
+  app.post(api.leases.signingComplete.path, async (req, res) => {
+    try {
+      const input = leaseSigningCompleteSchema.parse(req.body);
+      const signing = await storage.getLeaseSigningRequestByTokenHash(hashToken(input.token));
+      if (!signing) return res.status(400).json({ message: "Invalid signing link." });
+      if (signing.status !== "pending") return res.status(400).json({ message: "This signing request is no longer pending." });
+      if (new Date(signing.expiresAt).getTime() < Date.now()) {
+        return res.status(400).json({ message: "This signing link has expired." });
+      }
+
+      const signed = await storage.markLeaseSigningCompleted({
+        signingRequestId: signing.id,
+        signedFullName: input.fullName.trim(),
+        signedFromIp: req.ip || req.socket?.remoteAddress || undefined,
+      });
+
+      const lease = await storage.getLease(signing.leaseId);
+      if (lease?.draftText) {
+        const signatureFooter = `\n\n---\nDigitally signed by ${signed.signedFullName} on ${new Date(signed.signedAt!).toLocaleString()}\n`;
+        await storage.updateLease(lease.id, { draftText: `${lease.draftText}${signatureFooter}` });
+      }
+
+      return res.json({
+        message: "Lease signed successfully.",
+        leaseId: signing.leaseId,
+        signedAt: new Date(signed.signedAt!).toISOString(),
+        signedFullName: signed.signedFullName!,
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: error.errors[0]?.message ?? "Invalid signature payload." });
+      }
+      if (isMissingRelationError(error)) {
+        return res.status(503).json({ message: "Lease signing tables are missing. Run database migrations first." });
+      }
+      return res.status(500).json({ message: "Failed to complete lease signing." });
+    }
+  });
+
+  app.get(api.leases.expiryNotificationSettings.path, isAuthenticated, async (req: any, res) => {
+    const userId = req.user?.claims?.sub;
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+    const dbUser = await storage.getUser(userId);
+    if (dbUser?.role !== "manager") return res.status(403).json({ message: "Forbidden" });
+    try {
+      const settings = await getManagerLeaseExpirySettings(userId);
+      return res.json({
+        ...settings,
+        daysBeforeExpiry: normalizeLeaseExpiryDays(settings.daysBeforeExpiry),
+        updatedAt: settings.updatedAt ? settings.updatedAt.toISOString() : null,
+      });
+    } catch (error) {
+      if (isMissingRelationError(error)) {
+        return res.status(503).json({ message: "Lease expiry settings tables are missing. Run database migrations first." });
+      }
+      return res.status(500).json({ message: "Failed to fetch settings." });
+    }
+  });
+
+  app.put(api.leases.updateExpiryNotificationSettings.path, isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user?.claims?.sub;
+      if (!userId) return res.status(401).json({ message: "Unauthorized" });
+      const dbUser = await storage.getUser(userId);
+      if (dbUser?.role !== "manager") return res.status(403).json({ message: "Forbidden" });
+
+      const input = api.leases.updateExpiryNotificationSettings.input.parse(req.body);
+      const settings = await storage.upsertManagerLeaseExpiryNotificationSettings({
+        managerId: userId,
+        enabled: input.enabled,
+        daysBeforeExpiry: normalizeLeaseExpiryDays(input.daysBeforeExpiry),
+      });
+      if (settings.enabled) {
+        void triggerLeaseExpiryScan(userId);
+      }
+      return res.json({
+        ...settings,
+        daysBeforeExpiry: normalizeLeaseExpiryDays(settings.daysBeforeExpiry),
+        updatedAt: settings.updatedAt ? settings.updatedAt.toISOString() : null,
+      });
+    } catch (error) {
+      if (isMissingRelationError(error)) {
+        return res.status(503).json({ message: "Lease expiry settings tables are missing. Run database migrations first." });
+      }
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: error.errors[0]?.message ?? "Invalid settings payload." });
+      }
+      return res.status(500).json({ message: "Failed to update settings." });
+    }
+  });
+
+  app.post("/api/internal/jobs/lease-expiry-scan", async (req, res) => {
+    const expectedSecret = process.env.CRON_SECRET;
+    const providedSecret = String(req.headers["x-cron-secret"] || "");
+    if (process.env.NODE_ENV === "production" && !expectedSecret) {
+      return res.status(503).json({ message: "CRON_SECRET is not configured." });
+    }
+    if (expectedSecret && providedSecret !== expectedSecret) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+    await triggerLeaseExpiryScan();
+    return res.json({ message: "Lease expiry scan completed." });
   });
 
   // === Maintenance ===
@@ -1149,7 +1560,15 @@ export async function registerRoutes(
     if (!userId) return res.status(401).json({ message: "Unauthorized" });
     const dbUser = await storage.getUser(userId);
     if (dbUser?.role !== "manager") return res.status(403).json({ message: "Forbidden" });
-    const settings = await getManagerNotificationSettings(userId);
+    let settings;
+    try {
+      settings = await getManagerNotificationSettings(userId);
+    } catch (error) {
+      if (isMissingRelationError(error)) {
+        return res.status(503).json({ message: "Notification settings tables are missing. Run database migrations first." });
+      }
+      throw error;
+    }
     return res.json({
       ...settings,
       overdueDays: normalizeOverdueDays(settings.overdueDays),
@@ -1181,6 +1600,9 @@ export async function registerRoutes(
         updatedAt: settings.updatedAt ? settings.updatedAt.toISOString() : null,
       });
     } catch (error) {
+      if (isMissingRelationError(error)) {
+        return res.status(503).json({ message: "Notification settings tables are missing. Run database migrations first." });
+      }
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: error.errors[0]?.message ?? "Invalid settings payload." });
       }

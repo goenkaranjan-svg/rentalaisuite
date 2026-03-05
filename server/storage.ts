@@ -3,11 +3,15 @@ import { db } from "./db";
 import { 
   users, properties, leases, maintenanceRequests, payments, screenings, listingMappingTemplates, strMarketListings,
   managerRentNotificationSettings, rentOverdueNotificationHistory,
+  managerLeaseExpiryNotificationSettings, leaseExpiryNotificationHistory,
+  leaseSigningRequests,
   type User, type Property, type Lease, type MaintenanceRequest, 
   type Payment, type Screening, type ListingMappingTemplate, type InsertProperty, type InsertLease, 
   type InsertMaintenanceRequest, type InsertPayment, type InsertScreening, type InsertListingMappingTemplate,
   type StrMarketListing, type InsertStrMarketListing,
-  type ManagerRentNotificationSettings, type UpsertManagerRentNotificationSettings
+  type ManagerRentNotificationSettings, type UpsertManagerRentNotificationSettings,
+  type LeaseSigningRequest, type InsertLeaseSigningRequest,
+  type ManagerLeaseExpiryNotificationSettings, type UpsertManagerLeaseExpiryNotificationSettings
 } from "@shared/schema";
 import { and, eq, desc } from "drizzle-orm";
 
@@ -60,6 +64,30 @@ export interface IStorage {
     monthKey: string,
     thresholdDays: number,
   ): Promise<void>;
+  getManagerLeaseExpiryNotificationSettings(managerId: string): Promise<ManagerLeaseExpiryNotificationSettings | undefined>;
+  upsertManagerLeaseExpiryNotificationSettings(
+    settings: UpsertManagerLeaseExpiryNotificationSettings,
+  ): Promise<ManagerLeaseExpiryNotificationSettings>;
+  hasSentLeaseExpiryNotification(
+    managerId: string,
+    leaseId: number,
+    leaseEndDateKey: string,
+    thresholdDays: number,
+  ): Promise<boolean>;
+  markLeaseExpiryNotificationSent(
+    managerId: string,
+    leaseId: number,
+    leaseEndDateKey: string,
+    thresholdDays: number,
+  ): Promise<void>;
+  createLeaseSigningRequest(input: InsertLeaseSigningRequest): Promise<LeaseSigningRequest>;
+  getLeaseSigningRequestByTokenHash(tokenHash: string): Promise<LeaseSigningRequest | undefined>;
+  getLatestLeaseSigningRequestByLease(leaseId: number): Promise<LeaseSigningRequest | undefined>;
+  markLeaseSigningCompleted(input: {
+    signingRequestId: number;
+    signedFullName: string;
+    signedFromIp?: string;
+  }): Promise<LeaseSigningRequest>;
 
   // Screenings
   createScreening(screening: InsertScreening): Promise<Screening>;
@@ -236,6 +264,93 @@ export class DatabaseStorage implements IStorage {
           rentOverdueNotificationHistory.thresholdDays,
         ],
       });
+  }
+  async getManagerLeaseExpiryNotificationSettings(managerId: string) {
+    const [settings] = await db
+      .select()
+      .from(managerLeaseExpiryNotificationSettings)
+      .where(eq(managerLeaseExpiryNotificationSettings.managerId, managerId));
+    return settings;
+  }
+  async upsertManagerLeaseExpiryNotificationSettings(settings: UpsertManagerLeaseExpiryNotificationSettings) {
+    const [upserted] = await db
+      .insert(managerLeaseExpiryNotificationSettings)
+      .values(settings)
+      .onConflictDoUpdate({
+        target: managerLeaseExpiryNotificationSettings.managerId,
+        set: {
+          enabled: settings.enabled,
+          daysBeforeExpiry: settings.daysBeforeExpiry,
+          updatedAt: new Date(),
+        },
+      })
+      .returning();
+    return upserted;
+  }
+  async hasSentLeaseExpiryNotification(managerId: string, leaseId: number, leaseEndDateKey: string, thresholdDays: number) {
+    const [entry] = await db
+      .select({ id: leaseExpiryNotificationHistory.id })
+      .from(leaseExpiryNotificationHistory)
+      .where(and(
+        eq(leaseExpiryNotificationHistory.managerId, managerId),
+        eq(leaseExpiryNotificationHistory.leaseId, leaseId),
+        eq(leaseExpiryNotificationHistory.leaseEndDateKey, leaseEndDateKey),
+        eq(leaseExpiryNotificationHistory.thresholdDays, thresholdDays),
+      ))
+      .limit(1);
+    return Boolean(entry);
+  }
+  async markLeaseExpiryNotificationSent(managerId: string, leaseId: number, leaseEndDateKey: string, thresholdDays: number) {
+    await db
+      .insert(leaseExpiryNotificationHistory)
+      .values({
+        managerId,
+        leaseId,
+        leaseEndDateKey,
+        thresholdDays,
+        sentAt: new Date(),
+      })
+      .onConflictDoNothing({
+        target: [
+          leaseExpiryNotificationHistory.managerId,
+          leaseExpiryNotificationHistory.leaseId,
+          leaseExpiryNotificationHistory.leaseEndDateKey,
+          leaseExpiryNotificationHistory.thresholdDays,
+        ],
+      });
+  }
+  async createLeaseSigningRequest(input: InsertLeaseSigningRequest) {
+    const [record] = await db.insert(leaseSigningRequests).values(input).returning();
+    return record;
+  }
+  async getLeaseSigningRequestByTokenHash(tokenHash: string) {
+    const [record] = await db
+      .select()
+      .from(leaseSigningRequests)
+      .where(eq(leaseSigningRequests.tokenHash, tokenHash));
+    return record;
+  }
+  async getLatestLeaseSigningRequestByLease(leaseId: number) {
+    const [record] = await db
+      .select()
+      .from(leaseSigningRequests)
+      .where(eq(leaseSigningRequests.leaseId, leaseId))
+      .orderBy(desc(leaseSigningRequests.createdAt))
+      .limit(1);
+    return record;
+  }
+  async markLeaseSigningCompleted(input: { signingRequestId: number; signedFullName: string; signedFromIp?: string }) {
+    const [record] = await db
+      .update(leaseSigningRequests)
+      .set({
+        status: "signed",
+        signedAt: new Date(),
+        signedFullName: input.signedFullName,
+        signedFromIp: input.signedFromIp ?? null,
+      })
+      .where(eq(leaseSigningRequests.id, input.signingRequestId))
+      .returning();
+    return record;
   }
 
   // Screenings

@@ -42,6 +42,23 @@ export const leases = pgTable("leases", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const leaseSigningRequests = pgTable("lease_signing_requests", {
+  id: serial("id").primaryKey(),
+  leaseId: integer("lease_id").notNull().references(() => leases.id),
+  managerId: varchar("manager_id").notNull().references(() => users.id),
+  tenantId: varchar("tenant_id").notNull().references(() => users.id),
+  tenantEmail: text("tenant_email").notNull(),
+  tokenHash: text("token_hash").notNull(),
+  status: text("status").notNull().default("pending"), // pending, signed, expired, cancelled
+  expiresAt: timestamp("expires_at").notNull(),
+  signedAt: timestamp("signed_at"),
+  signedFullName: text("signed_full_name"),
+  signedFromIp: text("signed_from_ip"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  uniqueIndex("lease_signing_requests_token_hash_idx").on(table.tokenHash),
+]);
+
 export const maintenanceRequests = pgTable("maintenance_requests", {
   id: serial("id").primaryKey(),
   propertyId: integer("property_id").notNull().references(() => properties.id),
@@ -88,6 +105,35 @@ export const rentOverdueNotificationHistory = pgTable(
       table.managerId,
       table.leaseId,
       table.monthKey,
+      table.thresholdDays,
+    ),
+  ]
+);
+
+export const managerLeaseExpiryNotificationSettings = pgTable("manager_lease_expiry_notification_settings", {
+  managerId: varchar("manager_id").notNull().references(() => users.id),
+  enabled: boolean("enabled").notNull().default(true),
+  daysBeforeExpiry: integer("days_before_expiry").notNull().default(30),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  primaryKey({ columns: [table.managerId] }),
+]);
+
+export const leaseExpiryNotificationHistory = pgTable(
+  "lease_expiry_notification_history",
+  {
+    id: serial("id").primaryKey(),
+    managerId: varchar("manager_id").notNull().references(() => users.id),
+    leaseId: integer("lease_id").notNull().references(() => leases.id),
+    leaseEndDateKey: text("lease_end_date_key").notNull(), // YYYY-MM-DD
+    thresholdDays: integer("threshold_days").notNull(),
+    sentAt: timestamp("sent_at").defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("lease_expiry_notification_dedupe_idx").on(
+      table.managerId,
+      table.leaseId,
+      table.leaseEndDateKey,
       table.thresholdDays,
     ),
   ]
@@ -194,6 +240,16 @@ export const insertStrMarketListingSchema = createInsertSchema(strMarketListings
 export const upsertManagerRentNotificationSettingsSchema = createInsertSchema(managerRentNotificationSettings, {
   overdueDays: z.coerce.number().int().min(1).max(60),
 }).omit({ updatedAt: true });
+export const upsertManagerLeaseExpiryNotificationSettingsSchema = createInsertSchema(managerLeaseExpiryNotificationSettings, {
+  daysBeforeExpiry: z.coerce.number().int().min(1).max(365),
+}).omit({ updatedAt: true });
+export const insertLeaseSigningRequestSchema = createInsertSchema(leaseSigningRequests).omit({
+  id: true,
+  createdAt: true,
+  signedAt: true,
+  signedFullName: true,
+  signedFromIp: true,
+});
 
 // === TYPES ===
 export type Property = typeof properties.$inferSelect;
@@ -201,6 +257,9 @@ export type InsertProperty = z.infer<typeof insertPropertySchema>;
 
 export type Lease = typeof leases.$inferSelect;
 export type InsertLease = z.infer<typeof insertLeaseSchema>;
+
+export type LeaseSigningRequest = typeof leaseSigningRequests.$inferSelect;
+export type InsertLeaseSigningRequest = z.infer<typeof insertLeaseSigningRequestSchema>;
 
 export type MaintenanceRequest = typeof maintenanceRequests.$inferSelect;
 export type InsertMaintenanceRequest = z.infer<typeof insertMaintenanceRequestSchema>;
@@ -212,6 +271,11 @@ export type ManagerRentNotificationSettings = typeof managerRentNotificationSett
 export type UpsertManagerRentNotificationSettings = z.infer<typeof upsertManagerRentNotificationSettingsSchema>;
 
 export type RentOverdueNotificationHistory = typeof rentOverdueNotificationHistory.$inferSelect;
+
+export type ManagerLeaseExpiryNotificationSettings = typeof managerLeaseExpiryNotificationSettings.$inferSelect;
+export type UpsertManagerLeaseExpiryNotificationSettings = z.infer<typeof upsertManagerLeaseExpiryNotificationSettingsSchema>;
+
+export type LeaseExpiryNotificationHistory = typeof leaseExpiryNotificationHistory.$inferSelect;
 
 export type Screening = typeof screenings.$inferSelect;
 export type InsertScreening = z.infer<typeof insertScreeningSchema>;

@@ -20,6 +20,7 @@ import RenterPortal from "@/pages/RenterPortal";
 import ListingExports from "@/pages/ListingExports";
 import InvestorPortal from "@/pages/InvestorPortal";
 import InvestorDealDetails from "@/pages/InvestorDealDetails";
+import LeaseSign from "@/pages/LeaseSign";
 
 // Wrapper for protected routes to handle layout
 function ProtectedLayout({ children }: { children: React.ReactNode }) {
@@ -87,6 +88,7 @@ function Router() {
   return (
     <Switch>
       <Route path="/login" component={Login} />
+      <Route path="/lease-sign/:token" component={LeaseSign} />
       
       {/* Protected Routes */}
       <Route path="/">

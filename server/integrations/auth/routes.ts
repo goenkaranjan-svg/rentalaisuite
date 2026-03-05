@@ -13,14 +13,12 @@ import {
   createMagicLinkToken,
   createMfaLoginToken,
   createRecoveryToken,
-  createStepUpToken,
   createVerificationToken,
   generateBackupCodes,
   deviceFingerprint,
   generateMfaSecret,
   hashCode,
   isCaptchaSatisfied,
-  isKnownDevice,
   isPasskeyFeatureEnabled,
   isUserLocked,
   parseCountryFromHeaders,
@@ -321,25 +319,25 @@ export function registerAuthRoutes(app: Express): void {
       });
 
       const fingerprint = deviceFingerprint(ip, userAgent);
-      const isTrusted = isKnownDevice(user.id, fingerprint);
-      const needsRiskStepUp = process.env.ENABLE_RISK_STEP_UP === "true" && !isTrusted;
-      if (needsRiskStepUp) {
-        const token = createStepUpToken(user.id);
-        return res.status(202).json({
-          message: "Additional verification required.",
-          stepUpRequired: true,
-          stepUpToken: process.env.NODE_ENV !== "production" ? token : undefined,
-        });
-      }
+      // Temporarily disabled: risk-based step-up verification on login.
+      // if (needsRiskStepUp) {
+      //   const token = createStepUpToken(user.id);
+      //   return res.status(202).json({
+      //     message: "Additional verification required.",
+      //     stepUpRequired: true,
+      //     stepUpToken: process.env.NODE_ENV !== "production" ? token : undefined,
+      //   });
+      // }
 
-      if (user.mfaEnabled && user.mfaSecret) {
-        const loginToken = createMfaLoginToken(user.id);
-        return res.status(202).json({
-          message: "MFA verification required.",
-          mfaRequired: true,
-          loginToken,
-        });
-      }
+      // Temporarily disabled: MFA challenge on login.
+      // if (user.mfaEnabled && user.mfaSecret) {
+      //   const loginToken = createMfaLoginToken(user.id);
+      //   return res.status(202).json({
+      //     message: "MFA verification required.",
+      //     mfaRequired: true,
+      //     loginToken,
+      //   });
+      // }
 
       rememberDevice(user.id, fingerprint);
       writeAuthAudit({

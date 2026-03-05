@@ -7,7 +7,8 @@ import {
   insertPaymentSchema, payments,
   insertScreeningSchema, screenings,
   strMarketListings,
-  upsertManagerRentNotificationSettingsSchema
+  upsertManagerRentNotificationSettingsSchema,
+  upsertManagerLeaseExpiryNotificationSettingsSchema
 } from './schema';
 
 // Shared error schemas
@@ -297,7 +298,95 @@ export const api = {
         200: z.object({ documentText: z.string() }),
         404: errorSchemas.notFound,
       },
-    }
+    },
+    sendForSigning: {
+      method: "POST" as const,
+      path: "/api/leases/:id/signing/request" as const,
+      responses: {
+        200: z.object({
+          leaseId: z.number(),
+          status: z.string(),
+          expiresAt: z.string(),
+          sentTo: z.string(),
+          signingLink: z.string().optional(),
+        }),
+      },
+    },
+    signingStatus: {
+      method: "GET" as const,
+      path: "/api/leases/:id/signing-status" as const,
+      responses: {
+        200: z.object({
+          leaseId: z.number(),
+          status: z.string(),
+          createdAt: z.string().nullable(),
+          expiresAt: z.string().nullable(),
+          signedAt: z.string().nullable(),
+          signedFullName: z.string().nullable(),
+          tenantEmail: z.string().nullable(),
+        }),
+      },
+    },
+    signingValidate: {
+      method: "GET" as const,
+      path: "/api/leases/signing/validate" as const,
+      input: z.object({ token: z.string().min(20) }),
+      responses: {
+        200: z.object({
+          valid: z.boolean(),
+          leaseId: z.number().optional(),
+          status: z.string().optional(),
+          expiresAt: z.string().optional(),
+          propertyAddress: z.string().optional(),
+          rentAmount: z.number().optional(),
+          tenantEmail: z.string().optional(),
+        }),
+      },
+    },
+    signingComplete: {
+      method: "POST" as const,
+      path: "/api/leases/signing/complete" as const,
+      input: z.object({
+        token: z.string().min(20),
+        fullName: z.string().min(2).max(120),
+      }),
+      responses: {
+        200: z.object({
+          message: z.string(),
+          leaseId: z.number(),
+          signedAt: z.string(),
+          signedFullName: z.string(),
+        }),
+      },
+    },
+    expiryNotificationSettings: {
+      method: "GET" as const,
+      path: "/api/leases/expiry-notification-settings" as const,
+      responses: {
+        200: z.object({
+          managerId: z.string(),
+          enabled: z.boolean(),
+          daysBeforeExpiry: z.number().int().min(1).max(365),
+          updatedAt: z.string().nullable(),
+        }),
+      },
+    },
+    updateExpiryNotificationSettings: {
+      method: "PUT" as const,
+      path: "/api/leases/expiry-notification-settings" as const,
+      input: upsertManagerLeaseExpiryNotificationSettingsSchema.pick({
+        enabled: true,
+        daysBeforeExpiry: true,
+      }),
+      responses: {
+        200: z.object({
+          managerId: z.string(),
+          enabled: z.boolean(),
+          daysBeforeExpiry: z.number().int().min(1).max(365),
+          updatedAt: z.string().nullable(),
+        }),
+      },
+    },
   },
   maintenance: {
     list: {

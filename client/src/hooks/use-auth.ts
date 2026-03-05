@@ -81,7 +81,10 @@ export function useAuth() {
       if (!res.ok) throw new Error(body?.message || "Failed to login.");
       return body;
     },
-    onSuccess: () => {
+    onSuccess: (data: any) => {
+      if (data?.id) {
+        queryClient.setQueryData(["/api/auth/user"], data);
+      }
       queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
     },
   });
@@ -98,7 +101,10 @@ export function useAuth() {
       if (!res.ok) throw new Error(body?.message || "Failed to sign up.");
       return body;
     },
-    onSuccess: () => {
+    onSuccess: (data: any) => {
+      if (data?.id) {
+        queryClient.setQueryData(["/api/auth/user"], data);
+      }
       queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
     },
   });
@@ -183,7 +189,10 @@ export function useAuth() {
       }
       return verifyBody;
     },
-    onSuccess: () => {
+    onSuccess: (data: any) => {
+      if (data?.id) {
+        queryClient.setQueryData(["/api/auth/user"], data);
+      }
       queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
     },
   });
