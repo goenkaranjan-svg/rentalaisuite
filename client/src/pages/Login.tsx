@@ -88,11 +88,24 @@ export default function Login() {
     else setLocation("/");
   }, [user, setLocation]);
 
+  const redirectByRole = (nextRole: UserRole | string | undefined) => {
+    if (nextRole === "tenant") {
+      setLocation("/renter");
+      return;
+    }
+    if (nextRole === "investor") {
+      setLocation("/investor");
+      return;
+    }
+    setLocation("/");
+  };
+
   const handleSignIn = async () => {
     try {
-      await login({ email, password, role });
+      const signedInUser = await login({ email, password, role });
       setShowResendVerification(false);
       toast({ title: "Signed in", description: "Welcome back." });
+      redirectByRole((signedInUser as any)?.role ?? role);
     } catch (error: any) {
       const message = String(error?.message || "");
       setShowResendVerification(message.toLowerCase().includes("verify your email"));
@@ -111,8 +124,9 @@ export default function Login() {
 
   const handleSignUp = async () => {
     try {
-      await signup({ email, password, role, firstName, lastName });
+      const signedUpUser = await signup({ email, password, role, firstName, lastName });
       toast({ title: "Account created", description: "You are now signed in." });
+      redirectByRole((signedUpUser as any)?.role ?? role);
     } catch (error: any) {
       toast({ title: "Sign up failed", description: error.message, variant: "destructive" });
     }
@@ -140,8 +154,9 @@ export default function Login() {
 
   const handlePasskeyLogin = async () => {
     try {
-      await loginWithPasskey();
+      const passkeyUser = await loginWithPasskey();
       toast({ title: "Signed in", description: "Authenticated with passkey." });
+      redirectByRole((passkeyUser as any)?.role);
     } catch (error: any) {
       toast({ title: "Passkey sign-in unavailable", description: error.message, variant: "destructive" });
     }

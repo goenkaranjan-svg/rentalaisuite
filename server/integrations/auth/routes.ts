@@ -24,7 +24,6 @@ import {
   isPasskeyFeatureEnabled,
   isUserLocked,
   parseCountryFromHeaders,
-  passwordPolicyResult,
   readAuthAudit,
   registerFailedLogin,
   rememberDevice,
@@ -196,10 +195,11 @@ export function registerAuthRoutes(app: Express): void {
       }
       const input = signupSchema.parse(req.body);
       input.email = input.email.trim().toLowerCase();
-      const passwordPolicy = passwordPolicyResult(input.password);
-      if (!passwordPolicy.ok) {
-        return res.status(400).json({ message: passwordPolicy.message });
-      }
+      // Temporarily disabled: password complexity enforcement.
+      // const passwordPolicy = passwordPolicyResult(input.password);
+      // if (!passwordPolicy.ok) {
+      //   return res.status(400).json({ message: passwordPolicy.message });
+      // }
       const existing = await authStorage.getUserByEmail(input.email);
       if (existing) {
         if (!existing.passwordHash) {
@@ -417,8 +417,9 @@ export function registerAuthRoutes(app: Express): void {
   app.post("/api/auth/reset-password", strictAuthLimiter, async (req, res) => {
     try {
       const input = resetSchema.parse(req.body);
-      const policy = passwordPolicyResult(input.password);
-      if (!policy.ok) return res.status(400).json({ message: policy.message });
+      // Temporarily disabled: password complexity enforcement.
+      // const policy = passwordPolicyResult(input.password);
+      // if (!policy.ok) return res.status(400).json({ message: policy.message });
       const tokenHash = hashToken(input.token);
       const user = await authStorage.findUserByResetToken(tokenHash);
       if (!user) {
@@ -731,8 +732,9 @@ export function registerAuthRoutes(app: Express): void {
       const token = consumeRecoveryToken(input.token);
       if (!token) return res.status(400).json({ message: "Invalid recovery token." });
       if (!token.ready) return res.status(400).json({ message: "Recovery is cooling down. Try again later." });
-      const policy = passwordPolicyResult(input.password);
-      if (!policy.ok) return res.status(400).json({ message: policy.message });
+      // Temporarily disabled: password complexity enforcement.
+      // const policy = passwordPolicyResult(input.password);
+      // if (!policy.ok) return res.status(400).json({ message: policy.message });
       await authStorage.updatePassword(token.userId, hashPassword(input.password));
       return res.json({ message: "Account recovery complete." });
     } catch {
