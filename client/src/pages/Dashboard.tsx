@@ -3,10 +3,14 @@ import { useMaintenanceRequests } from "@/hooks/use-maintenance";
 import { useLeases } from "@/hooks/use-leases";
 import { usePortfolioHealth, useSmartAlerts } from "@/hooks/use-insights";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { AlertTriangle, Building2, Wrench, Wallet, Users } from "lucide-react";
+import { AlertTriangle, Building2, Settings2, Wrench, Wallet, Users } from "lucide-react";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip } from "recharts";
 import { Badge } from "@/components/ui/badge";
 import { Link } from "wouter";
+import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Switch } from "@/components/ui/switch";
+import { useTheme } from "@/hooks/use-theme";
 
 const data = [
   { name: 'Jan', revenue: 18000 },
@@ -18,6 +22,7 @@ const data = [
 ];
 
 export default function Dashboard() {
+  const { isDarkMode, setIsDarkMode } = useTheme();
   const { data: properties } = useProperties();
   const { data: maintenance } = useMaintenanceRequests();
   const { data: leases } = useLeases();
@@ -51,6 +56,24 @@ export default function Dashboard() {
           <div className="text-sm text-slate-500">
             Last updated: Today, 9:41 AM
           </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-9 w-9 border-slate-200 bg-white text-slate-600"
+                aria-label="Dashboard settings"
+              >
+                <Settings2 className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-72 p-3">
+              <div className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50/60 px-3 py-2">
+                <span className="text-sm text-slate-700">Dark Theme</span>
+                <Switch checked={isDarkMode} onCheckedChange={setIsDarkMode} />
+              </div>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 

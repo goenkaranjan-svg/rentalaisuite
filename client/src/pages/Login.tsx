@@ -80,6 +80,7 @@ export default function Login() {
   const [newPassword, setNewPassword] = useState("");
   const [devResetToken, setDevResetToken] = useState<string | null>(null);
   const [showResendVerification, setShowResendVerification] = useState(false);
+  const [heroWordIndex, setHeroWordIndex] = useState(0);
 
   useEffect(() => {
     if (!user) return;
@@ -87,6 +88,13 @@ export default function Login() {
     else if (user.role === "investor") setLocation("/investor");
     else setLocation("/");
   }, [user, setLocation]);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setHeroWordIndex((prev) => (prev + 1) % 3);
+    }, 2200);
+    return () => clearInterval(timer);
+  }, []);
 
   const redirectByRole = (nextRole: UserRole | string | undefined) => {
     if (nextRole === "tenant") {
@@ -181,45 +189,63 @@ export default function Login() {
   const newPasswordRuleState = PASSWORD_RULES.map((rule) => ({ ...rule, met: rule.check(newPassword) }));
 
   return (
-    <div className="min-h-screen grid lg:grid-cols-2 bg-white">
-      <div className="hidden lg:flex flex-col justify-between p-12 bg-gradient-to-br from-white via-slate-50 to-emerald-50 relative overflow-hidden border-r border-slate-200">
-        <div className="pointer-events-none absolute -top-20 -right-16 h-72 w-72 rounded-full bg-emerald-200/35 blur-3xl" />
-        <div className="pointer-events-none absolute -bottom-24 -left-16 h-72 w-72 rounded-full bg-slate-200/40 blur-3xl" />
-        <div className="relative text-slate-900">
+    <div className="relative min-h-screen bg-slate-950">
+      <div
+        className="pointer-events-none absolute inset-0 bg-cover bg-center"
+        style={{ backgroundImage: "url('/home-city.jpg')" }}
+      />
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-slate-950/45 via-slate-950/70 to-slate-950/85" />
+      <div className="relative min-h-screen grid lg:grid-cols-2">
+      <div className="hidden lg:flex flex-col justify-between p-12 relative overflow-hidden border-r border-white/10 bg-slate-950/20 backdrop-blur-[1px]">
+        <div className="relative text-slate-100">
           <div className="flex items-center gap-2 mb-8">
             <div className="w-10 h-10 rounded-xl bg-slate-900 flex items-center justify-center shadow-lg shadow-slate-500/20">
               <Building2 className="w-6 h-6 text-white" />
             </div>
-            <span className="text-2xl font-bold font-display">PropMan.ai</span>
+            <span className="text-2xl font-bold font-display">RentalMgmt.AI</span>
           </div>
-          <h1 className="text-[44px] font-bold font-display leading-[1.05] mb-5 tracking-tight">Invest and manage with confidence.</h1>
-          <p className="text-[15px] leading-6 text-slate-600 max-w-md">
+          <h1 className="text-[44px] font-bold font-display leading-[1.05] mb-5 tracking-tight">
+            <span>A Smater Way to </span>
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.span
+                key={heroWordIndex}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.22 }}
+                className="inline-block"
+              >
+                {["Manage", "Rent", "Invest"][heroWordIndex]}
+              </motion.span>
+            </AnimatePresence>
+          </h1>
+          <p className="text-[15px] leading-6 text-slate-200 max-w-md">
             Fast property operations for managers, renters, and investors in one secure workspace.
           </p>
         </div>
-        <div className="relative grid gap-3 text-slate-800">
-          <div className="rounded-xl border border-slate-200 bg-white p-4">
-            <p className="text-xs uppercase tracking-wide text-emerald-700">Built for focused decisions</p>
-            <p className="mt-2 text-sm text-slate-600">Track leasing, maintenance, accounting, and investment opportunities with fewer clicks.</p>
+        <div className="relative grid gap-3 text-slate-100">
+          <div className="rounded-xl border border-white/20 bg-slate-900/40 p-4 backdrop-blur-sm">
+            <p className="text-xs uppercase tracking-wide text-emerald-300">Built for focused decisions</p>
+            <p className="mt-2 text-sm text-slate-200">Track leasing, maintenance, accounting, and investment opportunities with fewer clicks.</p>
           </div>
         </div>
       </div>
 
-      <div className="flex items-center justify-center p-3 sm:p-6 lg:p-8 bg-white">
+      <div className="flex items-center justify-center p-3 sm:p-6 lg:p-8 bg-slate-950/35">
         <motion.div
           initial={{ opacity: 0, y: 12, scale: 0.98 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           transition={{ duration: 0.35, ease: "easeOut" }}
           className="w-full max-w-[430px]"
         >
-        <Card className="w-full border-slate-200 shadow-[0_8px_28px_rgba(15,23,42,0.06)]">
+        <Card className="login-auth-card w-full border-white/15 bg-slate-950/75 shadow-[0_8px_28px_rgba(2,6,23,0.45)] backdrop-blur-md">
           <CardHeader className="space-y-3 px-5 pt-5 pb-4 sm:space-y-4 sm:px-7 sm:pt-7 sm:pb-5">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 lg:hidden">
                 <div className="w-8 h-8 rounded-lg bg-slate-900 flex items-center justify-center">
                   <Building2 className="w-4 h-4 text-white" />
                 </div>
-                <span className="font-semibold text-slate-900">PropMan.ai</span>
+                <span className="font-semibold text-slate-100">RentalMgmt.AI</span>
               </div>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -227,9 +253,9 @@ export default function Login() {
                     variant="outline"
                     size="icon"
                     aria-label="Select role"
-                    className="ml-auto h-9 w-9 shrink-0 bg-slate-50 border-slate-200 text-slate-700"
+                    className="ml-auto h-9 w-9 shrink-0 bg-slate-900/80 border-slate-600 text-slate-100"
                   >
-                    <Menu className="h-4 w-4 text-slate-500" />
+                    <Menu className="h-4 w-4 text-slate-300" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-48">
@@ -247,17 +273,17 @@ export default function Login() {
                 exit={{ opacity: 0, y: -6 }}
                 transition={{ duration: 0.18 }}
               >
-                <CardTitle className="text-[22px] sm:text-[27px] tracking-tight flex items-center gap-2 leading-tight">
-                  <ActiveModeIcon className="h-5 w-5 text-emerald-700" />
+                <CardTitle className="text-[22px] sm:text-[27px] tracking-tight flex items-center gap-2 leading-tight text-slate-100">
+                  <ActiveModeIcon className="h-5 w-5 text-emerald-400" />
                   {activeMode.title}
                 </CardTitle>
                 {activeMode.description ? (
-                  <p className="mt-1 text-[14px] text-slate-600">{activeMode.description}</p>
+                  <p className="mt-1 text-[14px] text-slate-300">{activeMode.description}</p>
                 ) : null}
               </motion.div>
             </AnimatePresence>
-            <p className="text-xs text-slate-500">
-              Signing in as <span className="font-medium text-slate-700">{activeRole.label}</span>
+            <p className="text-xs text-slate-300">
+              Signing in as <span className="font-medium text-slate-100">{activeRole.label}</span>
             </p>
           </CardHeader>
           <CardContent className="px-5 pb-5 sm:px-7 sm:pb-7">
@@ -279,7 +305,7 @@ export default function Login() {
                     placeholder="you@company.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="h-11 bg-slate-50 border-slate-200 focus-visible:ring-2 focus-visible:ring-emerald-500/20 focus-visible:border-emerald-500"
+                    className="h-11 bg-slate-900/80 border-slate-600 text-slate-100 placeholder:text-slate-400 focus-visible:ring-2 focus-visible:ring-emerald-500/20 focus-visible:border-emerald-500"
                   />
                 </div>
                 <div className="space-y-2">
@@ -289,7 +315,7 @@ export default function Login() {
                     placeholder="Enter your password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="h-11 bg-slate-50 border-slate-200 focus-visible:ring-2 focus-visible:ring-emerald-500/20 focus-visible:border-emerald-500"
+                    className="h-11 bg-slate-900/80 border-slate-600 text-slate-100 placeholder:text-slate-400 focus-visible:ring-2 focus-visible:ring-emerald-500/20 focus-visible:border-emerald-500"
                   />
                 </div>
                 <Button className="w-full h-11 bg-emerald-500 hover:bg-emerald-600 text-white transition-all duration-200 text-sm sm:text-base px-3" onClick={handleSignIn} disabled={isLoggingIn}>
@@ -312,20 +338,20 @@ export default function Login() {
                   onClick={handlePasskeyLogin}
                   disabled={isLoggingInWithPasskey}
                 >
-                  {isLoggingInWithPasskey ? "Checking passkey..." : "Continue with Passkey"}
+                  {isLoggingInWithPasskey ? "Checking passkey..." : "Sign in with Passkey"}
                 </Button>
                 <div className="grid grid-cols-2 gap-2 -mt-1">
                   <button
                     type="button"
                     onClick={() => setMode("forgot")}
-                    className="text-sm text-slate-600 hover:text-slate-900 underline underline-offset-2 text-left"
+                    className="text-sm text-slate-300 hover:text-slate-100 underline underline-offset-2 text-left"
                   >
                     Forgot password?
                   </button>
                   <button
                     type="button"
                     onClick={() => setMode("signup")}
-                    className="text-sm text-slate-600 hover:text-slate-900 underline underline-offset-2 text-right"
+                    className="text-sm text-slate-300 hover:text-slate-100 underline underline-offset-2 text-right"
                   >
                     Create an account
                   </button>
@@ -342,7 +368,7 @@ export default function Login() {
                       placeholder="Jane"
                       value={firstName}
                       onChange={(e) => setFirstName(e.target.value)}
-                      className="h-11 bg-slate-50 border-slate-200 focus-visible:ring-2 focus-visible:ring-emerald-500/20 focus-visible:border-emerald-500"
+                      className="h-11 bg-slate-900/80 border-slate-600 text-slate-100 placeholder:text-slate-400 focus-visible:ring-2 focus-visible:ring-emerald-500/20 focus-visible:border-emerald-500"
                     />
                   </div>
                   <div className="space-y-2">
@@ -351,7 +377,7 @@ export default function Login() {
                       placeholder="Doe"
                       value={lastName}
                       onChange={(e) => setLastName(e.target.value)}
-                      className="h-11 bg-slate-50 border-slate-200 focus-visible:ring-2 focus-visible:ring-emerald-500/20 focus-visible:border-emerald-500"
+                      className="h-11 bg-slate-900/80 border-slate-600 text-slate-100 placeholder:text-slate-400 focus-visible:ring-2 focus-visible:ring-emerald-500/20 focus-visible:border-emerald-500"
                     />
                   </div>
                 </div>
@@ -362,7 +388,7 @@ export default function Login() {
                     placeholder="you@company.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="h-11 bg-slate-50 border-slate-200 focus-visible:ring-2 focus-visible:ring-emerald-500/20 focus-visible:border-emerald-500"
+                    className="h-11 bg-slate-900/80 border-slate-600 text-slate-100 placeholder:text-slate-400 focus-visible:ring-2 focus-visible:ring-emerald-500/20 focus-visible:border-emerald-500"
                   />
                 </div>
                 <div className="space-y-2">
@@ -372,7 +398,7 @@ export default function Login() {
                     placeholder="Create a secure password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="h-11 bg-slate-50 border-slate-200 focus-visible:ring-2 focus-visible:ring-emerald-500/20 focus-visible:border-emerald-500"
+                    className="h-11 bg-slate-900/80 border-slate-600 text-slate-100 placeholder:text-slate-400 focus-visible:ring-2 focus-visible:ring-emerald-500/20 focus-visible:border-emerald-500"
                   />
                 </div>
                 <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
@@ -395,7 +421,7 @@ export default function Login() {
                 <button
                   type="button"
                   onClick={() => setMode("signin")}
-                  className="w-full text-sm text-slate-600 hover:text-slate-900 underline underline-offset-2"
+                  className="w-full text-sm text-slate-300 hover:text-slate-100 underline underline-offset-2"
                 >
                   Already have an account? Sign in
                 </button>
@@ -407,7 +433,7 @@ export default function Login() {
                 <button
                   type="button"
                   onClick={() => setMode("signin")}
-                  className="text-sm text-slate-600 hover:text-slate-900 underline underline-offset-2"
+                  className="text-sm text-slate-300 hover:text-slate-100 underline underline-offset-2"
                 >
                   Back to sign in
                 </button>
@@ -418,7 +444,7 @@ export default function Login() {
                     placeholder="you@company.com"
                     value={forgotEmail}
                     onChange={(e) => setForgotEmail(e.target.value)}
-                    className="h-11 bg-slate-50 border-slate-200 focus-visible:ring-2 focus-visible:ring-emerald-500/20 focus-visible:border-emerald-500"
+                    className="h-11 bg-slate-900/80 border-slate-600 text-slate-100 placeholder:text-slate-400 focus-visible:ring-2 focus-visible:ring-emerald-500/20 focus-visible:border-emerald-500"
                   />
                 </div>
                 <Button className="w-full h-11 bg-emerald-500 hover:bg-emerald-600 text-white transition-all duration-200 text-sm sm:text-base px-3" onClick={handleForgot} disabled={isProcessingForgotPassword}>
@@ -437,7 +463,7 @@ export default function Login() {
                     placeholder="Paste reset token"
                     value={resetToken}
                     onChange={(e) => setResetToken(e.target.value)}
-                    className="h-11 bg-slate-50 border-slate-200 focus-visible:ring-2 focus-visible:ring-emerald-500/20 focus-visible:border-emerald-500"
+                    className="h-11 bg-slate-900/80 border-slate-600 text-slate-100 placeholder:text-slate-400 focus-visible:ring-2 focus-visible:ring-emerald-500/20 focus-visible:border-emerald-500"
                   />
                 </div>
                 <div className="space-y-2">
@@ -447,7 +473,7 @@ export default function Login() {
                     placeholder="Enter a new password"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
-                    className="h-11 bg-slate-50 border-slate-200 focus-visible:ring-2 focus-visible:ring-emerald-500/20 focus-visible:border-emerald-500"
+                    className="h-11 bg-slate-900/80 border-slate-600 text-slate-100 placeholder:text-slate-400 focus-visible:ring-2 focus-visible:ring-emerald-500/20 focus-visible:border-emerald-500"
                   />
                 </div>
                 <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
@@ -467,13 +493,13 @@ export default function Login() {
             )}
               </motion.div>
             </AnimatePresence>
-            <p className="mt-4 text-[11px] leading-relaxed text-slate-500">
+            <p className="mt-4 text-[11px] leading-relaxed text-slate-300">
               This site is protected by reCAPTCHA and the Google{" "}
               <a
                 href="https://policies.google.com/privacy"
                 target="_blank"
                 rel="noreferrer"
-                className="underline underline-offset-2 hover:text-slate-700"
+                className="underline underline-offset-2 hover:text-slate-100"
               >
                 Privacy Policy
               </a>
@@ -482,7 +508,7 @@ export default function Login() {
                 href="https://policies.google.com/terms"
                 target="_blank"
                 rel="noreferrer"
-                className="underline underline-offset-2 hover:text-slate-700"
+                className="underline underline-offset-2 hover:text-slate-100"
               >
                 Terms of Service
               </a>{" "}
@@ -491,6 +517,7 @@ export default function Login() {
           </CardContent>
         </Card>
         </motion.div>
+      </div>
       </div>
     </div>
   );

@@ -8,7 +8,7 @@
   --font-sans: 'Inter', sans-serif;
   --font-display: 'Outfit', sans-serif;
 
-  /* Professional Enterprise Palette - Blue/Indigo */
+  /* Professional Enterprise Palette - Emerald */
   --background: 210 20% 98%;
   --foreground: 222 47% 11%;
 
@@ -18,7 +18,7 @@
   --popover: 0 0% 100%;
   --popover-foreground: 222 47% 11%;
 
-  --primary: 221 83% 53%;
+  --primary: 160 84% 39%;
   --primary-foreground: 210 40% 98%;
 
   --secondary: 210 40% 96%;
@@ -35,7 +35,7 @@
 
   --border: 214 32% 91%;
   --input: 214 32% 91%;
-  --ring: 221 83% 53%;
+  --ring: 160 84% 39%;
 
   --radius: 0.75rem;
 }
@@ -50,7 +50,7 @@
   --popover: 217 33% 17%;
   --popover-foreground: 210 40% 98%;
 
-  --primary: 217 91% 60%;
+  --primary: 160 84% 39%;
   --primary-foreground: 222 47% 11%;
 
   --secondary: 217 19% 27%;
@@ -67,7 +67,7 @@
 
   --border: 217 19% 27%;
   --input: 217 19% 27%;
-  --ring: 224 76% 48%;
+  --ring: 160 84% 39%;
 }
 
 @layer base {
@@ -100,5 +100,100 @@
       opacity: 1;
       transform: translateY(0);
     }
+  }
+
+  .dark .bg-white {
+    background-color: rgb(15 23 42) !important;
+  }
+
+  .dark .bg-slate-50,
+  .dark .bg-slate-50\/50,
+  .dark .bg-slate-50\/60,
+  .dark .bg-slate-100 {
+    background-color: rgb(15 23 42 / 0.7) !important;
+  }
+
+  .dark .border-slate-100,
+  .dark .border-slate-200,
+  .dark .border-slate-300 {
+    border-color: rgb(51 65 85) !important;
+  }
+
+  .dark .text-slate-900 {
+    color: rgb(241 245 249) !important;
+  }
+
+  .dark .text-slate-800,
+  .dark .text-slate-700 {
+    color: rgb(203 213 225) !important;
+  }
+
+  .dark .text-slate-600,
+  .dark .text-slate-500,
+  .dark .text-slate-400 {
+    color: rgb(148 163 184) !important;
+  }
+
+  /* Global blue-to-emerald brand alignment */
+  .bg-blue-600 {
+    background-color: rgb(16 185 129) !important;
+  }
+
+  .bg-blue-500 {
+    background-color: rgb(16 185 129) !important;
+  }
+
+  .hover\:bg-blue-700:hover {
+    background-color: rgb(5 150 105) !important;
+  }
+
+  .bg-blue-50 {
+    background-color: rgb(236 253 245) !important;
+  }
+
+  .bg-blue-100 {
+    background-color: rgb(209 250 229) !important;
+  }
+
+  .text-blue-200 {
+    color: rgb(167 243 208) !important;
+  }
+
+  .text-blue-500,
+  .text-blue-600,
+  .text-blue-700,
+  .text-blue-800 {
+    color: rgb(5 150 105) !important;
+  }
+
+  .border-blue-100,
+  .border-blue-200,
+  .border-blue-300,
+  .border-blue-500 {
+    border-color: rgb(52 211 153) !important;
+  }
+
+  .shadow-blue-900\/10,
+  .shadow-blue-900\/20 {
+    --tw-shadow-color: rgb(6 78 59 / 0.28) !important;
+  }
+
+  .login-auth-card,
+  .login-auth-card * {
+    color: rgb(241 245 249);
+  }
+
+  .login-auth-card input {
+    color: rgb(241 245 249) !important;
+    background-color: rgb(15 23 42 / 0.88) !important;
+    border-color: rgb(71 85 105) !important;
+  }
+
+  .login-auth-card input::placeholder {
+    color: rgb(148 163 184) !important;
+  }
+
+  .login-auth-card label {
+    color: rgb(226 232 240) !important;
   }
 }
