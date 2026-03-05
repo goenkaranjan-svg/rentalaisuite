@@ -30,9 +30,11 @@ export default function Maintenance() {
 
   return (
     <div className="space-y-8 animate-in">
-      <div>
-        <h1 className="text-3xl font-bold font-display text-slate-900">Maintenance Requests</h1>
-        <p className="text-slate-500 mt-1">Track and manage property repairs.</p>
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold font-display text-slate-900">Maintenance Requests</h1>
+          <p className="text-slate-500 mt-1">Track and manage property repairs.</p>
+        </div>
       </div>
 
       <div className="grid gap-4">

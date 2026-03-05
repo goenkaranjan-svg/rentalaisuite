@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ComponentType } from "react";
 import { format } from "date-fns";
-import { DollarSign, Receipt, AlertTriangle, TrendingUp, Plus, FileDown } from "lucide-react";
+import { DollarSign, Receipt, AlertTriangle, TrendingUp, Settings2, Pencil } from "lucide-react";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend } from "recharts";
 
 import { useLeases } from "@/hooks/use-leases";
@@ -8,30 +8,19 @@ import { useProperties } from "@/hooks/use-properties";
 import { useTenants } from "@/hooks/use-auth";
 import {
   useAccountingSummary,
-  useCreatePayment,
   usePayments,
   useRentOverdueNotificationSettings,
   useUpdateRentOverdueNotificationSettings,
 } from "@/hooks/use-payments";
-import { useMonthlyOwnerReportExport } from "@/hooks/use-insights";
 import { useAuth } from "@/hooks/use-auth";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-
-type PaymentFormState = {
-  leaseId: string;
-  amount: string;
-  status: "paid" | "pending" | "overdue" | "failed";
-  type: "rent" | "deposit" | "fee";
-};
+import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 export default function Accounting() {
   const { user } = useAuth();
@@ -44,24 +33,32 @@ export default function Accounting() {
   const { data: rentNotificationSettings } = useRentOverdueNotificationSettings(isManager);
   const { mutate: updateRentNotificationSettings, isPending: isSavingRentNotificationSettings } =
     useUpdateRentOverdueNotificationSettings();
-  const { mutate: createPayment, isPending: isSavingPayment } = useCreatePayment();
-  const { mutateAsync: exportMonthlyReport, isPending: isExportingReport } = useMonthlyOwnerReportExport();
 
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [rentNotifEnabled, setRentNotifEnabled] = useState(true);
   const [rentNotifDays, setRentNotifDays] = useState("5");
-  const [form, setForm] = useState<PaymentFormState>({
-    leaseId: "",
-    amount: "",
-    status: "paid",
-    type: "rent",
-  });
+  const [isEditingRentNotifDays, setIsEditingRentNotifDays] = useState(false);
+  const [rentNotifSettingsReady, setRentNotifSettingsReady] = useState(false);
 
   useEffect(() => {
     if (!rentNotificationSettings) return;
     setRentNotifEnabled(rentNotificationSettings.enabled);
     setRentNotifDays(String(rentNotificationSettings.overdueDays));
+    setRentNotifSettingsReady(true);
   }, [rentNotificationSettings]);
+
+  useEffect(() => {
+    if (!isManager || !rentNotifSettingsReady) return;
+    const parsedDays = Number(rentNotifDays);
+    if (!Number.isFinite(parsedDays)) return;
+    const nextDays = Math.min(60, Math.max(1, Math.floor(parsedDays)));
+    const timer = setTimeout(() => {
+      updateRentNotificationSettings({
+        enabled: rentNotifEnabled,
+        overdueDays: nextDays,
+      });
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [isManager, rentNotifDays, rentNotifEnabled, rentNotifSettingsReady, updateRentNotificationSettings]);
 
   const activeLeases = useMemo(
     () => (leases ?? []).filter((l) => l.status === "active"),
@@ -133,48 +130,11 @@ export default function Accounting() {
     [activeLeases, payments, now],
   );
 
-  const savePayment = () => {
-    if (!form.leaseId || !form.amount) return;
-    createPayment(
-      {
-        leaseId: Number(form.leaseId),
-        amount: form.amount,
-        status: form.status,
-        type: form.type,
-      },
-      {
-        onSuccess: () => {
-          setIsDialogOpen(false);
-          setForm({ leaseId: "", amount: "", status: "paid", type: "rent" });
-        },
-      },
-    );
-  };
-
-  const handleExportMonthlyReport = async () => {
-    try {
-      const report = await exportMonthlyReport(undefined);
-      const blob = new Blob([report.csv], { type: "text/csv;charset=utf-8;" });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `owner-report-${report.month}.csv`;
-      a.click();
-      window.URL.revokeObjectURL(url);
-    } catch (error) {
-      console.error("Failed to export monthly report:", error);
-    }
-  };
-
-  const handleSaveRentNotificationSettings = () => {
+  const displayedRentNotifDays = (() => {
     const parsedDays = Number(rentNotifDays);
-    updateRentNotificationSettings({
-      enabled: rentNotifEnabled,
-      overdueDays: Number.isFinite(parsedDays)
-        ? Math.min(60, Math.max(1, Math.floor(parsedDays)))
-        : 5,
-    });
-  };
+    if (!Number.isFinite(parsedDays)) return 5;
+    return Math.min(60, Math.max(1, Math.floor(parsedDays)));
+  })();
 
   return (
     <div className="space-y-8 animate-in">
@@ -184,82 +144,79 @@ export default function Accounting() {
           <p className="text-slate-500 mt-1">Collections, receivables, and rent roll management.</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={handleExportMonthlyReport} disabled={isExportingReport}>
-            <FileDown className="w-4 h-4 mr-2" />
-            {isExportingReport ? "Exporting..." : "Export Monthly Owner Report"}
-          </Button>
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-              <Button className="bg-slate-900 hover:bg-slate-800">
-                <Plus className="w-4 h-4 mr-2" />
-                Record Payment
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-md">
-              <DialogHeader>
-                <DialogTitle>Record Payment</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Lease</Label>
-                  <Select value={form.leaseId} onValueChange={(v) => setForm((s) => ({ ...s, leaseId: v }))}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select lease" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {activeLeases.map((lease) => (
-                        <SelectItem key={lease.id} value={String(lease.id)}>
-                          #{lease.id} · {propertyLookup.get(lease.propertyId) ?? `Property ${lease.propertyId}`}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Amount</Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={form.amount}
-                    onChange={(e) => setForm((s) => ({ ...s, amount: e.target.value }))}
-                    placeholder="0.00"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-2">
-                    <Label>Status</Label>
-                    <Select value={form.status} onValueChange={(v: PaymentFormState["status"]) => setForm((s) => ({ ...s, status: v }))}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="paid">Paid</SelectItem>
-                        <SelectItem value="pending">Pending</SelectItem>
-                        <SelectItem value="overdue">Overdue</SelectItem>
-                        <SelectItem value="failed">Failed</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Type</Label>
-                    <Select value={form.type} onValueChange={(v: PaymentFormState["type"]) => setForm((s) => ({ ...s, type: v }))}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="rent">Rent</SelectItem>
-                        <SelectItem value="deposit">Deposit</SelectItem>
-                        <SelectItem value="fee">Fee</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <Button className="w-full" onClick={savePayment} disabled={isSavingPayment}>
-                  {isSavingPayment ? "Saving..." : "Save Payment"}
+          {isManager && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-9 w-9 border-slate-200 bg-white text-slate-600"
+                  aria-label="Accounting settings"
+                >
+                  <Settings2 className="h-4 w-4" />
                 </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-[24rem] p-3 space-y-2">
+                <div className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50/60 px-3 py-2">
+                  <div className="text-sm font-medium text-slate-700">Overdue rent email alerts</div>
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      checked={rentNotifEnabled}
+                      onCheckedChange={(checked) => {
+                        setRentNotifEnabled(checked);
+                        if (!checked) {
+                          setIsEditingRentNotifDays(false);
+                        }
+                      }}
+                    />
+                    {rentNotifEnabled && !isEditingRentNotifDays ? (
+                      <>
+                        <span className="text-xs text-slate-600 whitespace-nowrap">
+                          {displayedRentNotifDays} days
+                        </span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 p-0"
+                          aria-label="Edit overdue days"
+                          title="Edit overdue days"
+                          onClick={() => setIsEditingRentNotifDays(true)}
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                      </>
+                    ) : null}
+                    {rentNotifEnabled && isEditingRentNotifDays ? (
+                      <>
+                        <Input
+                          type="number"
+                          min={1}
+                          max={60}
+                          value={rentNotifDays}
+                          onChange={(e) => setRentNotifDays(e.target.value)}
+                          placeholder="5"
+                          className="h-8 w-20"
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 px-2 text-xs"
+                          onClick={() => setIsEditingRentNotifDays(false)}
+                        >
+                          Done
+                        </Button>
+                      </>
+                    ) : null}
+                  </div>
+                </div>
+                <p className="text-[11px] text-slate-500">
+                  {isSavingRentNotificationSettings ? "Saving..." : "Changes are saved automatically."}
+                </p>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
       </div>
 
@@ -269,36 +226,6 @@ export default function Accounting() {
         <MetricCard title="Outstanding" value={`$${(summary?.outstanding ?? 0).toLocaleString()}`} icon={AlertTriangle} />
         <MetricCard title="Collection Rate" value={`${collectionRate.toFixed(1)}%`} icon={TrendingUp} />
       </div>
-
-      {isManager && (
-        <Card className="border-slate-200">
-          <CardHeader>
-            <CardTitle>Overdue Rent Email Alerts</CardTitle>
-          </CardHeader>
-          <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-            <div className="space-y-2">
-              <Label>Enable alerts</Label>
-              <div className="h-10 flex items-center">
-                <Switch checked={rentNotifEnabled} onCheckedChange={setRentNotifEnabled} />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label>Send alert after unpaid days</Label>
-              <Input
-                type="number"
-                min={1}
-                max={60}
-                value={rentNotifDays}
-                onChange={(e) => setRentNotifDays(e.target.value)}
-                placeholder="5"
-              />
-            </div>
-            <Button onClick={handleSaveRentNotificationSettings} disabled={isSavingRentNotificationSettings}>
-              {isSavingRentNotificationSettings ? "Saving..." : "Save Alerts"}
-            </Button>
-          </CardContent>
-        </Card>
-      )}
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         <Card className="xl:col-span-2 border-slate-200">

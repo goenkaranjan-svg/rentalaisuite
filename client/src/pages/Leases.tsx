@@ -13,14 +13,14 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { FileText, Plus, Download, Wand2, Loader2, RefreshCw, Send } from "lucide-react";
+import { FileText, Plus, Download, Wand2, Loader2, Send, Settings2, Pencil } from "lucide-react";
 import { format } from "date-fns";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertLeaseSchema } from "@shared/schema";
@@ -41,6 +41,11 @@ export default function Leases() {
   const [open, setOpen] = useState(false);
   const [leaseExpiryEnabled, setLeaseExpiryEnabled] = useState(true);
   const [leaseExpiryDays, setLeaseExpiryDays] = useState("30");
+  const [isEditingLeaseExpiryDays, setIsEditingLeaseExpiryDays] = useState(false);
+  const [leaseSettingsReady, setLeaseSettingsReady] = useState(false);
+  const selectableProperties = (properties ?? []).filter(
+    (p) => p.status === "available" && p.managerId === user?.id,
+  );
 
   useEffect(() => {
     refetch();
@@ -50,6 +55,7 @@ export default function Leases() {
     if (!leaseExpirySettings) return;
     setLeaseExpiryEnabled(leaseExpirySettings.enabled);
     setLeaseExpiryDays(String(leaseExpirySettings.daysBeforeExpiry));
+    setLeaseSettingsReady(true);
   }, [leaseExpirySettings]);
 
   const form = useForm({
@@ -73,13 +79,25 @@ export default function Leases() {
     });
   };
 
-  const handleSaveLeaseExpirySettings = () => {
+  useEffect(() => {
+    if (!leaseSettingsReady || user?.role !== "manager") return;
     const parsed = Number(leaseExpiryDays);
-    updateLeaseExpirySettings({
-      enabled: leaseExpiryEnabled,
-      daysBeforeExpiry: Number.isFinite(parsed) ? Math.min(365, Math.max(1, Math.floor(parsed))) : 30,
-    });
-  };
+    if (!Number.isFinite(parsed)) return;
+    const nextDays = Math.min(365, Math.max(1, Math.floor(parsed)));
+    const timer = setTimeout(() => {
+      updateLeaseExpirySettings({
+        enabled: leaseExpiryEnabled,
+        daysBeforeExpiry: nextDays,
+      });
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [leaseExpiryEnabled, leaseExpiryDays, leaseSettingsReady, user?.role, updateLeaseExpirySettings]);
+
+  const displayedLeaseExpiryDays = (() => {
+    const parsed = Number(leaseExpiryDays);
+    if (!Number.isFinite(parsed)) return 30;
+    return Math.min(365, Math.max(1, Math.floor(parsed)));
+  })();
 
   console.log("Leases Page - Data:", leases);
   console.log("Leases Page - Loading:", isLoading);
@@ -100,9 +118,77 @@ export default function Leases() {
           <p className="text-slate-500 mt-1">Contracts, renewals, and digital signatures. (Role: {user?.role})</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="icon" onClick={() => refetch()} title="Refresh data">
-            <RefreshCw className="h-4 w-4" />
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-9 w-9 border-slate-200 bg-white text-slate-600"
+                aria-label="Lease settings"
+              >
+                <Settings2 className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-[24rem] p-3 space-y-2">
+              <div className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50/60 px-3 py-2">
+                <div className="text-sm font-medium text-slate-700">Lease expiry reminders</div>
+                <div className="flex items-center gap-2">
+                  <Switch
+                    checked={leaseExpiryEnabled}
+                    onCheckedChange={(checked) => {
+                      setLeaseExpiryEnabled(checked);
+                      if (!checked) {
+                        setIsEditingLeaseExpiryDays(false);
+                      }
+                    }}
+                  />
+                  {leaseExpiryEnabled && !isEditingLeaseExpiryDays ? (
+                    <>
+                      <span className="text-xs text-slate-600 whitespace-nowrap">
+                        {displayedLeaseExpiryDays} days
+                      </span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7 p-0"
+                        aria-label="Edit reminder days"
+                        title="Edit reminder days"
+                        onClick={() => setIsEditingLeaseExpiryDays(true)}
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                    </>
+                  ) : null}
+                  {leaseExpiryEnabled && isEditingLeaseExpiryDays ? (
+                    <>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={365}
+                        value={leaseExpiryDays}
+                        onChange={(e) => setLeaseExpiryDays(e.target.value)}
+                        placeholder="30"
+                        className="h-8 w-20"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 text-xs"
+                        onClick={() => setIsEditingLeaseExpiryDays(false)}
+                      >
+                        Done
+                      </Button>
+                    </>
+                  ) : null}
+                </div>
+              </div>
+              <p className="text-[11px] text-slate-500">
+                {isSavingLeaseExpirySettings ? "Saving..." : "Changes are saved automatically."}
+              </p>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
               <Button className="bg-slate-900 hover:bg-slate-800">
@@ -110,12 +196,16 @@ export default function Leases() {
                 New Lease
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[425px]">
-              <DialogHeader>
+            <DialogContent className="w-[95vw] sm:max-w-[560px] max-h-[90dvh] p-0 overflow-hidden flex flex-col">
+              <DialogHeader className="px-6 pt-6 pb-2 border-b">
                 <DialogTitle>Create New Lease</DialogTitle>
               </DialogHeader>
               <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                <form
+                  id="create-lease-form"
+                  onSubmit={form.handleSubmit(onSubmit)}
+                  className="flex-1 overflow-y-auto px-6 pt-4 pb-0 space-y-4"
+                >
                   <FormField
                     control={form.control}
                     name="propertyId"
@@ -132,9 +222,7 @@ export default function Leases() {
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            {properties
-                              ?.filter((p) => p.status === "available" && p.managerId === user?.id)
-                              .map((prop) => (
+                            {selectableProperties.map((prop) => (
                               <SelectItem key={prop.id} value={prop.id.toString()}>
                                 {prop.address}
                               </SelectItem>
@@ -213,45 +301,18 @@ export default function Leases() {
                       </FormItem>
                     )}
                   />
-                  <DialogFooter>
-                    <Button type="submit" disabled={isCreating}>
+                  <div className="sticky bottom-0 -mx-6 mt-4 border-t bg-background/95 px-6 py-4 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+                    <Button type="submit" className="w-full" disabled={isCreating}>
                       {isCreating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                       Create Lease
                     </Button>
-                  </DialogFooter>
+                  </div>
                 </form>
               </Form>
             </DialogContent>
           </Dialog>
         </div>
       </div>
-
-      {user?.role === "manager" && (
-        <Card className="border-slate-200 shadow-sm p-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-            <div className="space-y-2">
-              <Label>Enable lease expiry reminders</Label>
-              <div className="h-10 flex items-center">
-                <Switch checked={leaseExpiryEnabled} onCheckedChange={setLeaseExpiryEnabled} />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label>Remind before N days</Label>
-              <Input
-                type="number"
-                min={1}
-                max={365}
-                value={leaseExpiryDays}
-                onChange={(e) => setLeaseExpiryDays(e.target.value)}
-                placeholder="30"
-              />
-            </div>
-            <Button onClick={handleSaveLeaseExpirySettings} disabled={isSavingLeaseExpirySettings}>
-              {isSavingLeaseExpirySettings ? "Saving..." : "Save Reminder Settings"}
-            </Button>
-          </div>
-        </Card>
-      )}
 
       <Card className="border-slate-200 shadow-sm overflow-hidden">
         <Table>

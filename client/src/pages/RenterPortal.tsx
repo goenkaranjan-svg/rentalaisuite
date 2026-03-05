@@ -76,9 +76,11 @@ export default function RenterPortal() {
 
   return (
     <div className="space-y-8 animate-in">
-      <div>
-        <h1 className="text-3xl font-bold font-display text-slate-900">Renter Portal</h1>
-        <p className="text-slate-500 mt-1">Payments, lease details, maintenance, and communication.</p>
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold font-display text-slate-900">Renter Portal</h1>
+          <p className="text-slate-500 mt-1">Payments, lease details, maintenance, and communication.</p>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

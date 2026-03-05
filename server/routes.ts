@@ -697,9 +697,13 @@ export async function registerRoutes(
   // 3. Application Routes
   
   // === Properties ===
-  app.get(api.properties.list.path, async (req, res) => {
+  app.get(api.properties.list.path, isAuthenticated, async (req: any, res) => {
+    const userId = req.user?.claims?.sub;
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+    const dbUser = await storage.getUser(userId);
     const input = api.properties.list.input.parse(req.query ?? {});
-    const allProperties = await storage.getProperties();
+    const allProperties =
+      dbUser?.role === "manager" ? await storage.getPropertiesByManager(userId) : await storage.getProperties();
 
     const filtered = allProperties.filter((property) => {
       if (input?.status && property.status !== input.status) {
@@ -733,10 +737,19 @@ export async function registerRoutes(
     res.json(property);
   });
 
-  app.post(api.properties.create.path, async (req, res) => {
+  app.post(api.properties.create.path, isAuthenticated, async (req: any, res) => {
     try {
+      const userId = req.user?.claims?.sub;
+      if (!userId) return res.status(401).json({ message: "Unauthorized" });
+      const dbUser = await storage.getUser(userId);
+      if (dbUser?.role !== "manager") {
+        return res.status(403).json({ message: "Only managers can create properties." });
+      }
       const input = api.properties.create.input.parse(req.body);
-      const property = await storage.createProperty(input);
+      const property = await storage.createProperty({
+        ...input,
+        managerId: userId,
+      });
       res.status(201).json(property);
     } catch (err) {
       if (err instanceof z.ZodError) {
@@ -1432,9 +1445,19 @@ export async function registerRoutes(
   });
 
   // === Maintenance ===
-  app.get(api.maintenance.list.path, async (req, res) => {
+  app.get(api.maintenance.list.path, isAuthenticated, async (req: any, res) => {
+    const userId = req.user?.claims?.sub;
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+    const dbUser = await storage.getUser(userId);
     const requests = await storage.getMaintenanceRequests();
-    res.json(requests);
+
+    if (dbUser?.role === "manager") {
+      const managerProperties = await storage.getPropertiesByManager(userId);
+      const propertyIds = new Set(managerProperties.map((p) => p.id));
+      return res.json(requests.filter((r) => propertyIds.has(r.propertyId)));
+    }
+
+    return res.json(requests.filter((r) => r.tenantId === userId));
   });
 
   app.post(api.maintenance.create.path, isAuthenticated, async (req: any, res) => {
@@ -1454,11 +1477,27 @@ export async function registerRoutes(
     }
   });
 
-  app.patch(api.maintenance.update.path, async (req, res) => {
+  app.patch(api.maintenance.update.path, isAuthenticated, async (req: any, res) => {
     try {
+      const userId = req.user?.claims?.sub;
+      if (!userId) return res.status(401).json({ message: "Unauthorized" });
+      const dbUser = await storage.getUser(userId);
+      const requestId = Number(req.params.id);
+      const existing = await storage.getMaintenanceRequest(requestId);
+      if (!existing) return res.status(404).json({ message: "Request not found" });
+
+      if (dbUser?.role === "manager") {
+        const property = await storage.getProperty(existing.propertyId);
+        if (!property || property.managerId !== userId) {
+          return res.status(403).json({ message: "Forbidden" });
+        }
+      } else if (existing.tenantId !== userId) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+
       const input = api.maintenance.update.input.parse(req.body);
-      const request = await storage.updateMaintenanceRequest(Number(req.params.id), input);
-       if (!request) return res.status(404).json({ message: "Request not found" });
+      const request = await storage.updateMaintenanceRequest(requestId, input);
+      if (!request) return res.status(404).json({ message: "Request not found" });
       res.json(request);
     } catch (err) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.message });

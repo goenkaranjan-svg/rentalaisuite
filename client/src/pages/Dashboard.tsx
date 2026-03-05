@@ -47,8 +47,10 @@ export default function Dashboard() {
           <h1 className="text-3xl font-bold font-display text-slate-900">Dashboard</h1>
           <p className="text-slate-500 mt-1">Overview of your rental portfolio performance.</p>
         </div>
-        <div className="text-sm text-slate-500">
-          Last updated: Today, 9:41 AM
+        <div className="flex items-center gap-2">
+          <div className="text-sm text-slate-500">
+            Last updated: Today, 9:41 AM
+          </div>
         </div>
       </div>
 

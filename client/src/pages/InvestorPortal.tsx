@@ -227,10 +227,12 @@ export default function InvestorPortal() {
               Explore high-potential short-term rental markets with projected returns, occupancy insights, and pricing context.
             </p>
           </div>
-          <Button onClick={handleSync} disabled={syncMutation.isPending} className="shadow-sm">
-            <RefreshCw className={`w-4 h-4 mr-2 ${syncMutation.isPending ? "animate-spin" : ""}`} />
-            {syncMutation.isPending ? "Syncing..." : "Refresh Public STR Data"}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button onClick={handleSync} disabled={syncMutation.isPending} className="shadow-sm">
+              <RefreshCw className={`w-4 h-4 mr-2 ${syncMutation.isPending ? "animate-spin" : ""}`} />
+              {syncMutation.isPending ? "Syncing..." : "Refresh Public STR Data"}
+            </Button>
+          </div>
         </div>
         <p className="relative mt-3 text-xs text-slate-500">
           Listings auto-refresh hourly while this page is open.

@@ -15,8 +15,12 @@ export default function Messages() {
   return (
     <div className="h-[calc(100vh-4rem)] flex flex-col animate-in">
       <div className="mb-6">
-        <h1 className="text-3xl font-bold font-display text-slate-900">Messages</h1>
-        <p className="text-slate-500 mt-1">Secure communication with tenants and vendors.</p>
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold font-display text-slate-900">Messages</h1>
+            <p className="text-slate-500 mt-1">Secure communication with tenants and vendors.</p>
+          </div>
+        </div>
       </div>
 
       <Card className="flex-1 flex flex-col border-slate-200 shadow-sm overflow-hidden bg-slate-50/50">
