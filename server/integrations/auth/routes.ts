@@ -286,9 +286,10 @@ export function registerAuthRoutes(app: Express): void {
         registerFailedLogin(input.email, ip);
         return res.status(401).json({ message: "Invalid email or password." });
       }
-      if (!user.emailVerifiedAt && process.env.REQUIRE_EMAIL_VERIFICATION !== "false") {
-        return res.status(403).json({ message: "Please verify your email before signing in." });
-      }
+      // Temporarily disabled: allow sign-in even if email is not verified.
+      // if (!user.emailVerifiedAt && process.env.REQUIRE_EMAIL_VERIFICATION !== "false") {
+      //   return res.status(403).json({ message: "Please verify your email before signing in." });
+      // }
       if (!verifyPassword(input.password, user.passwordHash)) {
         const result = registerFailedLogin(input.email, ip);
         await authStorage.updateLoginSecurityState({
