@@ -237,16 +237,16 @@ export default function Login() {
         </div>
       </div>
 
-      <div className="flex items-center justify-center p-3 sm:p-6 lg:p-8 bg-slate-950/35">
+      <div className="flex items-center justify-center p-4 sm:p-6 lg:p-10 bg-slate-950/35">
         <motion.div
           initial={{ opacity: 0, y: 12, scale: 0.98 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           transition={{ duration: 0.35, ease: "easeOut" }}
-          className="w-full max-w-[430px]"
+          className="w-full max-w-[520px]"
         >
         <div className="rounded-3xl bg-gradient-to-br from-emerald-400/70 via-emerald-500/10 to-sky-500/60 p-[1.2px] shadow-[0_18px_60px_rgba(15,23,42,0.95)]">
         <Card className="login-auth-card w-full rounded-[1.6rem] border border-white/10 bg-slate-950/85 shadow-[0_18px_60px_rgba(15,23,42,0.95)] backdrop-blur-xl">
-          <CardHeader className="space-y-3 px-5 pt-5 pb-4 sm:space-y-4 sm:px-7 sm:pt-7 sm:pb-5">
+          <CardHeader className="space-y-3 px-6 pt-6 pb-5 sm:space-y-4 sm:px-9 sm:pt-8 sm:pb-6">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 lg:hidden">
                 <div className="w-8 h-8 rounded-lg bg-slate-900 flex items-center justify-center">
@@ -280,20 +280,20 @@ export default function Login() {
                 exit={{ opacity: 0, y: -6 }}
                 transition={{ duration: 0.18 }}
               >
-                <CardTitle className="text-[22px] sm:text-[27px] tracking-tight flex items-center gap-2 leading-tight text-slate-100">
-                  <ActiveModeIcon className="h-5 w-5 text-emerald-400" />
+                <CardTitle className="text-[24px] sm:text-[30px] tracking-tight flex items-center gap-2 leading-tight text-slate-100">
+                  <ActiveModeIcon className="h-6 w-6 text-emerald-400" />
                   {activeMode.title}
                 </CardTitle>
                 {activeMode.description ? (
-                  <p className="mt-1 text-[14px] text-slate-300">{activeMode.description}</p>
+                  <p className="mt-1 text-[15px] text-slate-300">{activeMode.description}</p>
                 ) : null}
               </motion.div>
             </AnimatePresence>
-            <p className="text-xs text-slate-300">
+            <p className="text-sm text-slate-300">
               Signing in as <span className="font-medium text-slate-100">{activeRole.label}</span>
             </p>
           </CardHeader>
-          <CardContent className="px-5 pb-5 sm:px-7 sm:pb-7">
+          <CardContent className="px-6 pb-6 sm:px-9 sm:pb-8">
             <AnimatePresence mode="wait" initial={false}>
               <motion.div
                 key={mode}
@@ -301,31 +301,31 @@ export default function Login() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -8 }}
                 transition={{ duration: 0.2 }}
-                className="space-y-4"
+                className="space-y-5"
               >
             {mode === "signin" && (
               <>
                 <div className="space-y-2">
-                  <Label>Email</Label>
+                  <Label className="text-sm">Email</Label>
                   <Input
                     type="email"
                     placeholder="you@company.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="h-11 bg-slate-900/80 border-slate-600 text-slate-100 placeholder:text-slate-400 focus-visible:ring-2 focus-visible:ring-emerald-500/20 focus-visible:border-emerald-500"
+                    className="h-12 text-base bg-slate-900/80 border-slate-600 text-slate-100 placeholder:text-slate-400 focus-visible:ring-2 focus-visible:ring-emerald-500/20 focus-visible:border-emerald-500"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Password</Label>
+                  <Label className="text-sm">Password</Label>
                   <Input
                     type="password"
                     placeholder="Enter your password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="h-11 bg-slate-900/80 border-slate-600 text-slate-100 placeholder:text-slate-400 focus-visible:ring-2 focus-visible:ring-emerald-500/20 focus-visible:border-emerald-500"
+                    className="h-12 text-base bg-slate-900/80 border-slate-600 text-slate-100 placeholder:text-slate-400 focus-visible:ring-2 focus-visible:ring-emerald-500/20 focus-visible:border-emerald-500"
                   />
                 </div>
-                <Button className="w-full h-11 bg-emerald-500 hover:bg-emerald-600 text-white transition-all duration-200 text-sm sm:text-base px-3" onClick={handleSignIn} disabled={isLoggingIn}>
+                <Button className="w-full h-12 text-base bg-emerald-500 hover:bg-emerald-600 text-white transition-all duration-200 px-4" onClick={handleSignIn} disabled={isLoggingIn}>
                   {isLoggingIn ? "Signing in..." : "Sign in"}
                 </Button>
                 {showResendVerification && (
@@ -341,7 +341,7 @@ export default function Login() {
                 )}
                 <Button
                   variant="outline"
-                  className="passkey-button w-full h-11 border-slate-200 bg-white"
+                  className="passkey-button w-full h-12 text-base border-2 border-slate-300 bg-white font-medium text-slate-900"
                   onClick={handlePasskeyLogin}
                   disabled={isLoggingInWithPasskey}
                 >

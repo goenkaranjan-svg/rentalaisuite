@@ -188,8 +188,13 @@
     color: rgb(241 245 249);
   }
 
-  .login-auth-card .passkey-button {
+  .login-auth-card .passkey-button,
+  .login-auth-card .passkey-button * {
     color: rgb(15 23 42) !important;
+  }
+  .login-auth-card .passkey-button {
+    background-color: rgb(255 255 255) !important;
+    border-color: rgb(203 213 225) !important;
   }
 
   .login-auth-card input {
