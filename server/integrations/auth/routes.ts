@@ -363,21 +363,33 @@ export function registerAuthRoutes(app: Express): void {
     try {
       const input = forgotSchema.parse(req.body);
       input.email = input.email.trim().toLowerCase();
+      const payload: Record<string, unknown> = {
+        message: "If that email exists, a reset email has been sent.",
+      };
       const user = await authStorage.getUserByEmail(input.email);
       if (!user) {
-        return res.json({ message: "If that email exists, a reset link has been generated." });
+        if (process.env.NODE_ENV !== "production") {
+          payload.debug = "no_user";
+        }
+        return res.json(payload);
       }
 
       const token = generateResetToken();
       await authStorage.setResetToken(user.id, hashToken(token), new Date(Date.now() + 60 * 60 * 1000));
       const recoveryToken = createRecoveryToken(user.id);
 
-      // TODO: integrate a real email provider. For dev usability, return token in non-production.
-      const payload: Record<string, unknown> = {
-        message: "Password reset link generated.",
-      };
       if (user.email) {
-        await sendPasswordResetEmail({ to: user.email, token });
+        const delivery = await sendPasswordResetEmail({ to: user.email, token });
+        console.log(
+          `[auth] password reset email queued for ${user.email} via ${delivery.provider}${
+            delivery.id ? ` (${delivery.id})` : ""
+          }`,
+        );
+        if (process.env.NODE_ENV !== "production") {
+          payload.debug = "sent";
+        }
+      } else if (process.env.NODE_ENV !== "production") {
+        payload.debug = "no_email";
       }
       if (process.env.NODE_ENV !== "production") {
         payload.resetToken = token;

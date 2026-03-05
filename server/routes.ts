@@ -5,6 +5,7 @@ import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { z } from "zod";
 import { setupAuth, registerAuthRoutes, isAuthenticated } from "./integrations/auth";
+import { sendAuthEmail } from "./integrations/auth/mailer";
 import { registerChatRoutes } from "./integrations/chat";
 import { registerImageRoutes } from "./integrations/image";
 import { seedDatabase } from "./seed";
@@ -39,6 +40,19 @@ function toMoney(value: string | number): string {
 }
 
 const STEP_UP_TTL_MS = 10 * 60 * 1000;
+const RENT_OVERDUE_SCAN_INTERVAL_MS = 60 * 60 * 1000;
+const DEFAULT_RENT_OVERDUE_NOTIFICATION_DAYS = 5;
+
+type OverdueNotificationCandidate = {
+  leaseId: number;
+  propertyAddress: string;
+  tenantName: string;
+  rentAmount: number;
+  monthPaid: number;
+  balance: number;
+  monthKey: string;
+};
+
 const requireStepUpAuth = (req: Request & any, res: Response, next: NextFunction) => {
   const verifiedAt = Number(req.session?.stepUpVerifiedAt || 0);
   if (!verifiedAt || Date.now() - verifiedAt > STEP_UP_TTL_MS) {
@@ -315,6 +329,161 @@ export async function registerRoutes(
     listings = await storage.getStrMarketListings();
     return listings;
   };
+
+  const normalizeOverdueDays = (value: unknown) => {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return DEFAULT_RENT_OVERDUE_NOTIFICATION_DAYS;
+    return Math.min(60, Math.max(1, Math.floor(parsed)));
+  };
+
+  const getManagerNotificationSettings = async (managerId: string) => {
+    const existing = await storage.getManagerRentNotificationSettings(managerId);
+    if (existing) {
+      return {
+        managerId: existing.managerId,
+        enabled: existing.enabled,
+        overdueDays: normalizeOverdueDays(existing.overdueDays),
+        updatedAt: existing.updatedAt,
+      };
+    }
+    return {
+      managerId,
+      enabled: true,
+      overdueDays: normalizeOverdueDays(process.env.RENT_OVERDUE_NOTIFICATION_DEFAULT_DAYS),
+      updatedAt: null as Date | null,
+    };
+  };
+
+  const getOverdueRentCandidatesForManager = async (
+    managerId: string,
+    thresholdDays: number,
+    now: Date,
+  ): Promise<OverdueNotificationCandidate[]> => {
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    const daysSinceMonthStart = Math.floor((now.getTime() - startOfMonth.getTime()) / (1000 * 60 * 60 * 24));
+    if (daysSinceMonthStart < thresholdDays) return [];
+
+    const managerLeases = (await storage.getLeasesByManager(managerId)).filter((lease) => lease.status === "active");
+    if (managerLeases.length === 0) return [];
+
+    const managerProperties = await storage.getPropertiesByManager(managerId);
+    const propertyAddressById = new Map<number, string>();
+    managerProperties.forEach((property) => {
+      propertyAddressById.set(property.id, `${property.address}, ${property.city}, ${property.state} ${property.zipCode}`.trim());
+    });
+
+    const tenantIds = Array.from(new Set(managerLeases.map((lease) => lease.tenantId)));
+    const tenantNameById = new Map<string, string>();
+    for (const tenantId of tenantIds) {
+      const tenant = await storage.getUser(tenantId);
+      const displayName = [tenant?.firstName, tenant?.lastName].filter(Boolean).join(" ").trim();
+      tenantNameById.set(tenantId, displayName || tenant?.email || tenantId);
+    }
+
+    const allPayments = await storage.getPayments();
+    const candidates: OverdueNotificationCandidate[] = [];
+
+    for (const lease of managerLeases) {
+      const monthPaid = allPayments
+        .filter((payment) => {
+          if (payment.leaseId !== lease.id) return false;
+          if (payment.status !== "paid" || payment.type !== "rent") return false;
+          const paymentDate = new Date(payment.date ?? new Date());
+          return paymentDate.getMonth() === now.getMonth() && paymentDate.getFullYear() === now.getFullYear();
+        })
+        .reduce((sum, payment) => sum + Number(payment.amount), 0);
+
+      const rentAmount = Number(lease.rentAmount);
+      const balance = Math.max(rentAmount - monthPaid, 0);
+      if (balance < 0.01) continue;
+
+      const alreadySent = await storage.hasSentRentOverdueNotification(managerId, lease.id, monthKey, thresholdDays);
+      if (alreadySent) continue;
+
+      candidates.push({
+        leaseId: lease.id,
+        propertyAddress: propertyAddressById.get(lease.propertyId) || `Property #${lease.propertyId}`,
+        tenantName: tenantNameById.get(lease.tenantId) || lease.tenantId,
+        rentAmount,
+        monthPaid,
+        balance,
+        monthKey,
+      });
+    }
+
+    return candidates;
+  };
+
+  const sendRentOverdueNotifications = async (forcedManagerId?: string) => {
+    const now = new Date();
+    const managerIds = forcedManagerId
+      ? [forcedManagerId]
+      : Array.from(new Set((await storage.getProperties()).map((property) => property.managerId)));
+
+    for (const managerId of managerIds) {
+      try {
+        const manager = await storage.getUser(managerId);
+        if (!manager?.email) continue;
+
+        const settings = await getManagerNotificationSettings(managerId);
+        if (!settings.enabled) continue;
+
+        const overdueDays = normalizeOverdueDays(settings.overdueDays);
+        const candidates = await getOverdueRentCandidatesForManager(managerId, overdueDays, now);
+        if (candidates.length === 0) continue;
+
+        const lines = candidates
+          .map((item) => `Lease #${item.leaseId} (${item.propertyAddress}) - Tenant: ${item.tenantName} - Outstanding: $${item.balance.toFixed(2)}`)
+          .join("<br/>");
+        const subject = `Overdue rent alert: ${candidates.length} lease${candidates.length === 1 ? "" : "s"} pending`;
+
+        const delivery = await sendAuthEmail({
+          to: manager.email,
+          subject,
+          html: `<p>Rent is still unpaid for at least ${overdueDays} day(s) this month.</p><p>${lines}</p><p>Open Accounting in PropMan to review and follow up.</p>`,
+          text: `Rent is still unpaid for at least ${overdueDays} day(s) this month.\n${candidates
+            .map((item) => `Lease #${item.leaseId} - ${item.propertyAddress} - ${item.tenantName} - Outstanding $${item.balance.toFixed(2)}`)
+            .join("\n")}\nOpen Accounting in PropMan to review.`,
+        });
+
+        for (const item of candidates) {
+          await storage.markRentOverdueNotificationSent(managerId, item.leaseId, item.monthKey, overdueDays);
+        }
+
+        console.log(
+          `[accounting] overdue rent alert queued for manager ${manager.email} (${candidates.length} lease(s)) via ${delivery.provider}${
+            delivery.id ? ` (${delivery.id})` : ""
+          }`,
+        );
+      } catch (error) {
+        console.error(`Failed to send overdue rent notification for manager ${managerId}:`, error);
+      }
+    }
+  };
+
+  let rentOverdueScanInFlight: Promise<void> | null = null;
+  const triggerRentOverdueScan = (forcedManagerId?: string) => {
+    if (rentOverdueScanInFlight) return rentOverdueScanInFlight;
+    rentOverdueScanInFlight = (async () => {
+      try {
+        await sendRentOverdueNotifications(forcedManagerId);
+      } catch (error) {
+        console.error("Rent overdue notification scan failed:", error);
+      } finally {
+        rentOverdueScanInFlight = null;
+      }
+    })();
+    return rentOverdueScanInFlight;
+  };
+
+  const rentOverdueInterval = setInterval(() => {
+    void triggerRentOverdueScan();
+  }, RENT_OVERDUE_SCAN_INTERVAL_MS);
+  httpServer.on("close", () => clearInterval(rentOverdueInterval));
+  setTimeout(() => {
+    void triggerRentOverdueScan();
+  }, 10_000);
 
   const getManagerScopedData = async (managerId: string) => {
     const managerProperties = await storage.getPropertiesByManager(managerId);
@@ -973,6 +1142,63 @@ export async function registerRoutes(
       paymentCount: scopedPayments.length,
       chart: sixMonthBuckets,
     });
+  });
+
+  app.get(api.accounting.rentOverdueNotificationSettings.path, isAuthenticated, async (req: any, res) => {
+    const userId = req.user?.claims?.sub;
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+    const dbUser = await storage.getUser(userId);
+    if (dbUser?.role !== "manager") return res.status(403).json({ message: "Forbidden" });
+    const settings = await getManagerNotificationSettings(userId);
+    return res.json({
+      ...settings,
+      overdueDays: normalizeOverdueDays(settings.overdueDays),
+      updatedAt: settings.updatedAt ? settings.updatedAt.toISOString() : null,
+    });
+  });
+
+  app.put(api.accounting.updateRentOverdueNotificationSettings.path, isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user?.claims?.sub;
+      if (!userId) return res.status(401).json({ message: "Unauthorized" });
+      const dbUser = await storage.getUser(userId);
+      if (dbUser?.role !== "manager") return res.status(403).json({ message: "Forbidden" });
+
+      const input = api.accounting.updateRentOverdueNotificationSettings.input.parse(req.body);
+      const settings = await storage.upsertManagerRentNotificationSettings({
+        managerId: userId,
+        enabled: input.enabled,
+        overdueDays: normalizeOverdueDays(input.overdueDays),
+      });
+
+      if (settings.enabled) {
+        void triggerRentOverdueScan(userId);
+      }
+
+      return res.json({
+        ...settings,
+        overdueDays: normalizeOverdueDays(settings.overdueDays),
+        updatedAt: settings.updatedAt ? settings.updatedAt.toISOString() : null,
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: error.errors[0]?.message ?? "Invalid settings payload." });
+      }
+      return res.status(500).json({ message: "Failed to update settings." });
+    }
+  });
+
+  app.post("/api/internal/jobs/rent-overdue-scan", async (req, res) => {
+    const expectedSecret = process.env.CRON_SECRET;
+    const providedSecret = String(req.headers["x-cron-secret"] || "");
+    if (process.env.NODE_ENV === "production" && !expectedSecret) {
+      return res.status(503).json({ message: "CRON_SECRET is not configured." });
+    }
+    if (expectedSecret && providedSecret !== expectedSecret) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+    await triggerRentOverdueScan();
+    return res.json({ message: "Rent overdue scan completed." });
   });
 
   app.get("/api/insights/alerts", isAuthenticated, async (req: any, res) => {

@@ -2,12 +2,14 @@
 import { db } from "./db";
 import { 
   users, properties, leases, maintenanceRequests, payments, screenings, listingMappingTemplates, strMarketListings,
+  managerRentNotificationSettings, rentOverdueNotificationHistory,
   type User, type Property, type Lease, type MaintenanceRequest, 
   type Payment, type Screening, type ListingMappingTemplate, type InsertProperty, type InsertLease, 
   type InsertMaintenanceRequest, type InsertPayment, type InsertScreening, type InsertListingMappingTemplate,
-  type StrMarketListing, type InsertStrMarketListing
+  type StrMarketListing, type InsertStrMarketListing,
+  type ManagerRentNotificationSettings, type UpsertManagerRentNotificationSettings
 } from "@shared/schema";
-import { eq, desc } from "drizzle-orm";
+import { and, eq, desc } from "drizzle-orm";
 
 export interface IStorage {
   // Users
@@ -42,6 +44,22 @@ export interface IStorage {
   getPayments(): Promise<Payment[]>;
   getPaymentsByLease(leaseId: number): Promise<Payment[]>;
   createPayment(payment: InsertPayment): Promise<Payment>;
+  getManagerRentNotificationSettings(managerId: string): Promise<ManagerRentNotificationSettings | undefined>;
+  upsertManagerRentNotificationSettings(
+    settings: UpsertManagerRentNotificationSettings,
+  ): Promise<ManagerRentNotificationSettings>;
+  hasSentRentOverdueNotification(
+    managerId: string,
+    leaseId: number,
+    monthKey: string,
+    thresholdDays: number,
+  ): Promise<boolean>;
+  markRentOverdueNotificationSent(
+    managerId: string,
+    leaseId: number,
+    monthKey: string,
+    thresholdDays: number,
+  ): Promise<void>;
 
   // Screenings
   createScreening(screening: InsertScreening): Promise<Screening>;
@@ -164,6 +182,60 @@ export class DatabaseStorage implements IStorage {
   async createPayment(insertPayment: InsertPayment) {
     const [payment] = await db.insert(payments).values(insertPayment).returning();
     return payment;
+  }
+  async getManagerRentNotificationSettings(managerId: string) {
+    const [settings] = await db
+      .select()
+      .from(managerRentNotificationSettings)
+      .where(eq(managerRentNotificationSettings.managerId, managerId));
+    return settings;
+  }
+  async upsertManagerRentNotificationSettings(settings: UpsertManagerRentNotificationSettings) {
+    const [upserted] = await db
+      .insert(managerRentNotificationSettings)
+      .values(settings)
+      .onConflictDoUpdate({
+        target: managerRentNotificationSettings.managerId,
+        set: {
+          enabled: settings.enabled,
+          overdueDays: settings.overdueDays,
+          updatedAt: new Date(),
+        },
+      })
+      .returning();
+    return upserted;
+  }
+  async hasSentRentOverdueNotification(managerId: string, leaseId: number, monthKey: string, thresholdDays: number) {
+    const [entry] = await db
+      .select({ id: rentOverdueNotificationHistory.id })
+      .from(rentOverdueNotificationHistory)
+      .where(and(
+        eq(rentOverdueNotificationHistory.managerId, managerId),
+        eq(rentOverdueNotificationHistory.leaseId, leaseId),
+        eq(rentOverdueNotificationHistory.monthKey, monthKey),
+        eq(rentOverdueNotificationHistory.thresholdDays, thresholdDays),
+      ))
+      .limit(1);
+    return Boolean(entry);
+  }
+  async markRentOverdueNotificationSent(managerId: string, leaseId: number, monthKey: string, thresholdDays: number) {
+    await db
+      .insert(rentOverdueNotificationHistory)
+      .values({
+        managerId,
+        leaseId,
+        monthKey,
+        thresholdDays,
+        sentAt: new Date(),
+      })
+      .onConflictDoNothing({
+        target: [
+          rentOverdueNotificationHistory.managerId,
+          rentOverdueNotificationHistory.leaseId,
+          rentOverdueNotificationHistory.monthKey,
+          rentOverdueNotificationHistory.thresholdDays,
+        ],
+      });
   }
 
   // Screenings

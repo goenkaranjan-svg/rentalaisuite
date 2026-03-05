@@ -12,6 +12,13 @@ type AccountingSummary = {
   chart: Array<{ label: string; collected: number; outstanding: number }>;
 };
 
+export type RentOverdueNotificationSettings = {
+  managerId: string;
+  enabled: boolean;
+  overdueDays: number;
+  updatedAt: string | null;
+};
+
 export function usePayments() {
   return useQuery<Payment[]>({
     queryKey: [api.payments.list.path],
@@ -65,6 +72,46 @@ export function useCreatePayment() {
     },
     onError: (error) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+}
+
+export function useRentOverdueNotificationSettings(enabled = true) {
+  return useQuery<RentOverdueNotificationSettings>({
+    queryKey: [api.accounting.rentOverdueNotificationSettings.path],
+    enabled,
+    queryFn: async () => {
+      const res = await fetch(api.accounting.rentOverdueNotificationSettings.path, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch notification settings");
+      return await res.json();
+    },
+  });
+}
+
+export function useUpdateRentOverdueNotificationSettings() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async (input: { enabled: boolean; overdueDays: number }) => {
+      const res = await fetch(api.accounting.updateRentOverdueNotificationSettings.path, {
+        method: api.accounting.updateRentOverdueNotificationSettings.method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.message || "Failed to update notification settings");
+      }
+      return (await res.json()) as RentOverdueNotificationSettings;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [api.accounting.rentOverdueNotificationSettings.path] });
+      toast({ title: "Settings saved", description: "Overdue rent email notification settings updated." });
+    },
+    onError: (error) => {
+      toast({ title: "Update failed", description: error.message, variant: "destructive" });
     },
   });
 }

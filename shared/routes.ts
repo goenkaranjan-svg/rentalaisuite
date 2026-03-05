@@ -6,7 +6,8 @@ import {
   insertMaintenanceRequestSchema, maintenanceRequests,
   insertPaymentSchema, payments,
   insertScreeningSchema, screenings,
-  strMarketListings
+  strMarketListings,
+  upsertManagerRentNotificationSettingsSchema
 } from './schema';
 
 // Shared error schemas
@@ -372,6 +373,34 @@ export const api = {
               outstanding: z.number(),
             })
           ),
+        }),
+      },
+    },
+    rentOverdueNotificationSettings: {
+      method: "GET" as const,
+      path: "/api/accounting/rent-overdue-notification-settings" as const,
+      responses: {
+        200: z.object({
+          managerId: z.string(),
+          enabled: z.boolean(),
+          overdueDays: z.number().int().min(1).max(60),
+          updatedAt: z.string().nullable(),
+        }),
+      },
+    },
+    updateRentOverdueNotificationSettings: {
+      method: "PUT" as const,
+      path: "/api/accounting/rent-overdue-notification-settings" as const,
+      input: upsertManagerRentNotificationSettingsSchema.pick({
+        enabled: true,
+        overdueDays: true,
+      }),
+      responses: {
+        200: z.object({
+          managerId: z.string(),
+          enabled: z.boolean(),
+          overdueDays: z.number().int().min(1).max(60),
+          updatedAt: z.string().nullable(),
         }),
       },
     },

@@ -1,4 +1,4 @@
-import { useMemo, useState, type ComponentType } from "react";
+import { useEffect, useMemo, useState, type ComponentType } from "react";
 import { format } from "date-fns";
 import { DollarSign, Receipt, AlertTriangle, TrendingUp, Plus, FileDown } from "lucide-react";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend } from "recharts";
@@ -6,8 +6,15 @@ import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend } fro
 import { useLeases } from "@/hooks/use-leases";
 import { useProperties } from "@/hooks/use-properties";
 import { useTenants } from "@/hooks/use-auth";
-import { useAccountingSummary, useCreatePayment, usePayments } from "@/hooks/use-payments";
+import {
+  useAccountingSummary,
+  useCreatePayment,
+  usePayments,
+  useRentOverdueNotificationSettings,
+  useUpdateRentOverdueNotificationSettings,
+} from "@/hooks/use-payments";
 import { useMonthlyOwnerReportExport } from "@/hooks/use-insights";
+import { useAuth } from "@/hooks/use-auth";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -16,6 +23,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 type PaymentFormState = {
@@ -26,21 +34,34 @@ type PaymentFormState = {
 };
 
 export default function Accounting() {
+  const { user } = useAuth();
+  const isManager = user?.role === "manager";
   const { data: leases } = useLeases();
   const { data: properties } = useProperties();
   const { data: tenants } = useTenants();
   const { data: payments } = usePayments();
   const { data: summary } = useAccountingSummary();
+  const { data: rentNotificationSettings } = useRentOverdueNotificationSettings(isManager);
+  const { mutate: updateRentNotificationSettings, isPending: isSavingRentNotificationSettings } =
+    useUpdateRentOverdueNotificationSettings();
   const { mutate: createPayment, isPending: isSavingPayment } = useCreatePayment();
   const { mutateAsync: exportMonthlyReport, isPending: isExportingReport } = useMonthlyOwnerReportExport();
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [rentNotifEnabled, setRentNotifEnabled] = useState(true);
+  const [rentNotifDays, setRentNotifDays] = useState("5");
   const [form, setForm] = useState<PaymentFormState>({
     leaseId: "",
     amount: "",
     status: "paid",
     type: "rent",
   });
+
+  useEffect(() => {
+    if (!rentNotificationSettings) return;
+    setRentNotifEnabled(rentNotificationSettings.enabled);
+    setRentNotifDays(String(rentNotificationSettings.overdueDays));
+  }, [rentNotificationSettings]);
 
   const activeLeases = useMemo(
     () => (leases ?? []).filter((l) => l.status === "active"),
@@ -145,6 +166,16 @@ export default function Accounting() {
     }
   };
 
+  const handleSaveRentNotificationSettings = () => {
+    const parsedDays = Number(rentNotifDays);
+    updateRentNotificationSettings({
+      enabled: rentNotifEnabled,
+      overdueDays: Number.isFinite(parsedDays)
+        ? Math.min(60, Math.max(1, Math.floor(parsedDays)))
+        : 5,
+    });
+  };
+
   return (
     <div className="space-y-8 animate-in">
       <div className="flex items-center justify-between gap-4">
@@ -238,6 +269,36 @@ export default function Accounting() {
         <MetricCard title="Outstanding" value={`$${(summary?.outstanding ?? 0).toLocaleString()}`} icon={AlertTriangle} />
         <MetricCard title="Collection Rate" value={`${collectionRate.toFixed(1)}%`} icon={TrendingUp} />
       </div>
+
+      {isManager && (
+        <Card className="border-slate-200">
+          <CardHeader>
+            <CardTitle>Overdue Rent Email Alerts</CardTitle>
+          </CardHeader>
+          <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+            <div className="space-y-2">
+              <Label>Enable alerts</Label>
+              <div className="h-10 flex items-center">
+                <Switch checked={rentNotifEnabled} onCheckedChange={setRentNotifEnabled} />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Send alert after unpaid days</Label>
+              <Input
+                type="number"
+                min={1}
+                max={60}
+                value={rentNotifDays}
+                onChange={(e) => setRentNotifDays(e.target.value)}
+                placeholder="5"
+              />
+            </div>
+            <Button onClick={handleSaveRentNotificationSettings} disabled={isSavingRentNotificationSettings}>
+              {isSavingRentNotificationSettings ? "Saving..." : "Save Alerts"}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         <Card className="xl:col-span-2 border-slate-200">

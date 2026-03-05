@@ -1,5 +1,5 @@
 
-import { pgTable, text, serial, integer, boolean, timestamp, jsonb, decimal, varchar, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, jsonb, decimal, varchar, uniqueIndex, primaryKey } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -63,6 +63,35 @@ export const payments = pgTable("payments", {
   type: text("type").notNull(), // rent, deposit, fee
   stripePaymentId: text("stripe_payment_id"),
 });
+
+export const managerRentNotificationSettings = pgTable("manager_rent_notification_settings", {
+  managerId: varchar("manager_id").notNull().references(() => users.id),
+  enabled: boolean("enabled").notNull().default(true),
+  overdueDays: integer("overdue_days").notNull().default(5),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  primaryKey({ columns: [table.managerId] }),
+]);
+
+export const rentOverdueNotificationHistory = pgTable(
+  "rent_overdue_notification_history",
+  {
+    id: serial("id").primaryKey(),
+    managerId: varchar("manager_id").notNull().references(() => users.id),
+    leaseId: integer("lease_id").notNull().references(() => leases.id),
+    monthKey: text("month_key").notNull(), // YYYY-MM
+    thresholdDays: integer("threshold_days").notNull(),
+    sentAt: timestamp("sent_at").defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("rent_overdue_notification_dedupe_idx").on(
+      table.managerId,
+      table.leaseId,
+      table.monthKey,
+      table.thresholdDays,
+    ),
+  ]
+);
 
 // Tenant Screening (Mock for now)
 export const screenings = pgTable("screenings", {
@@ -162,6 +191,9 @@ export const insertPaymentSchema = createInsertSchema(payments).omit({ id: true,
 export const insertScreeningSchema = createInsertSchema(screenings).omit({ id: true, createdAt: true });
 export const insertListingMappingTemplateSchema = createInsertSchema(listingMappingTemplates).omit({ id: true, createdAt: true });
 export const insertStrMarketListingSchema = createInsertSchema(strMarketListings).omit({ id: true, createdAt: true });
+export const upsertManagerRentNotificationSettingsSchema = createInsertSchema(managerRentNotificationSettings, {
+  overdueDays: z.coerce.number().int().min(1).max(60),
+}).omit({ updatedAt: true });
 
 // === TYPES ===
 export type Property = typeof properties.$inferSelect;
@@ -175,6 +207,11 @@ export type InsertMaintenanceRequest = z.infer<typeof insertMaintenanceRequestSc
 
 export type Payment = typeof payments.$inferSelect;
 export type InsertPayment = z.infer<typeof insertPaymentSchema>;
+
+export type ManagerRentNotificationSettings = typeof managerRentNotificationSettings.$inferSelect;
+export type UpsertManagerRentNotificationSettings = z.infer<typeof upsertManagerRentNotificationSettingsSchema>;
+
+export type RentOverdueNotificationHistory = typeof rentOverdueNotificationHistory.$inferSelect;
 
 export type Screening = typeof screenings.$inferSelect;
 export type InsertScreening = z.infer<typeof insertScreeningSchema>;
