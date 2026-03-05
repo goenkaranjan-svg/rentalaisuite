@@ -24,7 +24,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/compon
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertLeaseSchema } from "@shared/schema";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/hooks/use-auth";
 
 export default function Leases() {
@@ -43,6 +43,7 @@ export default function Leases() {
   const [leaseExpiryDays, setLeaseExpiryDays] = useState("30");
   const [isEditingLeaseExpiryDays, setIsEditingLeaseExpiryDays] = useState(false);
   const [leaseSettingsReady, setLeaseSettingsReady] = useState(false);
+  const lastSavedLeaseSettingsRef = useRef<string | null>(null);
   const selectableProperties = (properties ?? []).filter(
     (p) => p.status === "available" && p.managerId === user?.id,
   );
@@ -55,6 +56,7 @@ export default function Leases() {
     if (!leaseExpirySettings) return;
     setLeaseExpiryEnabled(leaseExpirySettings.enabled);
     setLeaseExpiryDays(String(leaseExpirySettings.daysBeforeExpiry));
+    lastSavedLeaseSettingsRef.current = `${leaseExpirySettings.enabled}:${leaseExpirySettings.daysBeforeExpiry}`;
     setLeaseSettingsReady(true);
   }, [leaseExpirySettings]);
 
@@ -84,10 +86,16 @@ export default function Leases() {
     const parsed = Number(leaseExpiryDays);
     if (!Number.isFinite(parsed)) return;
     const nextDays = Math.min(365, Math.max(1, Math.floor(parsed)));
+    const nextSignature = `${leaseExpiryEnabled}:${nextDays}`;
+    if (lastSavedLeaseSettingsRef.current === nextSignature) return;
     const timer = setTimeout(() => {
       updateLeaseExpirySettings({
         enabled: leaseExpiryEnabled,
         daysBeforeExpiry: nextDays,
+      }, {
+        onSuccess: () => {
+          lastSavedLeaseSettingsRef.current = nextSignature;
+        },
       });
     }, 500);
     return () => clearTimeout(timer);

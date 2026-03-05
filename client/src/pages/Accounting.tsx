@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ComponentType } from "react";
+import { useEffect, useMemo, useRef, useState, type ComponentType } from "react";
 import { format } from "date-fns";
 import { DollarSign, Receipt, AlertTriangle, TrendingUp, Settings2, Pencil } from "lucide-react";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend } from "recharts";
@@ -38,11 +38,13 @@ export default function Accounting() {
   const [rentNotifDays, setRentNotifDays] = useState("5");
   const [isEditingRentNotifDays, setIsEditingRentNotifDays] = useState(false);
   const [rentNotifSettingsReady, setRentNotifSettingsReady] = useState(false);
+  const lastSavedRentNotifSettingsRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!rentNotificationSettings) return;
     setRentNotifEnabled(rentNotificationSettings.enabled);
     setRentNotifDays(String(rentNotificationSettings.overdueDays));
+    lastSavedRentNotifSettingsRef.current = `${rentNotificationSettings.enabled}:${rentNotificationSettings.overdueDays}`;
     setRentNotifSettingsReady(true);
   }, [rentNotificationSettings]);
 
@@ -51,10 +53,16 @@ export default function Accounting() {
     const parsedDays = Number(rentNotifDays);
     if (!Number.isFinite(parsedDays)) return;
     const nextDays = Math.min(60, Math.max(1, Math.floor(parsedDays)));
+    const nextSignature = `${rentNotifEnabled}:${nextDays}`;
+    if (lastSavedRentNotifSettingsRef.current === nextSignature) return;
     const timer = setTimeout(() => {
       updateRentNotificationSettings({
         enabled: rentNotifEnabled,
         overdueDays: nextDays,
+      }, {
+        onSuccess: () => {
+          lastSavedRentNotifSettingsRef.current = nextSignature;
+        },
       });
     }, 500);
     return () => clearTimeout(timer);
