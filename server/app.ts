@@ -1,4 +1,3 @@
-import "dotenv/config";
 import express, { type Request, type Response, type NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { registerRoutes } from "./routes";

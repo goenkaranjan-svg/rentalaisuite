@@ -1,4 +1,4 @@
-import bundledHandler from "./server-handler.mjs";
+import bundledHandler from "./server-handler.cjs";
 
 const handler =
   (bundledHandler && typeof bundledHandler === "object" && "default" in bundledHandler
