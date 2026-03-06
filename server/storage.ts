@@ -17,7 +17,7 @@ import {
   type ManagerLeaseExpiryNotificationSettings, type UpsertManagerLeaseExpiryNotificationSettings,
   type ManagerMaintenanceAutomationSettings, type UpsertManagerMaintenanceAutomationSettings
 } from "@shared/schema";
-import { and, eq, desc } from "drizzle-orm";
+import { and, eq, desc, inArray, or } from "drizzle-orm";
 
 export interface IStorage {
   // Users
@@ -100,8 +100,10 @@ export interface IStorage {
   // Screenings
   createScreening(screening: InsertScreening): Promise<Screening>;
   getScreeningsByTenant(tenantId: string): Promise<Screening[]>;
+  getScreeningsByManager(managerId: string): Promise<Screening[]>;
   upsertZillowLeadByExternalId(lead: InsertZillowLead): Promise<ZillowLead>;
   getZillowLeadByExternalId(externalLeadId: string): Promise<ZillowLead | undefined>;
+  getZillowLeadsForManager(managerId: string, managerEmail?: string): Promise<ZillowLead[]>;
 
   // Listing Mapping Templates
   getListingMappingTemplatesByManager(managerId: string): Promise<ListingMappingTemplate[]>;
@@ -394,6 +396,16 @@ export class DatabaseStorage implements IStorage {
   async getScreeningsByTenant(tenantId: string) {
     return await db.select().from(screenings).where(eq(screenings.tenantId, tenantId)).orderBy(desc(screenings.createdAt));
   }
+  async getScreeningsByManager(managerId: string) {
+    const managerLeases = await this.getLeasesByManager(managerId);
+    const tenantIds = Array.from(new Set(managerLeases.map((lease) => lease.tenantId))).filter(Boolean);
+    if (tenantIds.length === 0) return [];
+    return await db
+      .select()
+      .from(screenings)
+      .where(inArray(screenings.tenantId, tenantIds))
+      .orderBy(desc(screenings.createdAt));
+  }
   async upsertZillowLeadByExternalId(lead: InsertZillowLead) {
     const [record] = await db
       .insert(zillowLeads)
@@ -424,6 +436,24 @@ export class DatabaseStorage implements IStorage {
       .from(zillowLeads)
       .where(eq(zillowLeads.externalLeadId, externalLeadId));
     return record;
+  }
+  async getZillowLeadsForManager(managerId: string, managerEmail?: string) {
+    const managerProperties = await this.getPropertiesByManager(managerId);
+    const managerPropertyIds = managerProperties.map((property) => String(property.id));
+
+    const whereClauses = [eq(zillowLeads.managerId, managerId)];
+    if (managerEmail) {
+      whereClauses.push(eq(zillowLeads.managerEmail, managerEmail));
+    }
+    if (managerPropertyIds.length > 0) {
+      whereClauses.push(inArray(zillowLeads.propertyExternalId, managerPropertyIds));
+    }
+
+    return await db
+      .select()
+      .from(zillowLeads)
+      .where(or(...whereClauses))
+      .orderBy(desc(zillowLeads.receivedAt));
   }
 
   // Listing Mapping Templates

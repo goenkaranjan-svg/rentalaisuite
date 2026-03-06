@@ -549,6 +549,33 @@ export const api = {
     },
   },
   screenings: {
+    list: {
+      method: 'GET' as const,
+      path: '/api/screenings' as const,
+      responses: {
+        200: z.object({
+          leads: z.array(z.custom<typeof zillowLeads.$inferSelect>()),
+          screenings: z.array(z.custom<typeof screenings.$inferSelect>()),
+          tenants: z.array(z.object({
+            id: z.string(),
+            name: z.string(),
+            email: z.string(),
+          })),
+          properties: z.array(z.object({
+            id: z.number().int().positive(),
+            address: z.string(),
+            city: z.string(),
+            state: z.string(),
+          })),
+          summary: z.object({
+            totalLeads: z.number().int().nonnegative(),
+            pendingLeads: z.number().int().nonnegative(),
+            activeScreenings: z.number().int().nonnegative(),
+            approvedScreenings: z.number().int().nonnegative(),
+          }),
+        }),
+      },
+    },
     create: {
       method: 'POST' as const,
       path: '/api/screenings' as const,

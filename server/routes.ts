@@ -2510,8 +2510,58 @@ export async function registerRoutes(
   });
   
   // === Screenings ===
-   app.post(api.screenings.create.path, async (req, res) => {
-     try {
+  app.get(api.screenings.list.path, isAuthenticated, async (req: any, res) => {
+    const userId = req.user?.claims?.sub;
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
+    const manager = await storage.getUser(userId);
+    if (!manager || manager.role !== "manager") {
+      return res.status(403).json({ message: "Only managers can view screening data." });
+    }
+
+    const [leads, screenings, tenants, properties] = await Promise.all([
+      storage.getZillowLeadsForManager(userId, manager.email || undefined),
+      storage.getScreeningsByManager(userId),
+      storage.getTenants(),
+      storage.getPropertiesByManager(userId),
+    ]);
+
+    const tenantItems = tenants.map((tenant) => ({
+      id: tenant.id,
+      name: [tenant.firstName, tenant.lastName].filter(Boolean).join(" ").trim() || tenant.email || tenant.id,
+      email: tenant.email || "",
+    }));
+
+    const summary = {
+      totalLeads: leads.length,
+      pendingLeads: leads.filter((lead) => lead.status === "received").length,
+      activeScreenings: screenings.filter((screening) => screening.status === "pending").length,
+      approvedScreenings: screenings.filter((screening) => screening.status === "approved").length,
+    };
+
+    res.json({
+      leads,
+      screenings,
+      tenants: tenantItems,
+      properties: properties.map((property) => ({
+        id: property.id,
+        address: property.address,
+        city: property.city,
+        state: property.state,
+      })),
+      summary,
+    });
+  });
+
+  app.post(api.screenings.create.path, isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user?.claims?.sub;
+      if (!userId) return res.status(401).json({ message: "Unauthorized" });
+      const manager = await storage.getUser(userId);
+      if (!manager || manager.role !== "manager") {
+        return res.status(403).json({ message: "Only managers can create screenings." });
+      }
+
       const input = api.screenings.create.input.parse(req.body);
       const screening = await storage.createScreening(input);
       res.status(201).json(screening);
