@@ -165,6 +165,28 @@ export const screenings = pgTable("screenings", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const zillowLeads = pgTable(
+  "zillow_leads",
+  {
+    id: serial("id").primaryKey(),
+    externalLeadId: text("external_lead_id").notNull(),
+    listingExternalId: text("listing_external_id"),
+    propertyExternalId: text("property_external_id"),
+    managerId: varchar("manager_id"),
+    managerEmail: text("manager_email"),
+    applicantName: text("applicant_name"),
+    applicantEmail: text("applicant_email"),
+    applicantPhone: text("applicant_phone"),
+    message: text("message"),
+    moveInDate: text("move_in_date"),
+    status: text("status").notNull().default("received"),
+    rawPayload: jsonb("raw_payload").notNull(),
+    receivedAt: timestamp("received_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("zillow_leads_external_lead_id_idx").on(table.externalLeadId)],
+);
+
 export const listingMappingTemplates = pgTable("listing_mapping_templates", {
   id: serial("id").primaryKey(),
   managerId: varchar("manager_id").notNull().references(() => users.id),
@@ -259,6 +281,11 @@ export const insertMaintenanceRequestSchema = createInsertSchema(maintenanceRequ
 });
 export const insertPaymentSchema = createInsertSchema(payments).omit({ id: true, date: true });
 export const insertScreeningSchema = createInsertSchema(screenings).omit({ id: true, createdAt: true });
+export const insertZillowLeadSchema = createInsertSchema(zillowLeads).omit({
+  id: true,
+  receivedAt: true,
+  updatedAt: true,
+});
 export const insertListingMappingTemplateSchema = createInsertSchema(listingMappingTemplates).omit({ id: true, createdAt: true });
 export const insertStrMarketListingSchema = createInsertSchema(strMarketListings).omit({ id: true, createdAt: true });
 export const upsertManagerRentNotificationSettingsSchema = createInsertSchema(managerRentNotificationSettings, {
@@ -308,6 +335,9 @@ export type UpsertManagerMaintenanceAutomationSettings = z.infer<typeof upsertMa
 
 export type Screening = typeof screenings.$inferSelect;
 export type InsertScreening = z.infer<typeof insertScreeningSchema>;
+
+export type ZillowLead = typeof zillowLeads.$inferSelect;
+export type InsertZillowLead = z.infer<typeof insertZillowLeadSchema>;
 
 export type ListingMappingTemplate = typeof listingMappingTemplates.$inferSelect;
 export type InsertListingMappingTemplate = z.infer<typeof insertListingMappingTemplateSchema>;

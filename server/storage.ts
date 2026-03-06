@@ -2,6 +2,7 @@
 import { db } from "./db";
 import { 
   users, properties, leases, maintenanceRequests, payments, screenings, listingMappingTemplates, strMarketListings,
+  zillowLeads,
   managerRentNotificationSettings, rentOverdueNotificationHistory,
   managerLeaseExpiryNotificationSettings, leaseExpiryNotificationHistory,
   managerMaintenanceAutomationSettings,
@@ -9,6 +10,7 @@ import {
   type User, type Property, type Lease, type MaintenanceRequest, 
   type Payment, type Screening, type ListingMappingTemplate, type InsertProperty, type InsertLease, 
   type MaintenanceRequestInsert, type InsertPayment, type InsertScreening, type InsertListingMappingTemplate,
+  type ZillowLead, type InsertZillowLead,
   type StrMarketListing, type InsertStrMarketListing,
   type ManagerRentNotificationSettings, type UpsertManagerRentNotificationSettings,
   type LeaseSigningRequest, type InsertLeaseSigningRequest,
@@ -98,6 +100,8 @@ export interface IStorage {
   // Screenings
   createScreening(screening: InsertScreening): Promise<Screening>;
   getScreeningsByTenant(tenantId: string): Promise<Screening[]>;
+  upsertZillowLeadByExternalId(lead: InsertZillowLead): Promise<ZillowLead>;
+  getZillowLeadByExternalId(externalLeadId: string): Promise<ZillowLead | undefined>;
 
   // Listing Mapping Templates
   getListingMappingTemplatesByManager(managerId: string): Promise<ListingMappingTemplate[]>;
@@ -389,6 +393,37 @@ export class DatabaseStorage implements IStorage {
   }
   async getScreeningsByTenant(tenantId: string) {
     return await db.select().from(screenings).where(eq(screenings.tenantId, tenantId)).orderBy(desc(screenings.createdAt));
+  }
+  async upsertZillowLeadByExternalId(lead: InsertZillowLead) {
+    const [record] = await db
+      .insert(zillowLeads)
+      .values(lead)
+      .onConflictDoUpdate({
+        target: zillowLeads.externalLeadId,
+        set: {
+          listingExternalId: lead.listingExternalId ?? null,
+          propertyExternalId: lead.propertyExternalId ?? null,
+          managerId: lead.managerId ?? null,
+          managerEmail: lead.managerEmail ?? null,
+          applicantName: lead.applicantName ?? null,
+          applicantEmail: lead.applicantEmail ?? null,
+          applicantPhone: lead.applicantPhone ?? null,
+          message: lead.message ?? null,
+          moveInDate: lead.moveInDate ?? null,
+          status: lead.status ?? "received",
+          rawPayload: lead.rawPayload,
+          updatedAt: new Date(),
+        },
+      })
+      .returning();
+    return record;
+  }
+  async getZillowLeadByExternalId(externalLeadId: string) {
+    const [record] = await db
+      .select()
+      .from(zillowLeads)
+      .where(eq(zillowLeads.externalLeadId, externalLeadId));
+    return record;
   }
 
   // Listing Mapping Templates

@@ -304,7 +304,13 @@ export default function Login() {
                 className="space-y-5"
               >
             {mode === "signin" && (
-              <>
+              <form
+                className="space-y-5"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void handleSignIn();
+                }}
+              >
                 <div className="space-y-2">
                   <Label className="text-sm">Email</Label>
                   <Input
@@ -325,7 +331,7 @@ export default function Login() {
                     className="h-12 text-base bg-slate-900/80 border-slate-600 text-slate-100 placeholder:text-slate-400 focus-visible:ring-2 focus-visible:ring-emerald-500/20 focus-visible:border-emerald-500"
                   />
                 </div>
-                <Button className="w-full h-12 text-base bg-emerald-500 hover:bg-emerald-600 text-white transition-all duration-200 px-4" onClick={handleSignIn} disabled={isLoggingIn}>
+                <Button type="submit" className="w-full h-12 text-base bg-emerald-500 hover:bg-emerald-600 text-white transition-all duration-200 px-4" disabled={isLoggingIn}>
                   {isLoggingIn ? "Signing in..." : "Sign in"}
                 </Button>
                 {showResendVerification && (
@@ -340,6 +346,7 @@ export default function Login() {
                   </Button>
                 )}
                 <Button
+                  type="button"
                   variant="outline"
                   className="passkey-button w-full h-12 text-base border-2 border-slate-300 bg-white font-medium text-slate-900"
                   onClick={handlePasskeyLogin}
@@ -363,7 +370,7 @@ export default function Login() {
                     Create an account
                   </button>
                 </div>
-              </>
+              </form>
             )}
 
             {mode === "signup" && (

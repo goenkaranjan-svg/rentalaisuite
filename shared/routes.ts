@@ -6,6 +6,7 @@ import {
   insertMaintenanceRequestSchema, maintenanceRequests,
   insertPaymentSchema, payments,
   insertScreeningSchema, screenings,
+  insertZillowLeadSchema, zillowLeads,
   strMarketListings,
   upsertManagerRentNotificationSettingsSchema,
   upsertManagerLeaseExpiryNotificationSettingsSchema,
@@ -58,6 +59,27 @@ const listingFieldMappingSchema = z.object({
     })
     .optional(),
 });
+
+const zillowLeadDeliveryPayloadSchema = z.object({
+  leadId: z.string().optional(),
+  externalLeadId: z.string().optional(),
+  listingId: z.union([z.string(), z.number()]).optional(),
+  listingExternalId: z.string().optional(),
+  propertyId: z.union([z.string(), z.number()]).optional(),
+  propertyExternalId: z.string().optional(),
+  managerId: z.string().optional(),
+  managerEmail: z.string().optional(),
+  firstName: z.string().optional(),
+  lastName: z.string().optional(),
+  fullName: z.string().optional(),
+  name: z.string().optional(),
+  email: z.string().optional(),
+  phone: z.string().optional(),
+  message: z.string().optional(),
+  moveInDate: z.string().optional(),
+  applicant: z.record(z.unknown()).optional(),
+  renter: z.record(z.unknown()).optional(),
+}).passthrough();
 
 export const api = {
   properties: {
@@ -536,6 +558,33 @@ export const api = {
         400: errorSchemas.validation,
       },
     }
+  },
+  integrations: {
+    zillow: {
+      leadDelivery: {
+        method: 'POST' as const,
+        path: '/api/integrations/zillow/lead-delivery' as const,
+        input: zillowLeadDeliveryPayloadSchema,
+        responses: {
+          202: z.object({
+            success: z.literal(true),
+            leadId: z.number().int().positive(),
+            externalLeadId: z.string(),
+          }),
+          400: errorSchemas.validation,
+          401: errorSchemas.validation,
+        },
+      },
+      createLead: {
+        method: 'POST' as const,
+        path: '/api/integrations/zillow/leads' as const,
+        input: insertZillowLeadSchema,
+        responses: {
+          201: z.custom<typeof zillowLeads.$inferSelect>(),
+          400: errorSchemas.validation,
+        },
+      },
+    },
   }
 };
 

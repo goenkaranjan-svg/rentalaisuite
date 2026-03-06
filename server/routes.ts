@@ -41,6 +41,70 @@ function toMoney(value: string | number): string {
   return numeric.toFixed(2);
 }
 
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  return value as Record<string, unknown>;
+}
+
+function firstDefinedString(...values: unknown[]): string | undefined {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim().length > 0) return value.trim();
+    if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  }
+  return undefined;
+}
+
+function normalizeZillowLeadPayload(payload: Record<string, unknown>) {
+  const applicant = asRecord(payload.applicant) ?? asRecord(payload.renter) ?? asRecord(payload.contact) ?? {};
+  const listing = asRecord(payload.listing) ?? {};
+  const property = asRecord(payload.property) ?? {};
+  const manager = asRecord(payload.manager) ?? asRecord(payload.landlord) ?? {};
+
+  const externalLeadId = firstDefinedString(
+    payload.externalLeadId,
+    payload.leadId,
+    payload.lead_id,
+    payload.id,
+    applicant.externalLeadId,
+    applicant.leadId,
+  );
+
+  const applicantName = firstDefinedString(
+    payload.fullName,
+    payload.name,
+    [payload.firstName, payload.lastName].filter(Boolean).join(" ").trim(),
+    applicant.fullName,
+    applicant.name,
+    [applicant.firstName, applicant.lastName].filter(Boolean).join(" ").trim(),
+  );
+
+  return {
+    externalLeadId,
+    listingExternalId: firstDefinedString(
+      payload.listingExternalId,
+      payload.listingId,
+      payload.listing_id,
+      listing.externalId,
+      listing.id,
+    ),
+    propertyExternalId: firstDefinedString(
+      payload.propertyExternalId,
+      payload.propertyId,
+      payload.property_id,
+      property.externalId,
+      property.id,
+    ),
+    managerId: firstDefinedString(payload.managerId, payload.manager_id, manager.id),
+    managerEmail: firstDefinedString(payload.managerEmail, payload.manager_email, manager.email),
+    applicantName,
+    applicantEmail: firstDefinedString(payload.email, applicant.email),
+    applicantPhone: firstDefinedString(payload.phone, applicant.phone, applicant.phoneNumber),
+    message: firstDefinedString(payload.message, payload.notes, applicant.message),
+    moveInDate: firstDefinedString(payload.moveInDate, payload.move_in_date, applicant.moveInDate),
+    rawPayload: payload,
+  };
+}
+
 function getPublicAppBaseUrl(): string {
   const fromEnv =
     process.env.PUBLIC_APP_URL ||
@@ -2388,6 +2452,61 @@ export async function registerRoutes(
       checks,
       checkedAt: new Date().toISOString(),
     });
+  });
+
+  app.post(api.integrations.zillow.leadDelivery.path, async (req, res) => {
+    try {
+      const expectedSecret = process.env.ZILLOW_LEAD_DELIVERY_WEBHOOK_SECRET;
+      if (!expectedSecret) {
+        return res.status(500).json({ message: "ZILLOW_LEAD_DELIVERY_WEBHOOK_SECRET is not configured." });
+      }
+
+      const providedSecret = String(req.headers["x-zillow-webhook-secret"] || req.headers["x-webhook-secret"] || "");
+      if (!providedSecret || providedSecret !== expectedSecret) {
+        return res.status(401).json({ message: "Unauthorized webhook request." });
+      }
+
+      const payload = api.integrations.zillow.leadDelivery.input.parse(req.body) as Record<string, unknown>;
+      const normalized = normalizeZillowLeadPayload(payload);
+      if (!normalized.externalLeadId) {
+        return res.status(400).json({ message: "Missing external lead ID in Zillow payload." });
+      }
+
+      const lead = await storage.upsertZillowLeadByExternalId({
+        externalLeadId: normalized.externalLeadId,
+        listingExternalId: normalized.listingExternalId,
+        propertyExternalId: normalized.propertyExternalId,
+        managerId: normalized.managerId,
+        managerEmail: normalized.managerEmail,
+        applicantName: normalized.applicantName,
+        applicantEmail: normalized.applicantEmail,
+        applicantPhone: normalized.applicantPhone,
+        message: normalized.message,
+        moveInDate: normalized.moveInDate,
+        status: "received",
+        rawPayload: normalized.rawPayload,
+      });
+
+      return res.status(202).json({
+        success: true,
+        leadId: lead.id,
+        externalLeadId: lead.externalLeadId,
+      });
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.message });
+      throw err;
+    }
+  });
+
+  app.post(api.integrations.zillow.createLead.path, isAuthenticated, async (req: any, res) => {
+    try {
+      const payload = api.integrations.zillow.createLead.input.parse(req.body);
+      const lead = await storage.upsertZillowLeadByExternalId(payload);
+      res.status(201).json(lead);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.message });
+      throw err;
+    }
   });
   
   // === Screenings ===
