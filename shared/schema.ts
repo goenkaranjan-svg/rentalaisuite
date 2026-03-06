@@ -134,6 +134,14 @@ export const managerMaintenanceAutomationSettings = pgTable("manager_maintenance
   primaryKey({ columns: [table.managerId] }),
 ]);
 
+export const userProfileSettings = pgTable("user_profile_settings", {
+  userId: varchar("user_id").notNull().references(() => users.id),
+  phoneNumber: text("phone_number"),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  primaryKey({ columns: [table.userId] }),
+]);
+
 export const leaseExpiryNotificationHistory = pgTable(
   "lease_expiry_notification_history",
   {
@@ -295,6 +303,16 @@ export const upsertManagerLeaseExpiryNotificationSettingsSchema = createInsertSc
   daysBeforeExpiry: z.coerce.number().int().min(1).max(365),
 }).omit({ updatedAt: true });
 export const upsertManagerMaintenanceAutomationSettingsSchema = createInsertSchema(managerMaintenanceAutomationSettings).omit({ updatedAt: true });
+export const upsertUserProfileSettingsSchema = createInsertSchema(userProfileSettings, {
+  phoneNumber: z
+    .string()
+    .trim()
+    .min(7)
+    .max(25)
+    .regex(/^[0-9+()\-\s]+$/, "Phone number contains invalid characters")
+    .nullable()
+    .optional(),
+}).omit({ updatedAt: true });
 export const insertLeaseSigningRequestSchema = createInsertSchema(leaseSigningRequests).omit({
   id: true,
   createdAt: true,
@@ -332,6 +350,9 @@ export type LeaseExpiryNotificationHistory = typeof leaseExpiryNotificationHisto
 
 export type ManagerMaintenanceAutomationSettings = typeof managerMaintenanceAutomationSettings.$inferSelect;
 export type UpsertManagerMaintenanceAutomationSettings = z.infer<typeof upsertManagerMaintenanceAutomationSettingsSchema>;
+
+export type UserProfileSettings = typeof userProfileSettings.$inferSelect;
+export type UpsertUserProfileSettings = z.infer<typeof upsertUserProfileSettingsSchema>;
 
 export type Screening = typeof screenings.$inferSelect;
 export type InsertScreening = z.infer<typeof insertScreeningSchema>;

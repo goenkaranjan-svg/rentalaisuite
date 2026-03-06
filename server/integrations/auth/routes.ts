@@ -111,6 +111,18 @@ const reauthSchema = z.object({
   password: z.string().min(1),
 });
 
+const updateProfileSchema = z.object({
+  email: z.string().email(),
+  phoneNumber: z
+    .string()
+    .trim()
+    .min(7)
+    .max(25)
+    .regex(/^[0-9+()\-\s]+$/, "Phone number contains invalid characters")
+    .optional()
+    .nullable(),
+});
+
 function buildLocalSessionUser(user: { id: string; email: string | null }) {
   return {
     claims: {
@@ -758,6 +770,58 @@ export function registerAuthRoutes(app: Express): void {
   app.post("/api/auth/passkeys/auth/verify", strictAuthLimiter, async (_req, res) => {
     if (!isPasskeyFeatureEnabled()) return res.status(400).json({ message: "Passkeys are disabled." });
     return res.json({ message: "Passkey auth verify endpoint is enabled. Complete WebAuthn ceremony wiring next." });
+  });
+
+  app.get("/api/auth/profile", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user?.claims?.sub;
+      const user = await authStorage.getUser(userId);
+      if (!user) return res.status(404).json({ message: "User not found." });
+      const settings = await authStorage.getUserProfileSettings(userId);
+      return res.json({
+        email: user.email,
+        phoneNumber: settings?.phoneNumber ?? null,
+        mfaEnabled: Boolean(user.mfaEnabled),
+      });
+    } catch (error) {
+      return res.status(500).json({ message: mapAuthDbError(error) });
+    }
+  });
+
+  app.patch("/api/auth/profile", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user?.claims?.sub;
+      const input = updateProfileSchema.parse(req.body);
+      const normalizedEmail = input.email.trim().toLowerCase();
+      const normalizedPhoneNumber = input.phoneNumber?.trim() || null;
+      const currentUser = await authStorage.getUser(userId);
+      if (!currentUser) return res.status(404).json({ message: "User not found." });
+
+      if (currentUser.email !== normalizedEmail) {
+        const existing = await authStorage.getUserByEmail(normalizedEmail);
+        if (existing && existing.id !== userId) {
+          return res.status(409).json({ message: "Email is already in use." });
+        }
+        await authStorage.updateUserEmail(userId, normalizedEmail);
+      }
+
+      await authStorage.upsertUserProfileSettings({
+        userId,
+        phoneNumber: normalizedPhoneNumber,
+      });
+
+      const updatedUser = await authStorage.getUser(userId);
+      return res.json({
+        email: updatedUser?.email ?? normalizedEmail,
+        phoneNumber: normalizedPhoneNumber,
+        mfaEnabled: Boolean(updatedUser?.mfaEnabled),
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: error.errors[0]?.message ?? "Invalid input." });
+      }
+      return res.status(500).json({ message: mapAuthDbError(error) });
+    }
   });
 
   // Get current authenticated user

@@ -21,6 +21,8 @@ import ListingExports from "@/pages/ListingExports";
 import InvestorPortal from "@/pages/InvestorPortal";
 import InvestorDealDetails from "@/pages/InvestorDealDetails";
 import LeaseSign from "@/pages/LeaseSign";
+import Profile from "@/pages/Profile";
+import Screenings from "@/pages/Screenings";
 
 // Wrapper for protected routes to handle layout
 function ProtectedLayout({ children }: { children: React.ReactNode }) {
@@ -41,7 +43,7 @@ function ProtectedLayout({ children }: { children: React.ReactNode }) {
   }
 
   if (user.role === "tenant") {
-    const allowedTenantRoutes = ["/renter", "/messages", "/login"];
+    const allowedTenantRoutes = ["/renter", "/messages", "/profile", "/login"];
     const tenantDetailRoutes = ["/properties/"];
     const isAllowed =
       allowedTenantRoutes.includes(location) ||
@@ -52,7 +54,7 @@ function ProtectedLayout({ children }: { children: React.ReactNode }) {
     }
   }
   if (user.role === "investor") {
-    const allowedInvestorRoutes = ["/investor", "/messages", "/login"];
+    const allowedInvestorRoutes = ["/investor", "/messages", "/profile", "/login"];
     const investorDetailRoutes = ["/investor/deals/"];
     const isAllowedInvestorRoute =
       allowedInvestorRoutes.includes(location) ||
@@ -124,15 +126,12 @@ function Router() {
       <Route path="/listing-exports">
         <ProtectedLayout><ListingExports /></ProtectedLayout>
       </Route>
+      <Route path="/profile">
+        <ProtectedLayout><Profile /></ProtectedLayout>
+      </Route>
       
-      {/* Placeholders for other routes */}
       <Route path="/screenings">
-        <ProtectedLayout>
-          <div className="text-center py-20">
-            <h1 className="text-2xl font-bold text-slate-900">Tenant Screening</h1>
-            <p className="text-slate-500">Coming soon in next update.</p>
-          </div>
-        </ProtectedLayout>
+        <ProtectedLayout><Screenings /></ProtectedLayout>
       </Route>
 
       <Route component={NotFound} />

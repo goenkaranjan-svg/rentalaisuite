@@ -10,7 +10,8 @@ import {
   LogOut,
   Menu,
   Send,
-  TrendingUp
+  TrendingUp,
+  UserCircle2,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
@@ -23,12 +24,14 @@ function getNavigation(role?: string) {
     return [
       { name: "Renter Portal", href: "/renter", icon: LayoutDashboard },
       { name: "Messages", href: "/messages", icon: MessageSquare },
+      { name: "Profile", href: "/profile", icon: UserCircle2 },
     ];
   }
   if (role === "investor") {
     return [
       { name: "STR Market", href: "/investor", icon: TrendingUp },
       { name: "Messages", href: "/messages", icon: MessageSquare },
+      { name: "Profile", href: "/profile", icon: UserCircle2 },
     ];
   }
   return [
@@ -40,6 +43,7 @@ function getNavigation(role?: string) {
     { name: "Syndication", href: "/listing-exports", icon: Send },
     { name: "Screening", href: "/screenings", icon: UserSearch },
     { name: "Messages", href: "/messages", icon: MessageSquare },
+    { name: "Profile", href: "/profile", icon: UserCircle2 },
   ];
 }
 

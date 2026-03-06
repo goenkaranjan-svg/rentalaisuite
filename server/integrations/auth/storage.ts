@@ -1,4 +1,5 @@
 import { users, type User, type UpsertUser } from "@shared/models/auth";
+import { userProfileSettings, type UserProfileSettings } from "@shared/schema";
 import { db } from "../../db";
 import { and, eq, gt } from "drizzle-orm";
 import { randomUUID } from "crypto";
@@ -40,6 +41,9 @@ export interface IAuthStorage {
     secret?: string | null;
     backupCodes?: string[];
   }): Promise<void>;
+  updateUserEmail(userId: string, email: string): Promise<User | undefined>;
+  getUserProfileSettings(userId: string): Promise<UserProfileSettings | undefined>;
+  upsertUserProfileSettings(input: { userId: string; phoneNumber?: string | null }): Promise<UserProfileSettings>;
 }
 
 class AuthStorage implements IAuthStorage {
@@ -204,6 +208,44 @@ class AuthStorage implements IAuthStorage {
         updatedAt: new Date(),
       })
       .where(eq(users.id, input.userId));
+  }
+
+  async updateUserEmail(userId: string, email: string): Promise<User | undefined> {
+    const [user] = await db
+      .update(users)
+      .set({
+        email,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId))
+      .returning();
+    return user;
+  }
+
+  async getUserProfileSettings(userId: string): Promise<UserProfileSettings | undefined> {
+    const [settings] = await db
+      .select()
+      .from(userProfileSettings)
+      .where(eq(userProfileSettings.userId, userId));
+    return settings;
+  }
+
+  async upsertUserProfileSettings(input: { userId: string; phoneNumber?: string | null }): Promise<UserProfileSettings> {
+    const [settings] = await db
+      .insert(userProfileSettings)
+      .values({
+        userId: input.userId,
+        phoneNumber: input.phoneNumber ?? null,
+      })
+      .onConflictDoUpdate({
+        target: userProfileSettings.userId,
+        set: {
+          phoneNumber: input.phoneNumber ?? null,
+          updatedAt: new Date(),
+        },
+      })
+      .returning();
+    return settings;
   }
 }
 
