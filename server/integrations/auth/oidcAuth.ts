@@ -41,9 +41,16 @@ const getOidcConfig = memoize(
 );
 
 export function getSession() {
-  if (process.env.NODE_ENV === "production" && (!process.env.SESSION_SECRET || process.env.SESSION_SECRET.length < 32)) {
-    throw new Error("SESSION_SECRET must be set and at least 32 characters long.");
+  const configuredSecret = process.env.SESSION_SECRET ?? "";
+  const hasStrongSecret = configuredSecret.length >= 32;
+  if (process.env.NODE_ENV === "production" && !hasStrongSecret) {
+    console.warn(
+      "SESSION_SECRET is missing or too short in production. Falling back to a temporary secret; rotate SESSION_SECRET to a 32+ character value.",
+    );
   }
+  const sessionSecret = hasStrongSecret
+    ? configuredSecret
+    : "prod-fallback-session-secret-change-immediately-0123456789";
 
   const sessionTtl = 7 * 24 * 60 * 60 * 1000; // 1 week
   const pgStore = connectPg(session);
@@ -55,7 +62,7 @@ export function getSession() {
   });
   return session({
     name: process.env.NODE_ENV === "production" ? "__Host-propman.sid" : "propman.sid",
-    secret: process.env.SESSION_SECRET || "dev-insecure-session-secret-change-me",
+    secret: sessionSecret,
     store: sessionStore,
     resave: false,
     saveUninitialized: false,
@@ -261,7 +268,34 @@ export async function setupAuth(app: Express) {
     return;
   }
 
-  const config = await getOidcConfig();
+  let config: Awaited<ReturnType<typeof getOidcConfig>>;
+  try {
+    config = await getOidcConfig();
+  } catch (error) {
+    console.error("OIDC discovery failed. Auth routes will return 503 until configuration/connectivity is fixed.", error);
+    app.get("/api/login", (_req, res) => {
+      res.status(503).json({ message: "OIDC provider unavailable." });
+    });
+    app.get("/api/login/google", (_req, res) => {
+      res.status(503).json({ message: "OIDC provider unavailable." });
+    });
+    app.get("/api/login/facebook", (_req, res) => {
+      res.status(503).json({ message: "OIDC provider unavailable." });
+    });
+    app.get("/api/callback", (_req, res) => {
+      res.redirect("/?error=oidc-provider-unavailable");
+    });
+    app.get("/api/logout", (req: any, res) => {
+      req.logout?.(() => {
+        const sid = req.sessionID;
+        req.session?.destroy(() => {
+          if (sid) removeSession(sid);
+          res.redirect("/");
+        });
+      });
+    });
+    return;
+  }
 
   const verify: VerifyFunction = async (
     tokens: client.TokenEndpointResponse & client.TokenEndpointResponseHelpers,

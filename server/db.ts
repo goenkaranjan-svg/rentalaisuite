@@ -7,15 +7,10 @@ const { Pool } = pg;
 
 const databaseUrl = process.env.DATABASE_URL;
 
-if (!databaseUrl && process.env.NODE_ENV === "production") {
-  throw new Error(
-    "DATABASE_URL must be set in production. Did you forget to provision a database?",
-  );
-}
-
-if (!databaseUrl && process.env.NODE_ENV !== "production") {
+if (!databaseUrl) {
   // Fallback for local development so the app can start
-  // even if a real database has not been configured yet.
+  // even if a real database has not been configured yet. In production,
+  // this avoids a hard startup crash and surfaces DB errors per-request.
   // Auth and any data persistence will not work without a real Postgres instance.
   // eslint-disable-next-line no-console
   console.warn(

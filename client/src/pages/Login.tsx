@@ -350,14 +350,14 @@ export default function Login() {
                     <button
                       type="button"
                       onClick={() => setShowPasswordTemporarily((current) => !current)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-100"
+                      className="absolute right-2 top-1/2 z-20 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md border border-slate-500 bg-slate-800/95 text-slate-100 hover:bg-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/30"
                       aria-label={showPasswordTemporarily ? "Hide password" : "Show password for 5 seconds"}
                     >
                       {showPasswordTemporarily ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </button>
                   </div>
                 </div>
-                <Button type="submit" className="w-full h-12 text-base bg-emerald-500 hover:bg-emerald-600 text-white transition-all duration-200 px-4" disabled={isLoggingIn}>
+                <Button type="submit" className="w-full h-12 text-base font-semibold bg-emerald-500 hover:bg-emerald-600 text-white transition-all duration-200 px-4" disabled={isLoggingIn}>
                   {isLoggingIn ? "Signing in..." : "Sign in"}
                 </Button>
                 {showResendVerification && (
@@ -444,7 +444,7 @@ export default function Login() {
                     <button
                       type="button"
                       onClick={() => setShowPasswordTemporarily((current) => !current)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-100"
+                      className="absolute right-2 top-1/2 z-20 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md border border-slate-500 bg-slate-800/95 text-slate-100 hover:bg-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/30"
                       aria-label={showPasswordTemporarily ? "Hide password" : "Show password for 5 seconds"}
                     >
                       {showPasswordTemporarily ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -529,7 +529,7 @@ export default function Login() {
                     <button
                       type="button"
                       onClick={() => setShowNewPasswordTemporarily((current) => !current)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-100"
+                      className="absolute right-2 top-1/2 z-20 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md border border-slate-500 bg-slate-800/95 text-slate-100 hover:bg-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/30"
                       aria-label={showNewPasswordTemporarily ? "Hide new password" : "Show new password for 5 seconds"}
                     >
                       {showNewPasswordTemporarily ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
