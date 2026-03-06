@@ -74,7 +74,7 @@ function getLeadBadgeClass(status: string): string {
 }
 
 export default function Screenings() {
-  const { data, isLoading } = useScreeningOverview();
+  const { data, isLoading, error } = useScreeningOverview();
   const { mutateAsync: createScreening, isPending: isCreating } = useCreateScreening();
   const [form, setForm] = useState<ScreeningFormState>(initialForm);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -178,6 +178,10 @@ export default function Screenings() {
         <CardContent>
           {isLoading ? (
             <div className="py-10 text-center text-slate-500">Loading leads...</div>
+          ) : error ? (
+            <div className="py-12 text-center text-red-600">
+              Failed to load leads. {(error as Error).message}
+            </div>
           ) : !data?.leads.length ? (
             <div className="py-12 text-center text-slate-500">No leads available yet.</div>
           ) : (
@@ -229,6 +233,10 @@ export default function Screenings() {
         <CardContent>
           {isLoading ? (
             <div className="py-10 text-center text-slate-500">Loading screenings...</div>
+          ) : error ? (
+            <div className="py-12 text-center text-red-600">
+              Failed to load screenings. {(error as Error).message}
+            </div>
           ) : !data?.screenings.length ? (
             <div className="py-12 text-center text-slate-500">No screenings created yet.</div>
           ) : (

@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/use-auth";
 import { Sidebar } from "@/components/Sidebar";
 import { Loader2 } from "lucide-react";
+import { useEffect, useRef } from "react";
 
 import NotFound from "@/pages/not-found";
 import Login from "@/pages/Login";
@@ -20,6 +21,7 @@ import RenterPortal from "@/pages/RenterPortal";
 import ListingExports from "@/pages/ListingExports";
 import InvestorPortal from "@/pages/InvestorPortal";
 import InvestorDealDetails from "@/pages/InvestorDealDetails";
+import InvestorMultifamily from "@/pages/InvestorMultifamily.tsx";
 import LeaseSign from "@/pages/LeaseSign";
 import Profile from "@/pages/Profile";
 import Screenings from "@/pages/Screenings";
@@ -28,6 +30,48 @@ import Screenings from "@/pages/Screenings";
 function ProtectedLayout({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth();
   const [location, setLocation] = useLocation();
+  const logoutTriggeredRef = useRef(false);
+
+  useEffect(() => {
+    if (user?.role !== "manager") return;
+    logoutTriggeredRef.current = false;
+
+    const sendExitLogout = () => {
+      if (logoutTriggeredRef.current) return;
+      logoutTriggeredRef.current = true;
+      try {
+        const payload = new Blob([], { type: "application/json" });
+        if (navigator.sendBeacon) {
+          navigator.sendBeacon("/api/auth/logout", payload);
+          return;
+        }
+      } catch {
+        // Fall through to fetch keepalive.
+      }
+      void fetch("/api/auth/logout", {
+        method: "POST",
+        credentials: "include",
+        keepalive: true,
+      }).catch(() => {});
+    };
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        sendExitLogout();
+      }
+    };
+
+    const onPageHide = () => {
+      sendExitLogout();
+    };
+
+    window.addEventListener("pagehide", onPageHide);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      window.removeEventListener("pagehide", onPageHide);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [user?.role]);
 
   if (isLoading) {
     return (
@@ -54,7 +98,7 @@ function ProtectedLayout({ children }: { children: React.ReactNode }) {
     }
   }
   if (user.role === "investor") {
-    const allowedInvestorRoutes = ["/investor", "/messages", "/profile", "/login"];
+    const allowedInvestorRoutes = ["/investor", "/investor/multifamily", "/messages", "/profile", "/login"];
     const investorDetailRoutes = ["/investor/deals/"];
     const isAllowedInvestorRoute =
       allowedInvestorRoutes.includes(location) ||
@@ -70,6 +114,10 @@ function ProtectedLayout({ children }: { children: React.ReactNode }) {
     return null;
   }
   if (user.role === "manager" && location === "/investor") {
+    setLocation("/");
+    return null;
+  }
+  if (user.role === "manager" && location === "/investor/multifamily") {
     setLocation("/");
     return null;
   }
@@ -101,6 +149,9 @@ function Router() {
       </Route>
       <Route path="/investor">
         <ProtectedLayout><InvestorPortal /></ProtectedLayout>
+      </Route>
+      <Route path="/investor/multifamily">
+        <ProtectedLayout><InvestorMultifamily /></ProtectedLayout>
       </Route>
       <Route path="/investor/deals/:id">
         <ProtectedLayout><InvestorDealDetails /></ProtectedLayout>

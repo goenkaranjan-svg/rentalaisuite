@@ -7,7 +7,7 @@ import {
   insertPaymentSchema, payments,
   insertScreeningSchema, screenings,
   insertZillowLeadSchema, zillowLeads,
-  strMarketListings,
+  strMarketListings, multifamilySaleListings,
   upsertManagerRentNotificationSettingsSchema,
   upsertManagerLeaseExpiryNotificationSettingsSchema,
   upsertManagerMaintenanceAutomationSettingsSchema
@@ -290,6 +290,37 @@ export const api = {
       responses: {
         200: z.object({
           scrapedCount: z.number(),
+          storedCount: z.number(),
+          source: z.string(),
+          syncedAt: z.string(),
+        }),
+      },
+    },
+  },
+  multifamilySale: {
+    list: {
+      method: "GET" as const,
+      path: "/api/investor/multifamily/listings" as const,
+      input: z
+        .object({
+          search: z.string().optional(),
+          city: z.string().optional(),
+          region: z.string().optional(),
+          minPrice: z.coerce.number().nonnegative().optional(),
+          maxPrice: z.coerce.number().positive().optional(),
+          limit: z.coerce.number().int().positive().max(500).optional(),
+        })
+        .optional(),
+      responses: {
+        200: z.array(z.custom<typeof multifamilySaleListings.$inferSelect>()),
+      },
+    },
+    sync: {
+      method: "POST" as const,
+      path: "/api/investor/multifamily/sync" as const,
+      responses: {
+        200: z.object({
+          fetchedCount: z.number(),
           storedCount: z.number(),
           source: z.string(),
           syncedAt: z.string(),

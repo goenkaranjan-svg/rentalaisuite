@@ -4,86 +4,60 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useToast } from "@/hooks/use-toast";
-import { useDisableMfa, useEnableMfa, useMfaSetup, useUpdateUserProfile, useUserProfile } from "@/hooks/use-profile";
+import { useUpdateUserProfile, useUserProfile } from "@/hooks/use-profile";
+import { useAuth } from "@/hooks/use-auth";
 
 export default function Profile() {
   const { toast } = useToast();
+  const { user } = useAuth();
   const { data: profile, isLoading } = useUserProfile();
   const updateProfile = useUpdateUserProfile();
-  const setupMfa = useMfaSetup();
-  const enableMfa = useEnableMfa();
-  const disableMfa = useDisableMfa();
 
   const [email, setEmail] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
-  const [setupPassword, setSetupPassword] = useState("");
-  const [verificationCode, setVerificationCode] = useState("");
-  const [pendingSecret, setPendingSecret] = useState<string | null>(null);
-  const [pendingOtpAuthUrl, setPendingOtpAuthUrl] = useState<string | null>(null);
-  const [backupCodes, setBackupCodes] = useState<string[]>([]);
+  const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
+  const [twoFactorMethod, setTwoFactorMethod] = useState<"email" | "phone" | "">("");
 
   useEffect(() => {
     if (!profile) return;
     setEmail(profile.email ?? "");
     setPhoneNumber(profile.phoneNumber ?? "");
+    setTwoFactorEnabled(Boolean(profile.mfaEnabled));
+    setTwoFactorMethod(profile.twoFactorMethod ?? "");
   }, [profile]);
 
-  const saveContactDetails = async () => {
+  const saveProfile = async () => {
     try {
+      if (twoFactorEnabled && !twoFactorMethod) {
+        toast({
+          title: "2FA method required",
+          description: "Choose email or phone before enabling 2FA.",
+          variant: "destructive",
+        });
+        return;
+      }
+      if (twoFactorEnabled && twoFactorMethod === "phone" && !phoneNumber.trim()) {
+        toast({
+          title: "Phone required",
+          description: "Add a phone number to use phone-based 2FA.",
+          variant: "destructive",
+        });
+        return;
+      }
       await updateProfile.mutateAsync({
         email,
         phoneNumber: phoneNumber.trim() || null,
+        twoFactorEnabled,
+        twoFactorMethod:
+          twoFactorEnabled && (twoFactorMethod === "email" || twoFactorMethod === "phone")
+            ? twoFactorMethod
+            : null,
       });
     } catch (error) {
       toast({
         title: "Failed to save profile",
-        description: error instanceof Error ? error.message : "Unexpected error.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const beginMfaSetup = async () => {
-    try {
-      const result = await setupMfa.mutateAsync({ password: setupPassword });
-      setPendingSecret(result.secret);
-      setPendingOtpAuthUrl(result.otpauthUrl);
-      setBackupCodes(result.backupCodes);
-      toast({ title: "2FA setup started", description: "Enter the one-time code from your authenticator app." });
-    } catch (error) {
-      toast({
-        title: "Could not start 2FA",
-        description: error instanceof Error ? error.message : "Unexpected error.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const finishMfaSetup = async () => {
-    if (!pendingSecret) return;
-    try {
-      await enableMfa.mutateAsync({ secret: pendingSecret, code: verificationCode });
-      setPendingSecret(null);
-      setPendingOtpAuthUrl(null);
-      setBackupCodes([]);
-      setVerificationCode("");
-      setSetupPassword("");
-    } catch (error) {
-      toast({
-        title: "Could not enable 2FA",
-        description: error instanceof Error ? error.message : "Unexpected error.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const turnOffMfa = async () => {
-    try {
-      await disableMfa.mutateAsync();
-    } catch (error) {
-      toast({
-        title: "Could not disable 2FA",
         description: error instanceof Error ? error.message : "Unexpected error.",
         variant: "destructive",
       });
@@ -108,6 +82,15 @@ export default function Profile() {
           ) : (
             <>
               <div className="space-y-2">
+                <Label htmlFor="profile-user-id">User ID</Label>
+                <Input
+                  id="profile-user-id"
+                  value={user?.id ?? ""}
+                  readOnly
+                  disabled
+                />
+              </div>
+              <div className="space-y-2">
                 <Label htmlFor="profile-email">Email address</Label>
                 <Input
                   id="profile-email"
@@ -126,7 +109,7 @@ export default function Profile() {
                   placeholder="+1 (555) 123-4567"
                 />
               </div>
-              <Button onClick={saveContactDetails} disabled={updateProfile.isPending}>
+              <Button onClick={saveProfile} disabled={updateProfile.isPending}>
                 {updateProfile.isPending ? "Saving..." : "Save changes"}
               </Button>
             </>
@@ -140,58 +123,43 @@ export default function Profile() {
           <CardTitle>Two-Factor Authentication (2FA)</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {profile?.mfaEnabled ? (
-            <div className="space-y-3">
-              <p className="text-sm text-emerald-700">2FA is currently enabled on your account.</p>
-              <Button variant="outline" onClick={turnOffMfa} disabled={disableMfa.isPending}>
-                {disableMfa.isPending ? "Disabling..." : "Disable 2FA"}
-              </Button>
+          <RadioGroup
+            value={twoFactorEnabled ? "enabled" : "disabled"}
+            onValueChange={(value) => setTwoFactorEnabled(value === "enabled")}
+            className="gap-3"
+          >
+            <div className="flex items-center gap-2">
+              <RadioGroupItem id="2fa-disabled" value="disabled" />
+              <Label htmlFor="2fa-disabled">Disabled</Label>
             </div>
-          ) : (
-            <div className="space-y-4">
-              <p className="text-sm text-slate-600">Set up an authenticator app and verify a one-time code.</p>
-              {!pendingSecret ? (
-                <>
-                  <div className="space-y-2">
-                    <Label htmlFor="mfa-password">Current password</Label>
-                    <Input
-                      id="mfa-password"
-                      type="password"
-                      value={setupPassword}
-                      onChange={(e) => setSetupPassword(e.target.value)}
-                    />
-                  </div>
-                  <Button onClick={beginMfaSetup} disabled={setupMfa.isPending || !setupPassword}>
-                    {setupMfa.isPending ? "Starting setup..." : "Start 2FA setup"}
-                  </Button>
-                </>
-              ) : (
-                <div className="space-y-3 rounded-md border border-slate-200 p-4 bg-slate-50/70">
-                  <p className="text-sm text-slate-700">
-                    Enter this secret in your authenticator app: <span className="font-mono">{pendingSecret}</span>
-                  </p>
-                  {pendingOtpAuthUrl ? (
-                    <p className="text-xs text-slate-500 break-all">otpauth url: {pendingOtpAuthUrl}</p>
-                  ) : null}
-                  {backupCodes.length > 0 ? (
-                    <p className="text-xs text-slate-500">Backup codes: {backupCodes.join(", ")}</p>
-                  ) : null}
-                  <div className="space-y-2">
-                    <Label htmlFor="mfa-code">Authenticator code</Label>
-                    <Input
-                      id="mfa-code"
-                      value={verificationCode}
-                      onChange={(e) => setVerificationCode(e.target.value)}
-                      placeholder="123456"
-                    />
-                  </div>
-                  <Button onClick={finishMfaSetup} disabled={enableMfa.isPending || verificationCode.length < 6}>
-                    {enableMfa.isPending ? "Enabling..." : "Enable 2FA"}
-                  </Button>
+            <div className="flex items-center gap-2">
+              <RadioGroupItem id="2fa-enabled" value="enabled" />
+              <Label htmlFor="2fa-enabled">Enabled</Label>
+            </div>
+          </RadioGroup>
+
+          {twoFactorEnabled ? (
+            <div className="space-y-3 rounded-md border border-slate-200 p-4 bg-slate-50/70">
+              <p className="text-sm text-slate-600">Choose your two-factor verification method.</p>
+              <RadioGroup
+                value={twoFactorMethod}
+                onValueChange={(value) => setTwoFactorMethod(value as "email" | "phone")}
+                className="gap-3"
+              >
+                <div className="flex items-center gap-2">
+                  <RadioGroupItem id="2fa-method-email" value="email" />
+                  <Label htmlFor="2fa-method-email">Email</Label>
                 </div>
-              )}
+                <div className="flex items-center gap-2">
+                  <RadioGroupItem id="2fa-method-phone" value="phone" />
+                  <Label htmlFor="2fa-method-phone">Phone</Label>
+                </div>
+              </RadioGroup>
+              {twoFactorMethod === "phone" ? (
+                <p className="text-xs text-slate-500">Phone 2FA uses the phone number in your contact information.</p>
+              ) : null}
             </div>
-          )}
+          ) : null}
         </CardContent>
       </Card>
     </div>

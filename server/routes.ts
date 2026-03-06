@@ -3,6 +3,7 @@ import type { Express } from "express";
 import type { Server } from "http";
 import { storage } from "./storage";
 import { api } from "@shared/routes";
+import type { Lease, Property } from "@shared/schema";
 import { z } from "zod";
 import { setupAuth, registerAuthRoutes, isAuthenticated } from "./integrations/auth";
 import { sendAuthEmail } from "./integrations/auth/mailer";
@@ -12,6 +13,7 @@ import { registerImageRoutes } from "./integrations/image";
 import { seedDatabase } from "./seed";
 import OpenAI from "openai";
 import { scrapePublicStrListings } from "./services/str-market";
+import { fetchMultifamilySaleListings } from "./services/multifamily-sale";
 import type { Request, Response, NextFunction } from "express";
 import { randomBytes } from "node:crypto";
 
@@ -95,7 +97,7 @@ function normalizeZillowLeadPayload(payload: Record<string, unknown>) {
       property.id,
     ),
     managerId: firstDefinedString(payload.managerId, payload.manager_id, manager.id),
-    managerEmail: firstDefinedString(payload.managerEmail, payload.manager_email, manager.email),
+    managerEmail: firstDefinedString(payload.managerEmail, payload.manager_email, manager.email)?.toLowerCase(),
     applicantName,
     applicantEmail: firstDefinedString(payload.email, applicant.email),
     applicantPhone: firstDefinedString(payload.phone, applicant.phone, applicant.phoneNumber),
@@ -268,7 +270,7 @@ const leaseSigningCompleteSchema = z.object({
 });
 
 const requireStepUpAuth = (req: Request & any, res: Response, next: NextFunction) => {
-  const verifiedAt = Number(req.session?.stepUpVerifiedAt || 0);
+  const verifiedAt = Number(req.session?.stepUpVerifiedAt || req.session?.createdAt || 0);
   if (!verifiedAt || Date.now() - verifiedAt > STEP_UP_TTL_MS) {
     return res.status(403).json({ message: "Step-up authentication required. Call /api/auth/reauth first." });
   }
@@ -937,7 +939,7 @@ export async function registerRoutes(
         console.warn("Maintenance automation settings table is missing. Run migrations (npm run db:push) to enable settings menu.");
         return;
       }
-      throw error;
+      console.error("Maintenance escalation scan failed:", error);
     }
   };
 
@@ -960,6 +962,20 @@ export async function registerRoutes(
     const managerPayments = allPayments.filter((p) => leaseIds.has(p.leaseId));
     return { managerProperties, managerLeases, managerMaintenance, managerPayments };
   };
+
+  const canUserAccessProperty = async (userId: string, propertyId: number): Promise<boolean> => {
+    const user = await storage.getUser(userId);
+    if (!user) return false;
+    const property = await storage.getProperty(propertyId);
+    if (!property) return false;
+
+    if (user.role === "manager") return property.managerId === userId;
+    if (user.role === "tenant") {
+      const leases = await storage.getLeasesByTenant(userId);
+      return leases.some((lease) => lease.propertyId === propertyId);
+    }
+    return false;
+  };
   
   // Seed Database (Non-blocking)
   seedDatabase().catch(console.error);
@@ -980,8 +996,15 @@ export async function registerRoutes(
     if (!userId) return res.status(401).json({ message: "Unauthorized" });
     const dbUser = await storage.getUser(userId);
     const input = api.properties.list.input.parse(req.query ?? {});
-    const allProperties =
-      dbUser?.role === "manager" ? await storage.getPropertiesByManager(userId) : await storage.getProperties();
+    let allProperties: Property[] = [];
+    if (dbUser?.role === "manager") {
+      allProperties = await storage.getPropertiesByManager(userId);
+    } else if (dbUser?.role === "tenant") {
+      const tenantLeases = await storage.getLeasesByTenant(userId);
+      const propertyIds = new Set(tenantLeases.map((lease) => lease.propertyId));
+      const all = await storage.getProperties();
+      allProperties = all.filter((property) => propertyIds.has(property.id));
+    }
 
     const filtered = allProperties.filter((property) => {
       if (input?.status && property.status !== input.status) {
@@ -1009,8 +1032,13 @@ export async function registerRoutes(
     res.json(filtered);
   });
 
-  app.get(api.properties.get.path, async (req, res) => {
-    const property = await storage.getProperty(Number(req.params.id));
+  app.get(api.properties.get.path, isAuthenticated, async (req: any, res) => {
+    const userId = req.user?.claims?.sub;
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+    const propertyId = Number(req.params.id);
+    const allowed = await canUserAccessProperty(userId, propertyId);
+    if (!allowed) return res.status(403).json({ message: "Forbidden" });
+    const property = await storage.getProperty(propertyId);
     if (!property) return res.status(404).json({ message: "Property not found" });
     res.json(property);
   });
@@ -1037,12 +1065,20 @@ export async function registerRoutes(
     }
   });
 
-  app.put(api.properties.update.path, async (req, res) => {
+  app.put(api.properties.update.path, isAuthenticated, async (req: any, res) => {
      try {
-      const input = api.properties.update.input.parse(req.body);
-      const property = await storage.updateProperty(Number(req.params.id), input);
+      const userId = req.user?.claims?.sub;
+      if (!userId) return res.status(401).json({ message: "Unauthorized" });
+      const propertyId = Number(req.params.id);
+      const property = await storage.getProperty(propertyId);
       if (!property) return res.status(404).json({ message: "Property not found" });
-      res.json(property);
+      if (property.managerId !== userId) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+      const input = api.properties.update.input.parse(req.body);
+      const updated = await storage.updateProperty(propertyId, input);
+      if (!updated) return res.status(404).json({ message: "Property not found" });
+      res.json(updated);
     } catch (err) {
       if (err instanceof z.ZodError) {
         return res.status(400).json({ message: err.errors[0].message });
@@ -1051,8 +1087,16 @@ export async function registerRoutes(
     }
   });
 
-  app.delete(api.properties.delete.path, async (req, res) => {
-    await storage.deleteProperty(Number(req.params.id));
+  app.delete(api.properties.delete.path, isAuthenticated, async (req: any, res) => {
+    const userId = req.user?.claims?.sub;
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+    const propertyId = Number(req.params.id);
+    const property = await storage.getProperty(propertyId);
+    if (!property) return res.status(404).json({ message: "Property not found" });
+    if (property.managerId !== userId) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+    await storage.deleteProperty(propertyId);
     res.status(204).send();
   });
 
@@ -1378,6 +1422,76 @@ export async function registerRoutes(
     });
   });
 
+  // === Multifamily For-Sale Market (Investor) ===
+  app.get(api.multifamilySale.list.path, isAuthenticated, async (req: any, res) => {
+    const userId = req.user?.claims?.sub;
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
+    const dbUser = await storage.getUser(userId);
+    if (dbUser?.role !== "investor" && dbUser?.role !== "manager") {
+      return res.status(403).json({ message: "Only investors and managers can view multifamily sale data" });
+    }
+
+    const input = api.multifamilySale.list.input?.parse(req.query ?? {});
+    const normalizedSearch = input?.search?.trim().toLowerCase();
+    const cityFilter = input?.city?.trim().toLowerCase();
+    const regionFilter = input?.region?.trim().toLowerCase();
+    const listings = await storage.getMultifamilySaleListings();
+    const filtered = listings.filter((listing) => {
+      if (cityFilter && (listing.city ?? "").toLowerCase() !== cityFilter) return false;
+      if (regionFilter && (listing.state ?? "").toLowerCase() !== regionFilter) return false;
+      if (input?.minPrice !== undefined && Number(listing.price) < input.minPrice) return false;
+      if (input?.maxPrice !== undefined && Number(listing.price) > input.maxPrice) return false;
+      if (!normalizedSearch) return true;
+      const haystack = [
+        listing.formattedAddress ?? "",
+        listing.addressLine1 ?? "",
+        listing.city ?? "",
+        listing.state ?? "",
+        listing.zipCode ?? "",
+        listing.propertyType ?? "",
+      ]
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(normalizedSearch);
+    });
+    const limit = input?.limit ?? 150;
+    res.json(filtered.slice(0, limit));
+  });
+
+  app.post(api.multifamilySale.sync.path, isAuthenticated, async (req: any, res) => {
+    const userId = req.user?.claims?.sub;
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
+    const dbUser = await storage.getUser(userId);
+    if (dbUser?.role !== "investor" && dbUser?.role !== "manager") {
+      return res.status(403).json({ message: "Only investors and managers can sync multifamily sale data" });
+    }
+
+    const input = api.multifamilySale.list.input?.parse(req.query ?? {});
+    try {
+      const fetched = await fetchMultifamilySaleListings({
+        search: input?.search,
+        city: input?.city,
+        region: input?.region,
+        minPrice: input?.minPrice,
+        maxPrice: input?.maxPrice,
+        limit: input?.limit ?? 250,
+      });
+      const stored = await storage.replaceMultifamilySaleListings(fetched);
+      res.json({
+        fetchedCount: fetched.length,
+        storedCount: stored.length,
+        source: "rentcast",
+        syncedAt: new Date().toISOString(),
+      });
+    } catch (error: any) {
+      res.status(502).json({
+        message: error?.message || "Failed to sync multifamily sale listings.",
+      });
+    }
+  });
+
   // === Leases ===
   app.get(api.leases.list.path, isAuthenticated, async (req: any, res) => {
     const user = req.user as any;
@@ -1428,9 +1542,17 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/leases/:id", async (req, res) => {
+  app.patch("/api/leases/:id", isAuthenticated, async (req: any, res) => {
     try {
+      const userId = req.user?.claims?.sub;
+      if (!userId) return res.status(401).json({ message: "Unauthorized" });
       const id = Number(req.params.id);
+      const leaseBefore = await storage.getLease(id);
+      if (!leaseBefore) return res.status(404).json({ message: "Lease not found" });
+      const property = await storage.getProperty(leaseBefore.propertyId);
+      if (!property || property.managerId !== userId) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
       const lease = await storage.updateLease(id, req.body);
       res.json(lease);
     } catch (err) {
@@ -1439,13 +1561,17 @@ export async function registerRoutes(
   });
 
   // AI Lease Generation
-  app.post(api.leases.generateDoc.path, async (req, res) => {
+  app.post(api.leases.generateDoc.path, isAuthenticated, async (req: any, res) => {
     try {
+      const userId = req.user?.claims?.sub;
+      if (!userId) return res.status(401).json({ message: "Unauthorized" });
       const leaseId = Number(req.params.id);
       const lease = await storage.getLease(leaseId);
       if (!lease) return res.status(404).json({ message: "Lease not found" });
-      
       const property = await storage.getProperty(lease.propertyId);
+      if (!property || property.managerId !== userId) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
 
       const prompt = `Generate a residential lease agreement for the property at ${property?.address}, ${property?.city}, ${property?.state}. 
       Rent: $${lease.rentAmount}. 
@@ -1890,11 +2016,22 @@ export async function registerRoutes(
   });
 
   // AI Maintenance Analysis
-  app.post(api.maintenance.analyze.path, async (req, res) => {
+  app.post(api.maintenance.analyze.path, isAuthenticated, async (req: any, res) => {
     try {
+      const userId = req.user?.claims?.sub;
+      if (!userId) return res.status(401).json({ message: "Unauthorized" });
       const reqId = Number(req.params.id);
       const maintenanceRequest = await storage.getMaintenanceRequest(reqId);
       if (!maintenanceRequest) return res.status(404).json({ message: "Request not found" });
+      const dbUser = await storage.getUser(userId);
+      if (dbUser?.role === "manager") {
+        const property = await storage.getProperty(maintenanceRequest.propertyId);
+        if (!property || property.managerId !== userId) {
+          return res.status(403).json({ message: "Forbidden" });
+        }
+      } else if (maintenanceRequest.tenantId !== userId) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
 
       const prompt = `Analyze this maintenance request: "${maintenanceRequest.title} - ${maintenanceRequest.description}".
       Categorize the priority (Low, Medium, High, Emergency) and suggest a trade (Plumbing, Electrical, HVAC, General).
@@ -1927,7 +2064,10 @@ export async function registerRoutes(
     
     let paymentList;
     if (dbUser?.role === "manager") {
-      paymentList = await storage.getPayments();
+      const managerLeases = await storage.getLeasesByManager(user.claims.sub);
+      const leaseIds = new Set(managerLeases.map((lease) => lease.id));
+      const allPayments = await storage.getPayments();
+      paymentList = allPayments.filter((payment) => leaseIds.has(payment.leaseId));
     } else {
       // Find active leases for this tenant
       const tenantLeases = await storage.getLeasesByTenant(user.claims.sub);
@@ -1947,7 +2087,11 @@ export async function registerRoutes(
     const dbUser = await storage.getUser(userId);
 
     let scopedPayments = await storage.getPayments();
-    if (dbUser?.role !== "manager") {
+    if (dbUser?.role === "manager") {
+      const managerLeases = await storage.getLeasesByManager(userId);
+      const leaseIds = new Set(managerLeases.map((lease) => lease.id));
+      scopedPayments = scopedPayments.filter((payment) => leaseIds.has(payment.leaseId));
+    } else {
       const tenantLeases = await storage.getLeasesByTenant(userId);
       const leaseIds = tenantLeases.map((l) => l.id);
       scopedPayments = scopedPayments.filter((p) => leaseIds.includes(p.leaseId));
@@ -2187,8 +2331,17 @@ export async function registerRoutes(
     if (!dbUser) return res.status(401).json({ message: "Unauthorized" });
 
     const now = new Date();
-    const allProperties = dbUser.role === "manager" ? await storage.getPropertiesByManager(userId) : await storage.getProperties();
-    const allLeases = dbUser.role === "manager" ? await storage.getLeasesByManager(userId) : await storage.getLeasesByTenant(userId);
+    let allProperties: Property[] = [];
+    let allLeases: Lease[] = [];
+    if (dbUser.role === "manager") {
+      allProperties = await storage.getPropertiesByManager(userId);
+      allLeases = await storage.getLeasesByManager(userId);
+    } else if (dbUser.role === "tenant") {
+      allLeases = await storage.getLeasesByTenant(userId);
+      const propertyIds = new Set(allLeases.map((lease) => lease.propertyId));
+      const all = await storage.getProperties();
+      allProperties = all.filter((property) => propertyIds.has(property.id));
+    }
     const allPayments = await storage.getPayments();
     const allMaintenance = await storage.getMaintenanceRequests();
 
@@ -2347,6 +2500,8 @@ export async function registerRoutes(
     const userId = req.user?.claims?.sub;
     if (!userId) return res.status(401).json({ message: "Unauthorized" });
     const propertyId = Number(req.params.propertyId);
+    const allowed = await canUserAccessProperty(userId, propertyId);
+    if (!allowed) return res.status(403).json({ message: "Forbidden" });
     const property = await storage.getProperty(propertyId);
     if (!property) return res.status(404).json({ message: "Property not found" });
 

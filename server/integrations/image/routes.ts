@@ -1,8 +1,9 @@
 import type { Express, Request, Response } from "express";
 import { openai } from "./client";
+import { isAuthenticated } from "../auth/oidcAuth";
 
 export function registerImageRoutes(app: Express): void {
-  app.post("/api/generate-image", async (req: Request, res: Response) => {
+  app.post("/api/generate-image", isAuthenticated, async (req: Request, res: Response) => {
     try {
       const { prompt, size = "1024x1024" } = req.body;
 
@@ -16,6 +17,9 @@ export function registerImageRoutes(app: Express): void {
         n: 1,
         size: size as "1024x1024" | "512x512" | "256x256",
       });
+      if (!response.data?.length) {
+        return res.status(502).json({ error: "Image service returned no data" });
+      }
 
       const imageData = response.data[0];
       res.json({
@@ -28,4 +32,3 @@ export function registerImageRoutes(app: Express): void {
     }
   });
 }
-

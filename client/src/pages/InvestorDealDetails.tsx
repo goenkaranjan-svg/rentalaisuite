@@ -1,5 +1,5 @@
 import { Link, useRoute } from "wouter";
-import { ArrowLeft, ExternalLink, MapPin, LineChart, BedDouble, Bath, Users, CalendarRange } from "lucide-react";
+import { ArrowLeft, ExternalLink, MapPin, LineChart } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,13 +15,24 @@ function formatMoney(value: string | number): string {
   });
 }
 
-function displayAddress(
+function buildForSaleLocation(
   city?: string | null,
   region?: string | null,
-  neighbourhood?: string | null
+  neighbourhood?: string | null,
 ): string {
-  if (neighbourhood) return `${neighbourhood}, ${city}${region ? `, ${region.toUpperCase()}` : ""}`;
-  return `${city ?? "Unknown city"}${region ? `, ${region.toUpperCase()}` : ""}`;
+  return [neighbourhood, city, region?.toUpperCase()].filter(Boolean).join(", ");
+}
+
+function buildSearchLink(location: string, site: "zillow" | "redfin"): string {
+  const normalized = location.trim();
+  if (!normalized) return site === "zillow" ? "https://www.zillow.com/homes/for_sale/" : "https://www.redfin.com/";
+
+  if (site === "zillow") {
+    const zillowSlug = normalized.replace(/\s+/g, "-");
+    return `https://www.zillow.com/homes/for_sale/${encodeURIComponent(zillowSlug)}_rb/`;
+  }
+
+  return `https://www.redfin.com/search?q=${encodeURIComponent(normalized)}`;
 }
 
 export default function InvestorDealDetails() {
@@ -49,12 +60,30 @@ export default function InvestorDealDetails() {
     );
   }
 
+  const estimatedSalePrice = Number(listing.estimatedSalePrice);
+  const expectedAnnualReturn = Number(listing.expectedAnnualReturn);
+  const expectedMonthlyReturn = Number(listing.expectedMonthlyReturn);
+  const expectedOccupancyRate = Number(listing.expectedOccupancyRate);
+  const grossYieldPct =
+    Number.isFinite(estimatedSalePrice) && estimatedSalePrice > 0 && Number.isFinite(expectedAnnualReturn)
+      ? (expectedAnnualReturn / estimatedSalePrice) * 100
+      : 0;
+  const monthlyYieldPct =
+    Number.isFinite(estimatedSalePrice) && estimatedSalePrice > 0 && Number.isFinite(expectedMonthlyReturn)
+      ? (expectedMonthlyReturn / estimatedSalePrice) * 100
+      : 0;
+  const saleSearchLocation = buildForSaleLocation(
+    listing.sourceCity,
+    listing.sourceRegion,
+    listing.neighbourhood,
+  );
+
   return (
     <div className="space-y-6">
       <Link href="/investor">
         <Button variant="outline" className="shadow-sm">
           <ArrowLeft className="w-4 h-4 mr-2" />
-          Back to STR Deals
+          Back to Deals
         </Button>
       </Link>
 
@@ -76,22 +105,13 @@ export default function InvestorDealDetails() {
           <div className="flex items-start justify-between gap-4">
             <div>
               <CardTitle className="text-2xl">
-                {listing.title || `${listing.roomType || "STR"} in ${listing.sourceCity}`}
+                {listing.title || `Property in ${listing.sourceCity}`}
               </CardTitle>
               <p className="text-slate-500 mt-2 flex items-center">
                 <MapPin className="w-4 h-4 mr-1" />
                 {listing.sourceCity}, {listing.sourceRegion?.toUpperCase()}
                 {listing.neighbourhood ? ` • ${listing.neighbourhood}` : ""}
               </p>
-              <a
-                href={listing.listingUrl || listing.sourceUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="mt-2 inline-flex items-center text-sm font-medium text-sky-700 hover:text-sky-800 hover:underline"
-              >
-                {displayAddress(listing.sourceCity, listing.sourceRegion, listing.neighbourhood)}
-                <ExternalLink className="ml-1 h-3.5 w-3.5" />
-              </a>
             </div>
             <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700">
               {formatMoney(listing.expectedAnnualReturn)} / year
@@ -99,7 +119,32 @@ export default function InvestorDealDetails() {
           </div>
         </CardHeader>
         <CardContent className="space-y-5">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 p-4">
+            <p className="text-xs font-medium tracking-wide text-emerald-800 uppercase">Investment Snapshot</p>
+            <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-4">
+              <div>
+                <p className="text-xs text-emerald-700">Estimated Buy Price</p>
+                <p className="text-xl font-bold text-slate-900">{formatMoney(listing.estimatedSalePrice)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-emerald-700">Projected Annual Return</p>
+                <p className="text-xl font-bold text-slate-900">{formatMoney(listing.expectedAnnualReturn)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-emerald-700">Projected Gross Yield</p>
+                <p className="text-xl font-bold text-slate-900">{grossYieldPct.toFixed(1)}%</p>
+              </div>
+              <div>
+                <p className="text-xs text-emerald-700">Projected Occupancy</p>
+                <p className="text-xl font-bold text-slate-900">{expectedOccupancyRate.toFixed(1)}%</p>
+              </div>
+            </div>
+            <p className="mt-3 text-xs text-slate-600">
+              Valuation method: {listing.valuationMethod}
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
               <p className="text-xs text-slate-500">Expected Monthly Return</p>
               <p className="text-2xl font-bold text-slate-900 mt-1">{formatMoney(listing.expectedMonthlyReturn)}</p>
@@ -108,99 +153,40 @@ export default function InvestorDealDetails() {
               <p className="text-xs text-slate-500">Expected Annual Return</p>
               <p className="text-2xl font-bold text-slate-900 mt-1">{formatMoney(listing.expectedAnnualReturn)}</p>
             </div>
-            <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-              <p className="text-xs text-slate-500">Nightly Rate</p>
-              <p className="text-2xl font-bold text-slate-900 mt-1">{formatMoney(listing.nightlyRate)}</p>
-            </div>
           </div>
           <div className="rounded-lg border border-slate-200 p-4 bg-gradient-to-r from-slate-50 to-white">
-            <p className="text-xs text-slate-500">Estimated Sale Price</p>
-            <p className="text-2xl font-bold text-slate-900 mt-1">{formatMoney(listing.estimatedSalePrice)}</p>
-            <p className="text-xs text-slate-500 mt-1">Method: {listing.valuationMethod}</p>
-          </div>
-
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-            <div className="rounded-lg border border-slate-200 p-3">
-              <p className="text-slate-500">Occupancy</p>
-              <p className="font-semibold">{Number(listing.expectedOccupancyRate).toFixed(1)}%</p>
-            </div>
-            <div className="rounded-lg border border-slate-200 p-3">
-              <p className="text-slate-500">Room Type</p>
-              <p className="font-semibold">{listing.roomType || "N/A"}</p>
-            </div>
-            <div className="rounded-lg border border-slate-200 p-3">
-              <p className="text-slate-500">Property Type</p>
-              <p className="font-semibold">{listing.propertyType || "N/A"}</p>
-            </div>
-            <div className="rounded-lg border border-slate-200 p-3">
-              <p className="text-slate-500">Bedrooms</p>
-              <p className="font-semibold flex items-center gap-1"><BedDouble className="h-3.5 w-3.5 text-slate-400" />{listing.bedrooms ?? "N/A"}</p>
-            </div>
-            <div className="rounded-lg border border-slate-200 p-3">
-              <p className="text-slate-500">Bathrooms</p>
-              <p className="font-semibold flex items-center gap-1"><Bath className="h-3.5 w-3.5 text-slate-400" />{listing.bathrooms ?? "N/A"}</p>
-            </div>
-            <div className="rounded-lg border border-slate-200 p-3">
-              <p className="text-slate-500">Accommodates</p>
-              <p className="font-semibold flex items-center gap-1"><Users className="h-3.5 w-3.5 text-slate-400" />{listing.accommodates ?? "N/A"}</p>
-            </div>
-            <div className="rounded-lg border border-slate-200 p-3">
-              <p className="text-slate-500">Availability (365)</p>
-              <p className="font-semibold flex items-center gap-1"><CalendarRange className="h-3.5 w-3.5 text-slate-400" />{listing.availability365 ?? "N/A"}</p>
-            </div>
-            <div className="rounded-lg border border-slate-200 p-3">
-              <p className="text-slate-500">Minimum Nights</p>
-              <p className="font-semibold">{listing.minimumNights ?? "N/A"}</p>
-            </div>
-            <div className="rounded-lg border border-slate-200 p-3">
-              <p className="text-slate-500">Reviews</p>
-              <p className="font-semibold">{listing.numberOfReviews ?? "N/A"}</p>
-            </div>
-            <div className="rounded-lg border border-slate-200 p-3">
-              <p className="text-slate-500">Rating</p>
-              <p className="font-semibold">{listing.reviewScoreRating ?? "N/A"}</p>
-            </div>
-            <div className="rounded-lg border border-slate-200 p-3">
-              <p className="text-slate-500">Superhost</p>
-              <p className="font-semibold">
-                {listing.hostIsSuperhost === null ? "N/A" : listing.hostIsSuperhost ? "Yes" : "No"}
-              </p>
-            </div>
-            <div className="rounded-lg border border-slate-200 p-3">
-              <p className="text-slate-500">Latitude</p>
-              <p className="font-semibold">{listing.latitude ?? "N/A"}</p>
-            </div>
-            <div className="rounded-lg border border-slate-200 p-3">
-              <p className="text-slate-500">Longitude</p>
-              <p className="font-semibold">{listing.longitude ?? "N/A"}</p>
-            </div>
+            <p className="text-xs text-slate-500">Deal Underwriting</p>
+            <p className="text-2xl font-bold text-slate-900 mt-1">
+              {formatMoney(listing.expectedMonthlyReturn)} / mo
+              <span className="ml-2 text-base font-semibold text-slate-600">({monthlyYieldPct.toFixed(2)}% monthly yield)</span>
+            </p>
+            <p className="text-xs text-slate-500 mt-1">
+              Buy estimate {formatMoney(estimatedSalePrice)} based on projected STR income.
+            </p>
           </div>
 
           <div className="rounded-lg border border-slate-200 p-4 bg-slate-50">
-            <p className="text-sm text-slate-600">
-              Source: <span className="font-medium">{listing.source}</span> • Snapshot:{" "}
-              <span className="font-medium">{listing.sourceSnapshotDate || "N/A"}</span>
-            </p>
-            {listing.listingUrl && (
+            <p className="text-sm font-medium text-slate-700">Find live properties currently for sale</p>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
               <a
-                href={listing.listingUrl}
+                href={buildSearchLink(saleSearchLocation, "zillow")}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center mt-3 text-sm text-blue-700 hover:text-blue-800 mr-4"
+                className="inline-flex items-center text-sm text-blue-700 hover:text-blue-800"
               >
-                Open original listing
+                Find for-sale homes on Zillow
                 <ExternalLink className="w-3 h-3 ml-1" />
               </a>
-            )}
-            <a
-              href={listing.sourceUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center mt-3 text-sm text-blue-700 hover:text-blue-800"
-            >
-              Open source dataset
-              <ExternalLink className="w-3 h-3 ml-1" />
-            </a>
+              <a
+                href={buildSearchLink(saleSearchLocation, "redfin")}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center text-sm text-blue-700 hover:text-blue-800"
+              >
+                Find for-sale homes on Redfin
+                <ExternalLink className="w-3 h-3 ml-1" />
+              </a>
+            </div>
           </div>
 
           <div className="text-xs text-slate-500 flex items-center gap-1 rounded-md border border-slate-200 bg-slate-50 p-2.5">

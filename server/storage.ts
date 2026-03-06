@@ -1,7 +1,7 @@
 
 import { db } from "./db";
 import { 
-  users, properties, leases, maintenanceRequests, payments, screenings, listingMappingTemplates, strMarketListings,
+  users, properties, leases, maintenanceRequests, payments, screenings, listingMappingTemplates, strMarketListings, multifamilySaleListings,
   zillowLeads,
   managerRentNotificationSettings, rentOverdueNotificationHistory,
   managerLeaseExpiryNotificationSettings, leaseExpiryNotificationHistory,
@@ -12,12 +12,13 @@ import {
   type MaintenanceRequestInsert, type InsertPayment, type InsertScreening, type InsertListingMappingTemplate,
   type ZillowLead, type InsertZillowLead,
   type StrMarketListing, type InsertStrMarketListing,
+  type MultifamilySaleListing, type InsertMultifamilySaleListing,
   type ManagerRentNotificationSettings, type UpsertManagerRentNotificationSettings,
   type LeaseSigningRequest, type InsertLeaseSigningRequest,
   type ManagerLeaseExpiryNotificationSettings, type UpsertManagerLeaseExpiryNotificationSettings,
   type ManagerMaintenanceAutomationSettings, type UpsertManagerMaintenanceAutomationSettings
 } from "@shared/schema";
-import { and, eq, desc, inArray, or } from "drizzle-orm";
+import { and, eq, desc, ilike, inArray, or } from "drizzle-orm";
 
 export interface IStorage {
   // Users
@@ -115,6 +116,10 @@ export interface IStorage {
   getStrMarketListing(id: number): Promise<StrMarketListing | undefined>;
   getStrMarketListings(): Promise<StrMarketListing[]>;
   replaceStrMarketListings(listings: InsertStrMarketListing[]): Promise<StrMarketListing[]>;
+
+  // Multifamily For-Sale Listings
+  getMultifamilySaleListings(): Promise<MultifamilySaleListing[]>;
+  replaceMultifamilySaleListings(listings: InsertMultifamilySaleListing[]): Promise<MultifamilySaleListing[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -440,20 +445,33 @@ export class DatabaseStorage implements IStorage {
   async getZillowLeadsForManager(managerId: string, managerEmail?: string) {
     const managerProperties = await this.getPropertiesByManager(managerId);
     const managerPropertyIds = managerProperties.map((property) => String(property.id));
+    const normalizedManagerEmail = managerEmail?.trim();
 
     const whereClauses = [eq(zillowLeads.managerId, managerId)];
-    if (managerEmail) {
-      whereClauses.push(eq(zillowLeads.managerEmail, managerEmail));
+    if (normalizedManagerEmail) {
+      // Match manager email case-insensitively to avoid identity drift across auth providers.
+      whereClauses.push(ilike(zillowLeads.managerEmail, normalizedManagerEmail));
     }
     if (managerPropertyIds.length > 0) {
       whereClauses.push(inArray(zillowLeads.propertyExternalId, managerPropertyIds));
     }
 
-    return await db
+    const scopedLeads = await db
       .select()
       .from(zillowLeads)
       .where(or(...whereClauses))
       .orderBy(desc(zillowLeads.receivedAt));
+
+    // In local/dev, seeded demo leads may not carry the same manager identity as the
+    // active session. Fall back to all leads so the screening UI remains testable.
+    if (scopedLeads.length === 0 && process.env.NODE_ENV !== "production") {
+      return await db
+        .select()
+        .from(zillowLeads)
+        .orderBy(desc(zillowLeads.receivedAt));
+    }
+
+    return scopedLeads;
   }
 
   // Listing Mapping Templates
@@ -492,6 +510,18 @@ export class DatabaseStorage implements IStorage {
     return await db.transaction(async (tx) => {
       await tx.delete(strMarketListings);
       return await tx.insert(strMarketListings).values(listings).returning();
+    });
+  }
+
+  // Multifamily For-Sale Listings
+  async getMultifamilySaleListings() {
+    return await db.select().from(multifamilySaleListings).orderBy(desc(multifamilySaleListings.price));
+  }
+  async replaceMultifamilySaleListings(listings: InsertMultifamilySaleListing[]) {
+    return await db.transaction(async (tx) => {
+      await tx.delete(multifamilySaleListings);
+      if (listings.length === 0) return [];
+      return await tx.insert(multifamilySaleListings).values(listings).returning();
     });
   }
 }

@@ -1,10 +1,5 @@
-"use strict";
-var __create = Object.create;
 var __defProp = Object.defineProperty;
-var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __getOwnPropNames = Object.getOwnPropertyNames;
-var __getProtoOf = Object.getPrototypeOf;
-var __hasOwnProp = Object.prototype.hasOwnProperty;
 var __esm = (fn, res) => function __init() {
   return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
 };
@@ -12,47 +7,29 @@ var __export = (target, all) => {
   for (var name in all)
     __defProp(target, name, { get: all[name], enumerable: true });
 };
-var __copyProps = (to, from, except, desc3) => {
-  if (from && typeof from === "object" || typeof from === "function") {
-    for (let key of __getOwnPropNames(from))
-      if (!__hasOwnProp.call(to, key) && key !== except)
-        __defProp(to, key, { get: () => from[key], enumerable: !(desc3 = __getOwnPropDesc(from, key)) || desc3.enumerable });
-  }
-  return to;
-};
-var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__getProtoOf(mod)) : {}, __copyProps(
-  // If the importer is in node compatibility mode or this is not an ESM
-  // file that has been converted to a CommonJS file using a Babel-
-  // compatible transform (i.e. "__esModule" has not been set), then set
-  // "default" to the CommonJS "module.exports" for node compatibility.
-  isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target,
-  mod
-));
-var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
 // vite.config.ts
-var import_vite, import_plugin_react, import_path2, import_meta, vite_config_default;
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
+import path2 from "path";
+var vite_config_default;
 var init_vite_config = __esm({
   "vite.config.ts"() {
     "use strict";
-    import_vite = require("vite");
-    import_plugin_react = __toESM(require("@vitejs/plugin-react"), 1);
-    import_path2 = __toESM(require("path"), 1);
-    import_meta = {};
-    vite_config_default = (0, import_vite.defineConfig)({
+    vite_config_default = defineConfig({
       plugins: [
-        (0, import_plugin_react.default)()
+        react()
       ],
       resolve: {
         alias: {
-          "@": import_path2.default.resolve(import_meta.dirname, "client", "src"),
-          "@shared": import_path2.default.resolve(import_meta.dirname, "shared"),
-          "@assets": import_path2.default.resolve(import_meta.dirname, "attached_assets")
+          "@": path2.resolve(import.meta.dirname, "client", "src"),
+          "@shared": path2.resolve(import.meta.dirname, "shared"),
+          "@assets": path2.resolve(import.meta.dirname, "attached_assets")
         }
       },
-      root: import_path2.default.resolve(import_meta.dirname, "client"),
+      root: path2.resolve(import.meta.dirname, "client"),
       build: {
-        outDir: import_path2.default.resolve(import_meta.dirname, "dist/public"),
+        outDir: path2.resolve(import.meta.dirname, "dist/public"),
         emptyOutDir: true
       },
       server: {
@@ -70,13 +47,17 @@ var vite_exports = {};
 __export(vite_exports, {
   setupVite: () => setupVite
 });
+import { createServer as createViteServer, createLogger } from "vite";
+import fs2 from "fs";
+import path3 from "path";
+import { nanoid } from "nanoid";
 async function setupVite(server, app) {
   const serverOptions = {
     middlewareMode: true,
     hmr: { server, path: "/vite-hmr" },
     allowedHosts: true
   };
-  const vite = await (0, import_vite2.createServer)({
+  const vite = await createViteServer({
     ...vite_config_default,
     configFile: false,
     customLogger: {
@@ -93,16 +74,16 @@ async function setupVite(server, app) {
   app.use("/{*path}", async (req, res, next) => {
     const url = req.originalUrl;
     try {
-      const clientTemplate = import_path3.default.resolve(
-        import_meta2.dirname,
+      const clientTemplate = path3.resolve(
+        import.meta.dirname,
         "..",
         "client",
         "index.html"
       );
-      let template = await import_fs2.default.promises.readFile(clientTemplate, "utf-8");
+      let template = await fs2.promises.readFile(clientTemplate, "utf-8");
       template = template.replace(
         `src="/src/main.tsx"`,
-        `src="/src/main.tsx?v=${(0, import_nanoid.nanoid)()}"`
+        `src="/src/main.tsx?v=${nanoid()}"`
       );
       const page = await vite.transformIndexHtml(url, template);
       res.status(200).set({ "Content-Type": "text/html" }).end(page);
@@ -112,35 +93,23 @@ async function setupVite(server, app) {
     }
   });
 }
-var import_vite2, import_fs2, import_path3, import_nanoid, import_meta2, viteLogger;
+var viteLogger;
 var init_vite = __esm({
   "server/vite.ts"() {
     "use strict";
-    import_vite2 = require("vite");
     init_vite_config();
-    import_fs2 = __toESM(require("fs"), 1);
-    import_path3 = __toESM(require("path"), 1);
-    import_nanoid = require("nanoid");
-    import_meta2 = {};
-    viteLogger = (0, import_vite2.createLogger)();
+    viteLogger = createLogger();
   }
 });
 
-// server/vercel-handler.ts
-var vercel_handler_exports = {};
-__export(vercel_handler_exports, {
-  default: () => handler
-});
-module.exports = __toCommonJS(vercel_handler_exports);
-
 // server/app.ts
-var import_config = require("dotenv/config");
-var import_express2 = __toESM(require("express"), 1);
-var import_http = require("http");
+import "dotenv/config";
+import express2 from "express";
+import { createServer } from "http";
 
 // server/db.ts
-var import_node_postgres = require("drizzle-orm/node-postgres");
-var import_pg = __toESM(require("pg"), 1);
+import { drizzle } from "drizzle-orm/node-postgres";
+import pg from "pg";
 
 // shared/schema.ts
 var schema_exports = {};
@@ -185,178 +154,178 @@ __export(schema_exports, {
   users: () => users,
   zillowLeads: () => zillowLeads
 });
-var import_pg_core3 = require("drizzle-orm/pg-core");
-var import_drizzle_orm3 = require("drizzle-orm");
-var import_drizzle_zod2 = require("drizzle-zod");
-var import_zod = require("zod");
+import { pgTable as pgTable3, text as text2, serial as serial2, integer as integer3, boolean as boolean2, timestamp as timestamp3, jsonb as jsonb2, decimal, varchar as varchar2, uniqueIndex, primaryKey } from "drizzle-orm/pg-core";
+import { relations } from "drizzle-orm";
+import { createInsertSchema as createInsertSchema2 } from "drizzle-zod";
+import { z } from "zod";
 
 // shared/models/auth.ts
-var import_drizzle_orm = require("drizzle-orm");
-var import_pg_core = require("drizzle-orm/pg-core");
-var sessions = (0, import_pg_core.pgTable)(
+import { sql } from "drizzle-orm";
+import { boolean, index, integer, jsonb, pgTable, timestamp, varchar } from "drizzle-orm/pg-core";
+var sessions = pgTable(
   "sessions",
   {
-    sid: (0, import_pg_core.varchar)("sid").primaryKey(),
-    sess: (0, import_pg_core.jsonb)("sess").notNull(),
-    expire: (0, import_pg_core.timestamp)("expire").notNull()
+    sid: varchar("sid").primaryKey(),
+    sess: jsonb("sess").notNull(),
+    expire: timestamp("expire").notNull()
   },
-  (table) => [(0, import_pg_core.index)("IDX_session_expire").on(table.expire)]
+  (table) => [index("IDX_session_expire").on(table.expire)]
 );
-var users = (0, import_pg_core.pgTable)("users", {
-  id: (0, import_pg_core.varchar)("id").primaryKey().default(import_drizzle_orm.sql`gen_random_uuid()`),
-  email: (0, import_pg_core.varchar)("email").unique(),
-  role: (0, import_pg_core.varchar)("role").notNull().default("tenant"),
+var users = pgTable("users", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  email: varchar("email").unique(),
+  role: varchar("role").notNull().default("tenant"),
   // "manager" | "tenant" | "investor"
-  authProvider: (0, import_pg_core.varchar)("auth_provider").notNull().default("oidc"),
+  authProvider: varchar("auth_provider").notNull().default("oidc"),
   // "oidc" | "local"
-  passwordHash: (0, import_pg_core.varchar)("password_hash"),
-  emailVerifiedAt: (0, import_pg_core.timestamp)("email_verified_at"),
-  resetTokenHash: (0, import_pg_core.varchar)("reset_token_hash"),
-  resetTokenExpiresAt: (0, import_pg_core.timestamp)("reset_token_expires_at"),
-  failedLoginCount: (0, import_pg_core.integer)("failed_login_count").notNull().default(0),
-  lockoutUntil: (0, import_pg_core.timestamp)("lockout_until"),
-  mfaEnabled: (0, import_pg_core.boolean)("mfa_enabled").notNull().default(false),
-  mfaSecret: (0, import_pg_core.varchar)("mfa_secret"),
-  mfaBackupCodes: (0, import_pg_core.jsonb)("mfa_backup_codes").$type().notNull().default([]),
-  lastLoginAt: (0, import_pg_core.timestamp)("last_login_at"),
-  securityVersion: (0, import_pg_core.integer)("security_version").notNull().default(1),
-  firstName: (0, import_pg_core.varchar)("first_name"),
-  lastName: (0, import_pg_core.varchar)("last_name"),
-  profileImageUrl: (0, import_pg_core.varchar)("profile_image_url"),
-  createdAt: (0, import_pg_core.timestamp)("created_at").defaultNow(),
-  updatedAt: (0, import_pg_core.timestamp)("updated_at").defaultNow()
+  passwordHash: varchar("password_hash"),
+  emailVerifiedAt: timestamp("email_verified_at"),
+  resetTokenHash: varchar("reset_token_hash"),
+  resetTokenExpiresAt: timestamp("reset_token_expires_at"),
+  failedLoginCount: integer("failed_login_count").notNull().default(0),
+  lockoutUntil: timestamp("lockout_until"),
+  mfaEnabled: boolean("mfa_enabled").notNull().default(false),
+  mfaSecret: varchar("mfa_secret"),
+  mfaBackupCodes: jsonb("mfa_backup_codes").$type().notNull().default([]),
+  lastLoginAt: timestamp("last_login_at"),
+  securityVersion: integer("security_version").notNull().default(1),
+  firstName: varchar("first_name"),
+  lastName: varchar("last_name"),
+  profileImageUrl: varchar("profile_image_url"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow()
 });
 
 // shared/models/chat.ts
-var import_pg_core2 = require("drizzle-orm/pg-core");
-var import_drizzle_zod = require("drizzle-zod");
-var import_drizzle_orm2 = require("drizzle-orm");
-var conversations = (0, import_pg_core2.pgTable)("conversations", {
-  id: (0, import_pg_core2.serial)("id").primaryKey(),
-  title: (0, import_pg_core2.text)("title").notNull(),
-  createdAt: (0, import_pg_core2.timestamp)("created_at").default(import_drizzle_orm2.sql`CURRENT_TIMESTAMP`).notNull()
+import { pgTable as pgTable2, serial, integer as integer2, text, timestamp as timestamp2 } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { sql as sql2 } from "drizzle-orm";
+var conversations = pgTable2("conversations", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  createdAt: timestamp2("created_at").default(sql2`CURRENT_TIMESTAMP`).notNull()
 });
-var messages = (0, import_pg_core2.pgTable)("messages", {
-  id: (0, import_pg_core2.serial)("id").primaryKey(),
-  conversationId: (0, import_pg_core2.integer)("conversation_id").notNull().references(() => conversations.id, { onDelete: "cascade" }),
-  role: (0, import_pg_core2.text)("role").notNull(),
-  content: (0, import_pg_core2.text)("content").notNull(),
-  createdAt: (0, import_pg_core2.timestamp)("created_at").default(import_drizzle_orm2.sql`CURRENT_TIMESTAMP`).notNull()
+var messages = pgTable2("messages", {
+  id: serial("id").primaryKey(),
+  conversationId: integer2("conversation_id").notNull().references(() => conversations.id, { onDelete: "cascade" }),
+  role: text("role").notNull(),
+  content: text("content").notNull(),
+  createdAt: timestamp2("created_at").default(sql2`CURRENT_TIMESTAMP`).notNull()
 });
-var insertConversationSchema = (0, import_drizzle_zod.createInsertSchema)(conversations).omit({
+var insertConversationSchema = createInsertSchema(conversations).omit({
   id: true,
   createdAt: true
 });
-var insertMessageSchema = (0, import_drizzle_zod.createInsertSchema)(messages).omit({
+var insertMessageSchema = createInsertSchema(messages).omit({
   id: true,
   createdAt: true
 });
 
 // shared/schema.ts
-var properties = (0, import_pg_core3.pgTable)("properties", {
-  id: (0, import_pg_core3.serial)("id").primaryKey(),
-  managerId: (0, import_pg_core3.varchar)("manager_id").notNull().references(() => users.id),
+var properties = pgTable3("properties", {
+  id: serial2("id").primaryKey(),
+  managerId: varchar2("manager_id").notNull().references(() => users.id),
   // Links to users.id
-  address: (0, import_pg_core3.text)("address").notNull(),
-  city: (0, import_pg_core3.text)("city").notNull(),
-  state: (0, import_pg_core3.text)("state").notNull(),
-  zipCode: (0, import_pg_core3.text)("zip_code").notNull(),
-  price: (0, import_pg_core3.decimal)("price", { precision: 10, scale: 2 }).notNull(),
-  bedrooms: (0, import_pg_core3.integer)("bedrooms").notNull(),
-  bathrooms: (0, import_pg_core3.decimal)("bathrooms", { precision: 3, scale: 1 }).notNull(),
-  sqft: (0, import_pg_core3.integer)("sqft").notNull(),
-  description: (0, import_pg_core3.text)("description"),
-  status: (0, import_pg_core3.text)("status").notNull().default("available"),
+  address: text2("address").notNull(),
+  city: text2("city").notNull(),
+  state: text2("state").notNull(),
+  zipCode: text2("zip_code").notNull(),
+  price: decimal("price", { precision: 10, scale: 2 }).notNull(),
+  bedrooms: integer3("bedrooms").notNull(),
+  bathrooms: decimal("bathrooms", { precision: 3, scale: 1 }).notNull(),
+  sqft: integer3("sqft").notNull(),
+  description: text2("description"),
+  status: text2("status").notNull().default("available"),
   // available, rented, maintenance
-  imageUrl: (0, import_pg_core3.text)("image_url"),
-  createdAt: (0, import_pg_core3.timestamp)("created_at").defaultNow()
+  imageUrl: text2("image_url"),
+  createdAt: timestamp3("created_at").defaultNow()
 });
-var leases = (0, import_pg_core3.pgTable)("leases", {
-  id: (0, import_pg_core3.serial)("id").primaryKey(),
-  propertyId: (0, import_pg_core3.integer)("property_id").notNull().references(() => properties.id),
-  tenantId: (0, import_pg_core3.varchar)("tenant_id").notNull().references(() => users.id),
+var leases = pgTable3("leases", {
+  id: serial2("id").primaryKey(),
+  propertyId: integer3("property_id").notNull().references(() => properties.id),
+  tenantId: varchar2("tenant_id").notNull().references(() => users.id),
   // Links to users.id
-  startDate: (0, import_pg_core3.timestamp)("start_date").notNull(),
-  endDate: (0, import_pg_core3.timestamp)("end_date").notNull(),
-  rentAmount: (0, import_pg_core3.decimal)("rent_amount", { precision: 10, scale: 2 }).notNull(),
-  status: (0, import_pg_core3.text)("status").notNull().default("active"),
+  startDate: timestamp3("start_date").notNull(),
+  endDate: timestamp3("end_date").notNull(),
+  rentAmount: decimal("rent_amount", { precision: 10, scale: 2 }).notNull(),
+  status: text2("status").notNull().default("active"),
   // active, terminated, expired
-  documentUrl: (0, import_pg_core3.text)("document_url"),
+  documentUrl: text2("document_url"),
   // Link to generated/signed doc
-  draftText: (0, import_pg_core3.text)("draft_text"),
+  draftText: text2("draft_text"),
   // AI generated draft
-  createdAt: (0, import_pg_core3.timestamp)("created_at").defaultNow()
+  createdAt: timestamp3("created_at").defaultNow()
 });
-var leaseSigningRequests = (0, import_pg_core3.pgTable)("lease_signing_requests", {
-  id: (0, import_pg_core3.serial)("id").primaryKey(),
-  leaseId: (0, import_pg_core3.integer)("lease_id").notNull().references(() => leases.id),
-  managerId: (0, import_pg_core3.varchar)("manager_id").notNull().references(() => users.id),
-  tenantId: (0, import_pg_core3.varchar)("tenant_id").notNull().references(() => users.id),
-  tenantEmail: (0, import_pg_core3.text)("tenant_email").notNull(),
-  tokenHash: (0, import_pg_core3.text)("token_hash").notNull(),
-  status: (0, import_pg_core3.text)("status").notNull().default("pending"),
+var leaseSigningRequests = pgTable3("lease_signing_requests", {
+  id: serial2("id").primaryKey(),
+  leaseId: integer3("lease_id").notNull().references(() => leases.id),
+  managerId: varchar2("manager_id").notNull().references(() => users.id),
+  tenantId: varchar2("tenant_id").notNull().references(() => users.id),
+  tenantEmail: text2("tenant_email").notNull(),
+  tokenHash: text2("token_hash").notNull(),
+  status: text2("status").notNull().default("pending"),
   // pending, signed, expired, cancelled
-  expiresAt: (0, import_pg_core3.timestamp)("expires_at").notNull(),
-  signedAt: (0, import_pg_core3.timestamp)("signed_at"),
-  signedFullName: (0, import_pg_core3.text)("signed_full_name"),
-  signedFromIp: (0, import_pg_core3.text)("signed_from_ip"),
-  createdAt: (0, import_pg_core3.timestamp)("created_at").defaultNow()
+  expiresAt: timestamp3("expires_at").notNull(),
+  signedAt: timestamp3("signed_at"),
+  signedFullName: text2("signed_full_name"),
+  signedFromIp: text2("signed_from_ip"),
+  createdAt: timestamp3("created_at").defaultNow()
 }, (table) => [
-  (0, import_pg_core3.uniqueIndex)("lease_signing_requests_token_hash_idx").on(table.tokenHash)
+  uniqueIndex("lease_signing_requests_token_hash_idx").on(table.tokenHash)
 ]);
-var maintenanceRequests = (0, import_pg_core3.pgTable)("maintenance_requests", {
-  id: (0, import_pg_core3.serial)("id").primaryKey(),
-  propertyId: (0, import_pg_core3.integer)("property_id").notNull().references(() => properties.id),
-  tenantId: (0, import_pg_core3.varchar)("tenant_id").notNull().references(() => users.id),
+var maintenanceRequests = pgTable3("maintenance_requests", {
+  id: serial2("id").primaryKey(),
+  propertyId: integer3("property_id").notNull().references(() => properties.id),
+  tenantId: varchar2("tenant_id").notNull().references(() => users.id),
   // Links to users.id
-  title: (0, import_pg_core3.text)("title").notNull(),
-  description: (0, import_pg_core3.text)("description").notNull(),
-  category: (0, import_pg_core3.text)("category").notNull().default("general"),
+  title: text2("title").notNull(),
+  description: text2("description").notNull(),
+  category: text2("category").notNull().default("general"),
   // plumbing, electrical, hvac, appliance, pest, security, general
-  priority: (0, import_pg_core3.text)("priority").notNull().default("medium"),
+  priority: text2("priority").notNull().default("medium"),
   // low, medium, high, emergency
-  status: (0, import_pg_core3.text)("status").notNull().default("open"),
+  status: text2("status").notNull().default("open"),
   // open, in_progress, completed, rejected
-  slaDueAt: (0, import_pg_core3.timestamp)("sla_due_at"),
-  escalatedAt: (0, import_pg_core3.timestamp)("escalated_at"),
-  assignedVendor: (0, import_pg_core3.text)("assigned_vendor"),
-  assignmentNote: (0, import_pg_core3.text)("assignment_note"),
-  aiAnalysis: (0, import_pg_core3.text)("ai_analysis"),
+  slaDueAt: timestamp3("sla_due_at"),
+  escalatedAt: timestamp3("escalated_at"),
+  assignedVendor: text2("assigned_vendor"),
+  assignmentNote: text2("assignment_note"),
+  aiAnalysis: text2("ai_analysis"),
   // AI categorization/suggestion
-  createdAt: (0, import_pg_core3.timestamp)("created_at").defaultNow()
+  createdAt: timestamp3("created_at").defaultNow()
 });
-var payments = (0, import_pg_core3.pgTable)("payments", {
-  id: (0, import_pg_core3.serial)("id").primaryKey(),
-  leaseId: (0, import_pg_core3.integer)("lease_id").notNull().references(() => leases.id),
-  amount: (0, import_pg_core3.decimal)("amount", { precision: 10, scale: 2 }).notNull(),
-  date: (0, import_pg_core3.timestamp)("date").defaultNow(),
-  status: (0, import_pg_core3.text)("status").notNull().default("pending"),
+var payments = pgTable3("payments", {
+  id: serial2("id").primaryKey(),
+  leaseId: integer3("lease_id").notNull().references(() => leases.id),
+  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+  date: timestamp3("date").defaultNow(),
+  status: text2("status").notNull().default("pending"),
   // pending, paid, failed, overdue
-  type: (0, import_pg_core3.text)("type").notNull(),
+  type: text2("type").notNull(),
   // rent, deposit, fee
-  stripePaymentId: (0, import_pg_core3.text)("stripe_payment_id")
+  stripePaymentId: text2("stripe_payment_id")
 });
-var managerRentNotificationSettings = (0, import_pg_core3.pgTable)("manager_rent_notification_settings", {
-  managerId: (0, import_pg_core3.varchar)("manager_id").notNull().references(() => users.id),
-  enabled: (0, import_pg_core3.boolean)("enabled").notNull().default(true),
-  overdueDays: (0, import_pg_core3.integer)("overdue_days").notNull().default(5),
-  updatedAt: (0, import_pg_core3.timestamp)("updated_at").defaultNow()
+var managerRentNotificationSettings = pgTable3("manager_rent_notification_settings", {
+  managerId: varchar2("manager_id").notNull().references(() => users.id),
+  enabled: boolean2("enabled").notNull().default(true),
+  overdueDays: integer3("overdue_days").notNull().default(5),
+  updatedAt: timestamp3("updated_at").defaultNow()
 }, (table) => [
-  (0, import_pg_core3.primaryKey)({ columns: [table.managerId] })
+  primaryKey({ columns: [table.managerId] })
 ]);
-var rentOverdueNotificationHistory = (0, import_pg_core3.pgTable)(
+var rentOverdueNotificationHistory = pgTable3(
   "rent_overdue_notification_history",
   {
-    id: (0, import_pg_core3.serial)("id").primaryKey(),
-    managerId: (0, import_pg_core3.varchar)("manager_id").notNull().references(() => users.id),
-    leaseId: (0, import_pg_core3.integer)("lease_id").notNull().references(() => leases.id),
-    monthKey: (0, import_pg_core3.text)("month_key").notNull(),
+    id: serial2("id").primaryKey(),
+    managerId: varchar2("manager_id").notNull().references(() => users.id),
+    leaseId: integer3("lease_id").notNull().references(() => leases.id),
+    monthKey: text2("month_key").notNull(),
     // YYYY-MM
-    thresholdDays: (0, import_pg_core3.integer)("threshold_days").notNull(),
-    sentAt: (0, import_pg_core3.timestamp)("sent_at").defaultNow().notNull()
+    thresholdDays: integer3("threshold_days").notNull(),
+    sentAt: timestamp3("sent_at").defaultNow().notNull()
   },
   (table) => [
-    (0, import_pg_core3.uniqueIndex)("rent_overdue_notification_dedupe_idx").on(
+    uniqueIndex("rent_overdue_notification_dedupe_idx").on(
       table.managerId,
       table.leaseId,
       table.monthKey,
@@ -364,44 +333,44 @@ var rentOverdueNotificationHistory = (0, import_pg_core3.pgTable)(
     )
   ]
 );
-var managerLeaseExpiryNotificationSettings = (0, import_pg_core3.pgTable)("manager_lease_expiry_notification_settings", {
-  managerId: (0, import_pg_core3.varchar)("manager_id").notNull().references(() => users.id),
-  enabled: (0, import_pg_core3.boolean)("enabled").notNull().default(true),
-  daysBeforeExpiry: (0, import_pg_core3.integer)("days_before_expiry").notNull().default(30),
-  updatedAt: (0, import_pg_core3.timestamp)("updated_at").defaultNow()
+var managerLeaseExpiryNotificationSettings = pgTable3("manager_lease_expiry_notification_settings", {
+  managerId: varchar2("manager_id").notNull().references(() => users.id),
+  enabled: boolean2("enabled").notNull().default(true),
+  daysBeforeExpiry: integer3("days_before_expiry").notNull().default(30),
+  updatedAt: timestamp3("updated_at").defaultNow()
 }, (table) => [
-  (0, import_pg_core3.primaryKey)({ columns: [table.managerId] })
+  primaryKey({ columns: [table.managerId] })
 ]);
-var managerMaintenanceAutomationSettings = (0, import_pg_core3.pgTable)("manager_maintenance_automation_settings", {
-  managerId: (0, import_pg_core3.varchar)("manager_id").notNull().references(() => users.id),
-  autoTriageEnabled: (0, import_pg_core3.boolean)("auto_triage_enabled").notNull().default(true),
-  autoEscalationEnabled: (0, import_pg_core3.boolean)("auto_escalation_enabled").notNull().default(true),
-  autoVendorAssignmentEnabled: (0, import_pg_core3.boolean)("auto_vendor_assignment_enabled").notNull().default(true),
-  updatedAt: (0, import_pg_core3.timestamp)("updated_at").defaultNow()
+var managerMaintenanceAutomationSettings = pgTable3("manager_maintenance_automation_settings", {
+  managerId: varchar2("manager_id").notNull().references(() => users.id),
+  autoTriageEnabled: boolean2("auto_triage_enabled").notNull().default(true),
+  autoEscalationEnabled: boolean2("auto_escalation_enabled").notNull().default(true),
+  autoVendorAssignmentEnabled: boolean2("auto_vendor_assignment_enabled").notNull().default(true),
+  updatedAt: timestamp3("updated_at").defaultNow()
 }, (table) => [
-  (0, import_pg_core3.primaryKey)({ columns: [table.managerId] })
+  primaryKey({ columns: [table.managerId] })
 ]);
-var userProfileSettings = (0, import_pg_core3.pgTable)("user_profile_settings", {
-  userId: (0, import_pg_core3.varchar)("user_id").notNull().references(() => users.id),
-  phoneNumber: (0, import_pg_core3.text)("phone_number"),
-  twoFactorMethod: (0, import_pg_core3.text)("two_factor_method"),
-  updatedAt: (0, import_pg_core3.timestamp)("updated_at").defaultNow()
+var userProfileSettings = pgTable3("user_profile_settings", {
+  userId: varchar2("user_id").notNull().references(() => users.id),
+  phoneNumber: text2("phone_number"),
+  twoFactorMethod: text2("two_factor_method"),
+  updatedAt: timestamp3("updated_at").defaultNow()
 }, (table) => [
-  (0, import_pg_core3.primaryKey)({ columns: [table.userId] })
+  primaryKey({ columns: [table.userId] })
 ]);
-var leaseExpiryNotificationHistory = (0, import_pg_core3.pgTable)(
+var leaseExpiryNotificationHistory = pgTable3(
   "lease_expiry_notification_history",
   {
-    id: (0, import_pg_core3.serial)("id").primaryKey(),
-    managerId: (0, import_pg_core3.varchar)("manager_id").notNull().references(() => users.id),
-    leaseId: (0, import_pg_core3.integer)("lease_id").notNull().references(() => leases.id),
-    leaseEndDateKey: (0, import_pg_core3.text)("lease_end_date_key").notNull(),
+    id: serial2("id").primaryKey(),
+    managerId: varchar2("manager_id").notNull().references(() => users.id),
+    leaseId: integer3("lease_id").notNull().references(() => leases.id),
+    leaseEndDateKey: text2("lease_end_date_key").notNull(),
     // YYYY-MM-DD
-    thresholdDays: (0, import_pg_core3.integer)("threshold_days").notNull(),
-    sentAt: (0, import_pg_core3.timestamp)("sent_at").defaultNow().notNull()
+    thresholdDays: integer3("threshold_days").notNull(),
+    sentAt: timestamp3("sent_at").defaultNow().notNull()
   },
   (table) => [
-    (0, import_pg_core3.uniqueIndex)("lease_expiry_notification_dedupe_idx").on(
+    uniqueIndex("lease_expiry_notification_dedupe_idx").on(
       table.managerId,
       table.leaseId,
       table.leaseEndDateKey,
@@ -409,163 +378,163 @@ var leaseExpiryNotificationHistory = (0, import_pg_core3.pgTable)(
     )
   ]
 );
-var screenings = (0, import_pg_core3.pgTable)("screenings", {
-  id: (0, import_pg_core3.serial)("id").primaryKey(),
-  tenantId: (0, import_pg_core3.varchar)("tenant_id").notNull().references(() => users.id),
+var screenings = pgTable3("screenings", {
+  id: serial2("id").primaryKey(),
+  tenantId: varchar2("tenant_id").notNull().references(() => users.id),
   // Links to users.id
-  status: (0, import_pg_core3.text)("status").notNull().default("pending"),
+  status: text2("status").notNull().default("pending"),
   // pending, approved, rejected
-  creditScore: (0, import_pg_core3.integer)("credit_score"),
-  backgroundCheck: (0, import_pg_core3.text)("background_check"),
+  creditScore: integer3("credit_score"),
+  backgroundCheck: text2("background_check"),
   // "clear", "flagged"
-  notes: (0, import_pg_core3.text)("notes"),
-  createdAt: (0, import_pg_core3.timestamp)("created_at").defaultNow()
+  notes: text2("notes"),
+  createdAt: timestamp3("created_at").defaultNow()
 });
-var zillowLeads = (0, import_pg_core3.pgTable)(
+var zillowLeads = pgTable3(
   "zillow_leads",
   {
-    id: (0, import_pg_core3.serial)("id").primaryKey(),
-    externalLeadId: (0, import_pg_core3.text)("external_lead_id").notNull(),
-    listingExternalId: (0, import_pg_core3.text)("listing_external_id"),
-    propertyExternalId: (0, import_pg_core3.text)("property_external_id"),
-    managerId: (0, import_pg_core3.varchar)("manager_id"),
-    managerEmail: (0, import_pg_core3.text)("manager_email"),
-    applicantName: (0, import_pg_core3.text)("applicant_name"),
-    applicantEmail: (0, import_pg_core3.text)("applicant_email"),
-    applicantPhone: (0, import_pg_core3.text)("applicant_phone"),
-    message: (0, import_pg_core3.text)("message"),
-    moveInDate: (0, import_pg_core3.text)("move_in_date"),
-    status: (0, import_pg_core3.text)("status").notNull().default("received"),
-    rawPayload: (0, import_pg_core3.jsonb)("raw_payload").notNull(),
-    receivedAt: (0, import_pg_core3.timestamp)("received_at").notNull().defaultNow(),
-    updatedAt: (0, import_pg_core3.timestamp)("updated_at").notNull().defaultNow()
+    id: serial2("id").primaryKey(),
+    externalLeadId: text2("external_lead_id").notNull(),
+    listingExternalId: text2("listing_external_id"),
+    propertyExternalId: text2("property_external_id"),
+    managerId: varchar2("manager_id"),
+    managerEmail: text2("manager_email"),
+    applicantName: text2("applicant_name"),
+    applicantEmail: text2("applicant_email"),
+    applicantPhone: text2("applicant_phone"),
+    message: text2("message"),
+    moveInDate: text2("move_in_date"),
+    status: text2("status").notNull().default("received"),
+    rawPayload: jsonb2("raw_payload").notNull(),
+    receivedAt: timestamp3("received_at").notNull().defaultNow(),
+    updatedAt: timestamp3("updated_at").notNull().defaultNow()
   },
-  (table) => [(0, import_pg_core3.uniqueIndex)("zillow_leads_external_lead_id_idx").on(table.externalLeadId)]
+  (table) => [uniqueIndex("zillow_leads_external_lead_id_idx").on(table.externalLeadId)]
 );
-var listingMappingTemplates = (0, import_pg_core3.pgTable)("listing_mapping_templates", {
-  id: (0, import_pg_core3.serial)("id").primaryKey(),
-  managerId: (0, import_pg_core3.varchar)("manager_id").notNull().references(() => users.id),
-  name: (0, import_pg_core3.text)("name").notNull(),
-  mapping: (0, import_pg_core3.jsonb)("mapping").notNull(),
-  createdAt: (0, import_pg_core3.timestamp)("created_at").defaultNow()
+var listingMappingTemplates = pgTable3("listing_mapping_templates", {
+  id: serial2("id").primaryKey(),
+  managerId: varchar2("manager_id").notNull().references(() => users.id),
+  name: text2("name").notNull(),
+  mapping: jsonb2("mapping").notNull(),
+  createdAt: timestamp3("created_at").defaultNow()
 });
-var strMarketListings = (0, import_pg_core3.pgTable)(
+var strMarketListings = pgTable3(
   "str_market_listings",
   {
-    id: (0, import_pg_core3.serial)("id").primaryKey(),
-    source: (0, import_pg_core3.text)("source").notNull().default("insideairbnb"),
-    sourceCountry: (0, import_pg_core3.text)("source_country").notNull().default("united-states"),
-    sourceRegion: (0, import_pg_core3.text)("source_region"),
-    sourceCity: (0, import_pg_core3.text)("source_city").notNull(),
-    sourceSnapshotDate: (0, import_pg_core3.text)("source_snapshot_date"),
-    sourceUrl: (0, import_pg_core3.text)("source_url").notNull(),
-    externalListingId: (0, import_pg_core3.text)("external_listing_id").notNull(),
-    listingUrl: (0, import_pg_core3.text)("listing_url"),
-    pictureUrl: (0, import_pg_core3.text)("picture_url"),
-    title: (0, import_pg_core3.text)("title"),
-    propertyType: (0, import_pg_core3.text)("property_type"),
-    roomType: (0, import_pg_core3.text)("room_type"),
-    neighbourhood: (0, import_pg_core3.text)("neighbourhood"),
-    latitude: (0, import_pg_core3.decimal)("latitude", { precision: 9, scale: 6 }),
-    longitude: (0, import_pg_core3.decimal)("longitude", { precision: 9, scale: 6 }),
-    accommodates: (0, import_pg_core3.integer)("accommodates"),
-    bedrooms: (0, import_pg_core3.decimal)("bedrooms", { precision: 4, scale: 1 }),
-    bathrooms: (0, import_pg_core3.decimal)("bathrooms", { precision: 4, scale: 1 }),
-    minimumNights: (0, import_pg_core3.integer)("minimum_nights"),
-    numberOfReviews: (0, import_pg_core3.integer)("number_of_reviews"),
-    reviewScoreRating: (0, import_pg_core3.decimal)("review_score_rating", { precision: 5, scale: 2 }),
-    hostIsSuperhost: (0, import_pg_core3.boolean)("host_is_superhost"),
-    nightlyRate: (0, import_pg_core3.decimal)("nightly_rate", { precision: 10, scale: 2 }).notNull(),
-    availability365: (0, import_pg_core3.integer)("availability_365"),
-    expectedOccupancyRate: (0, import_pg_core3.decimal)("expected_occupancy_rate", { precision: 5, scale: 2 }).notNull(),
-    expectedMonthlyReturn: (0, import_pg_core3.decimal)("expected_monthly_return", { precision: 12, scale: 2 }).notNull(),
-    expectedAnnualReturn: (0, import_pg_core3.decimal)("expected_annual_return", { precision: 12, scale: 2 }).notNull(),
-    estimatedSalePrice: (0, import_pg_core3.decimal)("estimated_sale_price", { precision: 12, scale: 2 }).notNull(),
-    valuationMethod: (0, import_pg_core3.text)("valuation_method").notNull().default("cap-rate-8pct"),
-    currency: (0, import_pg_core3.text)("currency").notNull().default("USD"),
-    lastScrapedAt: (0, import_pg_core3.timestamp)("last_scraped_at").defaultNow().notNull(),
-    createdAt: (0, import_pg_core3.timestamp)("created_at").defaultNow()
+    id: serial2("id").primaryKey(),
+    source: text2("source").notNull().default("insideairbnb"),
+    sourceCountry: text2("source_country").notNull().default("united-states"),
+    sourceRegion: text2("source_region"),
+    sourceCity: text2("source_city").notNull(),
+    sourceSnapshotDate: text2("source_snapshot_date"),
+    sourceUrl: text2("source_url").notNull(),
+    externalListingId: text2("external_listing_id").notNull(),
+    listingUrl: text2("listing_url"),
+    pictureUrl: text2("picture_url"),
+    title: text2("title"),
+    propertyType: text2("property_type"),
+    roomType: text2("room_type"),
+    neighbourhood: text2("neighbourhood"),
+    latitude: decimal("latitude", { precision: 9, scale: 6 }),
+    longitude: decimal("longitude", { precision: 9, scale: 6 }),
+    accommodates: integer3("accommodates"),
+    bedrooms: decimal("bedrooms", { precision: 4, scale: 1 }),
+    bathrooms: decimal("bathrooms", { precision: 4, scale: 1 }),
+    minimumNights: integer3("minimum_nights"),
+    numberOfReviews: integer3("number_of_reviews"),
+    reviewScoreRating: decimal("review_score_rating", { precision: 5, scale: 2 }),
+    hostIsSuperhost: boolean2("host_is_superhost"),
+    nightlyRate: decimal("nightly_rate", { precision: 10, scale: 2 }).notNull(),
+    availability365: integer3("availability_365"),
+    expectedOccupancyRate: decimal("expected_occupancy_rate", { precision: 5, scale: 2 }).notNull(),
+    expectedMonthlyReturn: decimal("expected_monthly_return", { precision: 12, scale: 2 }).notNull(),
+    expectedAnnualReturn: decimal("expected_annual_return", { precision: 12, scale: 2 }).notNull(),
+    estimatedSalePrice: decimal("estimated_sale_price", { precision: 12, scale: 2 }).notNull(),
+    valuationMethod: text2("valuation_method").notNull().default("cap-rate-8pct"),
+    currency: text2("currency").notNull().default("USD"),
+    lastScrapedAt: timestamp3("last_scraped_at").defaultNow().notNull(),
+    createdAt: timestamp3("created_at").defaultNow()
   },
   (table) => [
-    (0, import_pg_core3.uniqueIndex)("str_market_source_city_listing_idx").on(
+    uniqueIndex("str_market_source_city_listing_idx").on(
       table.source,
       table.sourceCity,
       table.externalListingId
     )
   ]
 );
-var multifamilySaleListings = (0, import_pg_core3.pgTable)(
+var multifamilySaleListings = pgTable3(
   "multifamily_sale_listings",
   {
-    id: (0, import_pg_core3.serial)("id").primaryKey(),
-    source: (0, import_pg_core3.text)("source").notNull().default("rentcast"),
-    sourceListingId: (0, import_pg_core3.text)("source_listing_id").notNull(),
-    formattedAddress: (0, import_pg_core3.text)("formatted_address"),
-    addressLine1: (0, import_pg_core3.text)("address_line_1"),
-    addressLine2: (0, import_pg_core3.text)("address_line_2"),
-    city: (0, import_pg_core3.text)("city").notNull(),
-    state: (0, import_pg_core3.text)("state"),
-    stateFips: (0, import_pg_core3.text)("state_fips"),
-    zipCode: (0, import_pg_core3.text)("zip_code"),
-    county: (0, import_pg_core3.text)("county"),
-    countyFips: (0, import_pg_core3.text)("county_fips"),
-    latitude: (0, import_pg_core3.decimal)("latitude", { precision: 9, scale: 6 }),
-    longitude: (0, import_pg_core3.decimal)("longitude", { precision: 9, scale: 6 }),
-    propertyType: (0, import_pg_core3.text)("property_type"),
-    bedrooms: (0, import_pg_core3.decimal)("bedrooms", { precision: 4, scale: 1 }),
-    bathrooms: (0, import_pg_core3.decimal)("bathrooms", { precision: 4, scale: 1 }),
-    squareFootage: (0, import_pg_core3.integer)("square_footage"),
-    lotSize: (0, import_pg_core3.integer)("lot_size"),
-    yearBuilt: (0, import_pg_core3.integer)("year_built"),
-    status: (0, import_pg_core3.text)("status"),
-    price: (0, import_pg_core3.decimal)("price", { precision: 12, scale: 2 }).notNull(),
-    listingType: (0, import_pg_core3.text)("listing_type"),
-    listedDate: (0, import_pg_core3.text)("listed_date"),
-    removedDate: (0, import_pg_core3.text)("removed_date"),
-    createdDate: (0, import_pg_core3.text)("created_date"),
-    lastSeenDate: (0, import_pg_core3.text)("last_seen_date"),
-    daysOnMarket: (0, import_pg_core3.integer)("days_on_market"),
-    mlsName: (0, import_pg_core3.text)("mls_name"),
-    mlsNumber: (0, import_pg_core3.text)("mls_number"),
-    listingAgent: (0, import_pg_core3.jsonb)("listing_agent"),
-    listingOffice: (0, import_pg_core3.jsonb)("listing_office"),
-    history: (0, import_pg_core3.jsonb)("history"),
-    projectedAnnualReturn: (0, import_pg_core3.decimal)("projected_annual_return", { precision: 12, scale: 2 }),
-    currency: (0, import_pg_core3.text)("currency").notNull().default("USD"),
-    listingUrl: (0, import_pg_core3.text)("listing_url"),
-    photoUrl: (0, import_pg_core3.text)("photo_url"),
-    rawPayload: (0, import_pg_core3.jsonb)("raw_payload").notNull(),
-    lastSyncedAt: (0, import_pg_core3.timestamp)("last_synced_at").defaultNow().notNull(),
-    createdAt: (0, import_pg_core3.timestamp)("created_at").defaultNow()
+    id: serial2("id").primaryKey(),
+    source: text2("source").notNull().default("rentcast"),
+    sourceListingId: text2("source_listing_id").notNull(),
+    formattedAddress: text2("formatted_address"),
+    addressLine1: text2("address_line_1"),
+    addressLine2: text2("address_line_2"),
+    city: text2("city").notNull(),
+    state: text2("state"),
+    stateFips: text2("state_fips"),
+    zipCode: text2("zip_code"),
+    county: text2("county"),
+    countyFips: text2("county_fips"),
+    latitude: decimal("latitude", { precision: 9, scale: 6 }),
+    longitude: decimal("longitude", { precision: 9, scale: 6 }),
+    propertyType: text2("property_type"),
+    bedrooms: decimal("bedrooms", { precision: 4, scale: 1 }),
+    bathrooms: decimal("bathrooms", { precision: 4, scale: 1 }),
+    squareFootage: integer3("square_footage"),
+    lotSize: integer3("lot_size"),
+    yearBuilt: integer3("year_built"),
+    status: text2("status"),
+    price: decimal("price", { precision: 12, scale: 2 }).notNull(),
+    listingType: text2("listing_type"),
+    listedDate: text2("listed_date"),
+    removedDate: text2("removed_date"),
+    createdDate: text2("created_date"),
+    lastSeenDate: text2("last_seen_date"),
+    daysOnMarket: integer3("days_on_market"),
+    mlsName: text2("mls_name"),
+    mlsNumber: text2("mls_number"),
+    listingAgent: jsonb2("listing_agent"),
+    listingOffice: jsonb2("listing_office"),
+    history: jsonb2("history"),
+    projectedAnnualReturn: decimal("projected_annual_return", { precision: 12, scale: 2 }),
+    currency: text2("currency").notNull().default("USD"),
+    listingUrl: text2("listing_url"),
+    photoUrl: text2("photo_url"),
+    rawPayload: jsonb2("raw_payload").notNull(),
+    lastSyncedAt: timestamp3("last_synced_at").defaultNow().notNull(),
+    createdAt: timestamp3("created_at").defaultNow()
   },
   (table) => [
-    (0, import_pg_core3.uniqueIndex)("multifamily_sale_source_listing_idx").on(table.source, table.sourceListingId)
+    uniqueIndex("multifamily_sale_source_listing_idx").on(table.source, table.sourceListingId)
   ]
 );
-var propertiesRelations = (0, import_drizzle_orm3.relations)(properties, ({ one, many }) => ({
+var propertiesRelations = relations(properties, ({ one, many }) => ({
   leases: many(leases),
   maintenanceRequests: many(maintenanceRequests)
 }));
-var leasesRelations = (0, import_drizzle_orm3.relations)(leases, ({ one, many }) => ({
+var leasesRelations = relations(leases, ({ one, many }) => ({
   property: one(properties, {
     fields: [leases.propertyId],
     references: [properties.id]
   }),
   payments: many(payments)
 }));
-var maintenanceRequestsRelations = (0, import_drizzle_orm3.relations)(maintenanceRequests, ({ one }) => ({
+var maintenanceRequestsRelations = relations(maintenanceRequests, ({ one }) => ({
   property: one(properties, {
     fields: [maintenanceRequests.propertyId],
     references: [properties.id]
   })
 }));
-var insertPropertySchema = (0, import_drizzle_zod2.createInsertSchema)(properties).omit({ id: true, createdAt: true });
-var insertLeaseSchema = (0, import_drizzle_zod2.createInsertSchema)(leases, {
-  startDate: import_zod.z.coerce.date(),
-  endDate: import_zod.z.coerce.date(),
-  rentAmount: import_zod.z.union([import_zod.z.string(), import_zod.z.number()]).transform((v) => v.toString())
+var insertPropertySchema = createInsertSchema2(properties).omit({ id: true, createdAt: true });
+var insertLeaseSchema = createInsertSchema2(leases, {
+  startDate: z.coerce.date(),
+  endDate: z.coerce.date(),
+  rentAmount: z.union([z.string(), z.number()]).transform((v) => v.toString())
 }).omit({ id: true, createdAt: true });
-var insertMaintenanceRequestSchema = (0, import_drizzle_zod2.createInsertSchema)(maintenanceRequests).omit({
+var insertMaintenanceRequestSchema = createInsertSchema2(maintenanceRequests).omit({
   id: true,
   createdAt: true,
   aiAnalysis: true,
@@ -575,31 +544,31 @@ var insertMaintenanceRequestSchema = (0, import_drizzle_zod2.createInsertSchema)
   assignedVendor: true,
   assignmentNote: true
 });
-var insertPaymentSchema = (0, import_drizzle_zod2.createInsertSchema)(payments).omit({ id: true, date: true });
-var insertScreeningSchema = (0, import_drizzle_zod2.createInsertSchema)(screenings).omit({ id: true, createdAt: true });
-var insertZillowLeadSchema = (0, import_drizzle_zod2.createInsertSchema)(zillowLeads).omit({
+var insertPaymentSchema = createInsertSchema2(payments).omit({ id: true, date: true });
+var insertScreeningSchema = createInsertSchema2(screenings).omit({ id: true, createdAt: true });
+var insertZillowLeadSchema = createInsertSchema2(zillowLeads).omit({
   id: true,
   receivedAt: true,
   updatedAt: true
 });
-var insertListingMappingTemplateSchema = (0, import_drizzle_zod2.createInsertSchema)(listingMappingTemplates).omit({ id: true, createdAt: true });
-var insertStrMarketListingSchema = (0, import_drizzle_zod2.createInsertSchema)(strMarketListings).omit({ id: true, createdAt: true });
-var insertMultifamilySaleListingSchema = (0, import_drizzle_zod2.createInsertSchema)(multifamilySaleListings).omit({
+var insertListingMappingTemplateSchema = createInsertSchema2(listingMappingTemplates).omit({ id: true, createdAt: true });
+var insertStrMarketListingSchema = createInsertSchema2(strMarketListings).omit({ id: true, createdAt: true });
+var insertMultifamilySaleListingSchema = createInsertSchema2(multifamilySaleListings).omit({
   id: true,
   createdAt: true
 });
-var upsertManagerRentNotificationSettingsSchema = (0, import_drizzle_zod2.createInsertSchema)(managerRentNotificationSettings, {
-  overdueDays: import_zod.z.coerce.number().int().min(1).max(60)
+var upsertManagerRentNotificationSettingsSchema = createInsertSchema2(managerRentNotificationSettings, {
+  overdueDays: z.coerce.number().int().min(1).max(60)
 }).omit({ updatedAt: true });
-var upsertManagerLeaseExpiryNotificationSettingsSchema = (0, import_drizzle_zod2.createInsertSchema)(managerLeaseExpiryNotificationSettings, {
-  daysBeforeExpiry: import_zod.z.coerce.number().int().min(1).max(365)
+var upsertManagerLeaseExpiryNotificationSettingsSchema = createInsertSchema2(managerLeaseExpiryNotificationSettings, {
+  daysBeforeExpiry: z.coerce.number().int().min(1).max(365)
 }).omit({ updatedAt: true });
-var upsertManagerMaintenanceAutomationSettingsSchema = (0, import_drizzle_zod2.createInsertSchema)(managerMaintenanceAutomationSettings).omit({ updatedAt: true });
-var upsertUserProfileSettingsSchema = (0, import_drizzle_zod2.createInsertSchema)(userProfileSettings, {
-  phoneNumber: import_zod.z.string().trim().min(7).max(25).regex(/^[0-9+()\-\s]+$/, "Phone number contains invalid characters").nullable().optional(),
-  twoFactorMethod: import_zod.z.enum(["email", "phone"]).nullable().optional()
+var upsertManagerMaintenanceAutomationSettingsSchema = createInsertSchema2(managerMaintenanceAutomationSettings).omit({ updatedAt: true });
+var upsertUserProfileSettingsSchema = createInsertSchema2(userProfileSettings, {
+  phoneNumber: z.string().trim().min(7).max(25).regex(/^[0-9+()\-\s]+$/, "Phone number contains invalid characters").nullable().optional(),
+  twoFactorMethod: z.enum(["email", "phone"]).nullable().optional()
 }).omit({ updatedAt: true });
-var insertLeaseSigningRequestSchema = (0, import_drizzle_zod2.createInsertSchema)(leaseSigningRequests).omit({
+var insertLeaseSigningRequestSchema = createInsertSchema2(leaseSigningRequests).omit({
   id: true,
   createdAt: true,
   signedAt: true,
@@ -608,7 +577,7 @@ var insertLeaseSigningRequestSchema = (0, import_drizzle_zod2.createInsertSchema
 });
 
 // server/db.ts
-var { Pool } = import_pg.default;
+var { Pool } = pg;
 var databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl && process.env.NODE_ENV === "production") {
   throw new Error(
@@ -623,44 +592,44 @@ if (!databaseUrl && process.env.NODE_ENV !== "production") {
 var pool = new Pool({
   connectionString: databaseUrl ?? "postgres://localhost:5432/postgres"
 });
-var db = (0, import_node_postgres.drizzle)(pool, { schema: schema_exports });
+var db = drizzle(pool, { schema: schema_exports });
 
 // server/storage.ts
-var import_drizzle_orm4 = require("drizzle-orm");
+import { and, eq, desc, ilike, inArray, or } from "drizzle-orm";
 var DatabaseStorage = class {
   // Users
   async getUser(id) {
-    const [user] = await db.select().from(users).where((0, import_drizzle_orm4.eq)(users.id, id));
+    const [user] = await db.select().from(users).where(eq(users.id, id));
     return user;
   }
   async getTenants() {
-    return await db.select().from(users).where((0, import_drizzle_orm4.eq)(users.role, "tenant"));
+    return await db.select().from(users).where(eq(users.role, "tenant"));
   }
   // Properties
   async getProperties() {
-    return await db.select().from(properties).orderBy((0, import_drizzle_orm4.desc)(properties.createdAt));
+    return await db.select().from(properties).orderBy(desc(properties.createdAt));
   }
   async getProperty(id) {
-    const [property] = await db.select().from(properties).where((0, import_drizzle_orm4.eq)(properties.id, id));
+    const [property] = await db.select().from(properties).where(eq(properties.id, id));
     return property;
   }
   async getPropertiesByManager(managerId) {
-    return await db.select().from(properties).where((0, import_drizzle_orm4.eq)(properties.managerId, managerId)).orderBy((0, import_drizzle_orm4.desc)(properties.createdAt));
+    return await db.select().from(properties).where(eq(properties.managerId, managerId)).orderBy(desc(properties.createdAt));
   }
   async createProperty(insertProperty) {
     const [property] = await db.insert(properties).values(insertProperty).returning();
     return property;
   }
   async updateProperty(id, update) {
-    const [property] = await db.update(properties).set(update).where((0, import_drizzle_orm4.eq)(properties.id, id)).returning();
+    const [property] = await db.update(properties).set(update).where(eq(properties.id, id)).returning();
     return property;
   }
   async deleteProperty(id) {
-    await db.delete(properties).where((0, import_drizzle_orm4.eq)(properties.id, id));
+    await db.delete(properties).where(eq(properties.id, id));
   }
   // Leases
   async getLeases() {
-    return await db.select().from(leases).orderBy((0, import_drizzle_orm4.desc)(leases.createdAt));
+    return await db.select().from(leases).orderBy(desc(leases.createdAt));
   }
   async getLeasesByManager(managerId) {
     const results = await db.select({
@@ -674,48 +643,48 @@ var DatabaseStorage = class {
       documentUrl: leases.documentUrl,
       draftText: leases.draftText,
       createdAt: leases.createdAt
-    }).from(leases).innerJoin(properties, (0, import_drizzle_orm4.eq)(leases.propertyId, properties.id)).where((0, import_drizzle_orm4.eq)(properties.managerId, managerId)).orderBy((0, import_drizzle_orm4.desc)(leases.createdAt));
+    }).from(leases).innerJoin(properties, eq(leases.propertyId, properties.id)).where(eq(properties.managerId, managerId)).orderBy(desc(leases.createdAt));
     return results;
   }
   async getLeasesByTenant(tenantId) {
-    return await db.select().from(leases).where((0, import_drizzle_orm4.eq)(leases.tenantId, tenantId)).orderBy((0, import_drizzle_orm4.desc)(leases.createdAt));
+    return await db.select().from(leases).where(eq(leases.tenantId, tenantId)).orderBy(desc(leases.createdAt));
   }
   async createLease(insertLease) {
     const [lease] = await db.insert(leases).values(insertLease).returning();
     return lease;
   }
   async updateLease(id, update) {
-    const [lease] = await db.update(leases).set(update).where((0, import_drizzle_orm4.eq)(leases.id, id)).returning();
+    const [lease] = await db.update(leases).set(update).where(eq(leases.id, id)).returning();
     return lease;
   }
   async getLease(id) {
-    const [lease] = await db.select().from(leases).where((0, import_drizzle_orm4.eq)(leases.id, id));
+    const [lease] = await db.select().from(leases).where(eq(leases.id, id));
     return lease;
   }
   // Maintenance
   async getMaintenanceRequests() {
-    return await db.select().from(maintenanceRequests).orderBy((0, import_drizzle_orm4.desc)(maintenanceRequests.createdAt));
+    return await db.select().from(maintenanceRequests).orderBy(desc(maintenanceRequests.createdAt));
   }
   async getMaintenanceRequestsByTenant(tenantId) {
-    return await db.select().from(maintenanceRequests).where((0, import_drizzle_orm4.eq)(maintenanceRequests.tenantId, tenantId)).orderBy((0, import_drizzle_orm4.desc)(maintenanceRequests.createdAt));
+    return await db.select().from(maintenanceRequests).where(eq(maintenanceRequests.tenantId, tenantId)).orderBy(desc(maintenanceRequests.createdAt));
   }
   async getMaintenanceRequestsByProperty(propertyId) {
-    return await db.select().from(maintenanceRequests).where((0, import_drizzle_orm4.eq)(maintenanceRequests.propertyId, propertyId)).orderBy((0, import_drizzle_orm4.desc)(maintenanceRequests.createdAt));
+    return await db.select().from(maintenanceRequests).where(eq(maintenanceRequests.propertyId, propertyId)).orderBy(desc(maintenanceRequests.createdAt));
   }
   async createMaintenanceRequest(insertRequest) {
     const [request] = await db.insert(maintenanceRequests).values(insertRequest).returning();
     return request;
   }
   async getMaintenanceRequest(id) {
-    const [request] = await db.select().from(maintenanceRequests).where((0, import_drizzle_orm4.eq)(maintenanceRequests.id, id));
+    const [request] = await db.select().from(maintenanceRequests).where(eq(maintenanceRequests.id, id));
     return request;
   }
   async updateMaintenanceRequest(id, update) {
-    const [request] = await db.update(maintenanceRequests).set(update).where((0, import_drizzle_orm4.eq)(maintenanceRequests.id, id)).returning();
+    const [request] = await db.update(maintenanceRequests).set(update).where(eq(maintenanceRequests.id, id)).returning();
     return request;
   }
   async getManagerMaintenanceAutomationSettings(managerId) {
-    const [settings] = await db.select().from(managerMaintenanceAutomationSettings).where((0, import_drizzle_orm4.eq)(managerMaintenanceAutomationSettings.managerId, managerId));
+    const [settings] = await db.select().from(managerMaintenanceAutomationSettings).where(eq(managerMaintenanceAutomationSettings.managerId, managerId));
     return settings;
   }
   async upsertManagerMaintenanceAutomationSettings(settings) {
@@ -732,17 +701,17 @@ var DatabaseStorage = class {
   }
   // Payments
   async getPayments() {
-    return await db.select().from(payments).orderBy((0, import_drizzle_orm4.desc)(payments.date));
+    return await db.select().from(payments).orderBy(desc(payments.date));
   }
   async getPaymentsByLease(leaseId) {
-    return await db.select().from(payments).where((0, import_drizzle_orm4.eq)(payments.leaseId, leaseId)).orderBy((0, import_drizzle_orm4.desc)(payments.date));
+    return await db.select().from(payments).where(eq(payments.leaseId, leaseId)).orderBy(desc(payments.date));
   }
   async createPayment(insertPayment) {
     const [payment] = await db.insert(payments).values(insertPayment).returning();
     return payment;
   }
   async getManagerRentNotificationSettings(managerId) {
-    const [settings] = await db.select().from(managerRentNotificationSettings).where((0, import_drizzle_orm4.eq)(managerRentNotificationSettings.managerId, managerId));
+    const [settings] = await db.select().from(managerRentNotificationSettings).where(eq(managerRentNotificationSettings.managerId, managerId));
     return settings;
   }
   async upsertManagerRentNotificationSettings(settings) {
@@ -757,11 +726,11 @@ var DatabaseStorage = class {
     return upserted;
   }
   async hasSentRentOverdueNotification(managerId, leaseId, monthKey, thresholdDays) {
-    const [entry] = await db.select({ id: rentOverdueNotificationHistory.id }).from(rentOverdueNotificationHistory).where((0, import_drizzle_orm4.and)(
-      (0, import_drizzle_orm4.eq)(rentOverdueNotificationHistory.managerId, managerId),
-      (0, import_drizzle_orm4.eq)(rentOverdueNotificationHistory.leaseId, leaseId),
-      (0, import_drizzle_orm4.eq)(rentOverdueNotificationHistory.monthKey, monthKey),
-      (0, import_drizzle_orm4.eq)(rentOverdueNotificationHistory.thresholdDays, thresholdDays)
+    const [entry] = await db.select({ id: rentOverdueNotificationHistory.id }).from(rentOverdueNotificationHistory).where(and(
+      eq(rentOverdueNotificationHistory.managerId, managerId),
+      eq(rentOverdueNotificationHistory.leaseId, leaseId),
+      eq(rentOverdueNotificationHistory.monthKey, monthKey),
+      eq(rentOverdueNotificationHistory.thresholdDays, thresholdDays)
     )).limit(1);
     return Boolean(entry);
   }
@@ -782,7 +751,7 @@ var DatabaseStorage = class {
     });
   }
   async getManagerLeaseExpiryNotificationSettings(managerId) {
-    const [settings] = await db.select().from(managerLeaseExpiryNotificationSettings).where((0, import_drizzle_orm4.eq)(managerLeaseExpiryNotificationSettings.managerId, managerId));
+    const [settings] = await db.select().from(managerLeaseExpiryNotificationSettings).where(eq(managerLeaseExpiryNotificationSettings.managerId, managerId));
     return settings;
   }
   async upsertManagerLeaseExpiryNotificationSettings(settings) {
@@ -797,11 +766,11 @@ var DatabaseStorage = class {
     return upserted;
   }
   async hasSentLeaseExpiryNotification(managerId, leaseId, leaseEndDateKey, thresholdDays) {
-    const [entry] = await db.select({ id: leaseExpiryNotificationHistory.id }).from(leaseExpiryNotificationHistory).where((0, import_drizzle_orm4.and)(
-      (0, import_drizzle_orm4.eq)(leaseExpiryNotificationHistory.managerId, managerId),
-      (0, import_drizzle_orm4.eq)(leaseExpiryNotificationHistory.leaseId, leaseId),
-      (0, import_drizzle_orm4.eq)(leaseExpiryNotificationHistory.leaseEndDateKey, leaseEndDateKey),
-      (0, import_drizzle_orm4.eq)(leaseExpiryNotificationHistory.thresholdDays, thresholdDays)
+    const [entry] = await db.select({ id: leaseExpiryNotificationHistory.id }).from(leaseExpiryNotificationHistory).where(and(
+      eq(leaseExpiryNotificationHistory.managerId, managerId),
+      eq(leaseExpiryNotificationHistory.leaseId, leaseId),
+      eq(leaseExpiryNotificationHistory.leaseEndDateKey, leaseEndDateKey),
+      eq(leaseExpiryNotificationHistory.thresholdDays, thresholdDays)
     )).limit(1);
     return Boolean(entry);
   }
@@ -826,11 +795,11 @@ var DatabaseStorage = class {
     return record;
   }
   async getLeaseSigningRequestByTokenHash(tokenHash) {
-    const [record] = await db.select().from(leaseSigningRequests).where((0, import_drizzle_orm4.eq)(leaseSigningRequests.tokenHash, tokenHash));
+    const [record] = await db.select().from(leaseSigningRequests).where(eq(leaseSigningRequests.tokenHash, tokenHash));
     return record;
   }
   async getLatestLeaseSigningRequestByLease(leaseId) {
-    const [record] = await db.select().from(leaseSigningRequests).where((0, import_drizzle_orm4.eq)(leaseSigningRequests.leaseId, leaseId)).orderBy((0, import_drizzle_orm4.desc)(leaseSigningRequests.createdAt)).limit(1);
+    const [record] = await db.select().from(leaseSigningRequests).where(eq(leaseSigningRequests.leaseId, leaseId)).orderBy(desc(leaseSigningRequests.createdAt)).limit(1);
     return record;
   }
   async markLeaseSigningCompleted(input) {
@@ -839,7 +808,7 @@ var DatabaseStorage = class {
       signedAt: /* @__PURE__ */ new Date(),
       signedFullName: input.signedFullName,
       signedFromIp: input.signedFromIp ?? null
-    }).where((0, import_drizzle_orm4.eq)(leaseSigningRequests.id, input.signingRequestId)).returning();
+    }).where(eq(leaseSigningRequests.id, input.signingRequestId)).returning();
     return record;
   }
   // Screenings
@@ -848,13 +817,13 @@ var DatabaseStorage = class {
     return screening;
   }
   async getScreeningsByTenant(tenantId) {
-    return await db.select().from(screenings).where((0, import_drizzle_orm4.eq)(screenings.tenantId, tenantId)).orderBy((0, import_drizzle_orm4.desc)(screenings.createdAt));
+    return await db.select().from(screenings).where(eq(screenings.tenantId, tenantId)).orderBy(desc(screenings.createdAt));
   }
   async getScreeningsByManager(managerId) {
     const managerLeases = await this.getLeasesByManager(managerId);
     const tenantIds = Array.from(new Set(managerLeases.map((lease) => lease.tenantId))).filter(Boolean);
     if (tenantIds.length === 0) return [];
-    return await db.select().from(screenings).where((0, import_drizzle_orm4.inArray)(screenings.tenantId, tenantIds)).orderBy((0, import_drizzle_orm4.desc)(screenings.createdAt));
+    return await db.select().from(screenings).where(inArray(screenings.tenantId, tenantIds)).orderBy(desc(screenings.createdAt));
   }
   async upsertZillowLeadByExternalId(lead) {
     const [record] = await db.insert(zillowLeads).values(lead).onConflictDoUpdate({
@@ -877,32 +846,32 @@ var DatabaseStorage = class {
     return record;
   }
   async getZillowLeadByExternalId(externalLeadId) {
-    const [record] = await db.select().from(zillowLeads).where((0, import_drizzle_orm4.eq)(zillowLeads.externalLeadId, externalLeadId));
+    const [record] = await db.select().from(zillowLeads).where(eq(zillowLeads.externalLeadId, externalLeadId));
     return record;
   }
   async getZillowLeadsForManager(managerId, managerEmail) {
     const managerProperties = await this.getPropertiesByManager(managerId);
     const managerPropertyIds = managerProperties.map((property) => String(property.id));
     const normalizedManagerEmail = managerEmail?.trim();
-    const whereClauses = [(0, import_drizzle_orm4.eq)(zillowLeads.managerId, managerId)];
+    const whereClauses = [eq(zillowLeads.managerId, managerId)];
     if (normalizedManagerEmail) {
-      whereClauses.push((0, import_drizzle_orm4.ilike)(zillowLeads.managerEmail, normalizedManagerEmail));
+      whereClauses.push(ilike(zillowLeads.managerEmail, normalizedManagerEmail));
     }
     if (managerPropertyIds.length > 0) {
-      whereClauses.push((0, import_drizzle_orm4.inArray)(zillowLeads.propertyExternalId, managerPropertyIds));
+      whereClauses.push(inArray(zillowLeads.propertyExternalId, managerPropertyIds));
     }
-    const scopedLeads = await db.select().from(zillowLeads).where((0, import_drizzle_orm4.or)(...whereClauses)).orderBy((0, import_drizzle_orm4.desc)(zillowLeads.receivedAt));
+    const scopedLeads = await db.select().from(zillowLeads).where(or(...whereClauses)).orderBy(desc(zillowLeads.receivedAt));
     if (scopedLeads.length === 0 && process.env.NODE_ENV !== "production") {
-      return await db.select().from(zillowLeads).orderBy((0, import_drizzle_orm4.desc)(zillowLeads.receivedAt));
+      return await db.select().from(zillowLeads).orderBy(desc(zillowLeads.receivedAt));
     }
     return scopedLeads;
   }
   // Listing Mapping Templates
   async getListingMappingTemplatesByManager(managerId) {
-    return await db.select().from(listingMappingTemplates).where((0, import_drizzle_orm4.eq)(listingMappingTemplates.managerId, managerId)).orderBy((0, import_drizzle_orm4.desc)(listingMappingTemplates.createdAt));
+    return await db.select().from(listingMappingTemplates).where(eq(listingMappingTemplates.managerId, managerId)).orderBy(desc(listingMappingTemplates.createdAt));
   }
   async getListingMappingTemplate(id) {
-    const [template] = await db.select().from(listingMappingTemplates).where((0, import_drizzle_orm4.eq)(listingMappingTemplates.id, id));
+    const [template] = await db.select().from(listingMappingTemplates).where(eq(listingMappingTemplates.id, id));
     return template;
   }
   async createListingMappingTemplate(insertTemplate) {
@@ -910,15 +879,15 @@ var DatabaseStorage = class {
     return template;
   }
   async deleteListingMappingTemplate(id) {
-    await db.delete(listingMappingTemplates).where((0, import_drizzle_orm4.eq)(listingMappingTemplates.id, id));
+    await db.delete(listingMappingTemplates).where(eq(listingMappingTemplates.id, id));
   }
   // STR Market Listings
   async getStrMarketListing(id) {
-    const [listing] = await db.select().from(strMarketListings).where((0, import_drizzle_orm4.eq)(strMarketListings.id, id));
+    const [listing] = await db.select().from(strMarketListings).where(eq(strMarketListings.id, id));
     return listing;
   }
   async getStrMarketListings() {
-    return await db.select().from(strMarketListings).orderBy((0, import_drizzle_orm4.desc)(strMarketListings.expectedAnnualReturn));
+    return await db.select().from(strMarketListings).orderBy(desc(strMarketListings.expectedAnnualReturn));
   }
   async replaceStrMarketListings(listings) {
     if (listings.length === 0) return [];
@@ -929,7 +898,7 @@ var DatabaseStorage = class {
   }
   // Multifamily For-Sale Listings
   async getMultifamilySaleListings() {
-    return await db.select().from(multifamilySaleListings).orderBy((0, import_drizzle_orm4.desc)(multifamilySaleListings.price));
+    return await db.select().from(multifamilySaleListings).orderBy(desc(multifamilySaleListings.price));
   }
   async replaceMultifamilySaleListings(listings) {
     return await db.transaction(async (tx) => {
@@ -942,83 +911,83 @@ var DatabaseStorage = class {
 var storage = new DatabaseStorage();
 
 // shared/routes.ts
-var import_zod2 = require("zod");
+import { z as z2 } from "zod";
 var errorSchemas = {
-  validation: import_zod2.z.object({
-    message: import_zod2.z.string(),
-    field: import_zod2.z.string().optional()
+  validation: z2.object({
+    message: z2.string(),
+    field: z2.string().optional()
   }),
-  notFound: import_zod2.z.object({
-    message: import_zod2.z.string()
+  notFound: z2.object({
+    message: z2.string()
   }),
-  internal: import_zod2.z.object({
-    message: import_zod2.z.string()
+  internal: z2.object({
+    message: z2.string()
   })
 };
-var listingFieldMappingSchema = import_zod2.z.object({
-  common: import_zod2.z.object({
-    title: import_zod2.z.string().optional(),
-    availableDate: import_zod2.z.string().optional(),
-    leaseTermMonths: import_zod2.z.number().int().positive().optional(),
-    contactName: import_zod2.z.string().optional(),
-    contactEmail: import_zod2.z.string().optional(),
-    contactPhone: import_zod2.z.string().optional(),
-    amenities: import_zod2.z.array(import_zod2.z.string()).optional(),
-    petsAllowed: import_zod2.z.boolean().optional(),
-    furnished: import_zod2.z.boolean().optional(),
-    parkingIncluded: import_zod2.z.boolean().optional(),
-    laundry: import_zod2.z.string().optional()
+var listingFieldMappingSchema = z2.object({
+  common: z2.object({
+    title: z2.string().optional(),
+    availableDate: z2.string().optional(),
+    leaseTermMonths: z2.number().int().positive().optional(),
+    contactName: z2.string().optional(),
+    contactEmail: z2.string().optional(),
+    contactPhone: z2.string().optional(),
+    amenities: z2.array(z2.string()).optional(),
+    petsAllowed: z2.boolean().optional(),
+    furnished: z2.boolean().optional(),
+    parkingIncluded: z2.boolean().optional(),
+    laundry: z2.string().optional()
   }).optional(),
-  zillow: import_zod2.z.object({
-    propertyType: import_zod2.z.string().optional(),
-    applicationUrl: import_zod2.z.string().optional(),
-    virtualTourUrl: import_zod2.z.string().optional()
+  zillow: z2.object({
+    propertyType: z2.string().optional(),
+    applicationUrl: z2.string().optional(),
+    virtualTourUrl: z2.string().optional()
   }).optional(),
-  apartments: import_zod2.z.object({
-    communityName: import_zod2.z.string().optional(),
-    unitNumber: import_zod2.z.string().optional(),
-    depositAmount: import_zod2.z.number().nonnegative().optional(),
-    utilitiesIncluded: import_zod2.z.array(import_zod2.z.string()).optional()
+  apartments: z2.object({
+    communityName: z2.string().optional(),
+    unitNumber: z2.string().optional(),
+    depositAmount: z2.number().nonnegative().optional(),
+    utilitiesIncluded: z2.array(z2.string()).optional()
   }).optional()
 });
-var zillowLeadDeliveryPayloadSchema = import_zod2.z.object({
-  leadId: import_zod2.z.string().optional(),
-  externalLeadId: import_zod2.z.string().optional(),
-  listingId: import_zod2.z.union([import_zod2.z.string(), import_zod2.z.number()]).optional(),
-  listingExternalId: import_zod2.z.string().optional(),
-  propertyId: import_zod2.z.union([import_zod2.z.string(), import_zod2.z.number()]).optional(),
-  propertyExternalId: import_zod2.z.string().optional(),
-  managerId: import_zod2.z.string().optional(),
-  managerEmail: import_zod2.z.string().optional(),
-  firstName: import_zod2.z.string().optional(),
-  lastName: import_zod2.z.string().optional(),
-  fullName: import_zod2.z.string().optional(),
-  name: import_zod2.z.string().optional(),
-  email: import_zod2.z.string().optional(),
-  phone: import_zod2.z.string().optional(),
-  message: import_zod2.z.string().optional(),
-  moveInDate: import_zod2.z.string().optional(),
-  applicant: import_zod2.z.record(import_zod2.z.unknown()).optional(),
-  renter: import_zod2.z.record(import_zod2.z.unknown()).optional()
+var zillowLeadDeliveryPayloadSchema = z2.object({
+  leadId: z2.string().optional(),
+  externalLeadId: z2.string().optional(),
+  listingId: z2.union([z2.string(), z2.number()]).optional(),
+  listingExternalId: z2.string().optional(),
+  propertyId: z2.union([z2.string(), z2.number()]).optional(),
+  propertyExternalId: z2.string().optional(),
+  managerId: z2.string().optional(),
+  managerEmail: z2.string().optional(),
+  firstName: z2.string().optional(),
+  lastName: z2.string().optional(),
+  fullName: z2.string().optional(),
+  name: z2.string().optional(),
+  email: z2.string().optional(),
+  phone: z2.string().optional(),
+  message: z2.string().optional(),
+  moveInDate: z2.string().optional(),
+  applicant: z2.record(z2.unknown()).optional(),
+  renter: z2.record(z2.unknown()).optional()
 }).passthrough();
 var api = {
   properties: {
     list: {
       method: "GET",
       path: "/api/properties",
-      input: import_zod2.z.object({
-        status: import_zod2.z.enum(["available", "rented", "maintenance"]).optional(),
-        search: import_zod2.z.string().optional()
+      input: z2.object({
+        status: z2.enum(["available", "rented", "maintenance"]).optional(),
+        search: z2.string().optional()
       }).optional(),
       responses: {
-        200: import_zod2.z.array(import_zod2.z.custom())
+        200: z2.array(z2.custom())
       }
     },
     get: {
       method: "GET",
       path: "/api/properties/:id",
       responses: {
-        200: import_zod2.z.custom(),
+        200: z2.custom(),
         404: errorSchemas.notFound
       }
     },
@@ -1027,7 +996,7 @@ var api = {
       path: "/api/properties",
       input: insertPropertySchema,
       responses: {
-        201: import_zod2.z.custom(),
+        201: z2.custom(),
         400: errorSchemas.validation
       }
     },
@@ -1036,7 +1005,7 @@ var api = {
       path: "/api/properties/:id",
       input: insertPropertySchema.partial(),
       responses: {
-        200: import_zod2.z.custom(),
+        200: z2.custom(),
         400: errorSchemas.validation,
         404: errorSchemas.notFound
       }
@@ -1045,7 +1014,7 @@ var api = {
       method: "DELETE",
       path: "/api/properties/:id",
       responses: {
-        204: import_zod2.z.void(),
+        204: z2.void(),
         404: errorSchemas.notFound
       }
     }
@@ -1054,83 +1023,83 @@ var api = {
     availableProperties: {
       method: "GET",
       path: "/api/listings/available",
-      input: import_zod2.z.object({
-        search: import_zod2.z.string().optional()
+      input: z2.object({
+        search: z2.string().optional()
       }).optional(),
       responses: {
-        200: import_zod2.z.array(import_zod2.z.custom())
+        200: z2.array(z2.custom())
       }
     },
     zillow: {
       method: "POST",
       path: "/api/listings/export/zillow",
-      input: import_zod2.z.object({
-        propertyId: import_zod2.z.number(),
+      input: z2.object({
+        propertyId: z2.number(),
         mapping: listingFieldMappingSchema.optional()
       }),
       responses: {
-        200: import_zod2.z.object({
-          propertyId: import_zod2.z.number(),
-          platform: import_zod2.z.literal("zillow"),
-          payload: import_zod2.z.string(),
-          missingFields: import_zod2.z.array(import_zod2.z.string())
+        200: z2.object({
+          propertyId: z2.number(),
+          platform: z2.literal("zillow"),
+          payload: z2.string(),
+          missingFields: z2.array(z2.string())
         })
       }
     },
     apartments: {
       method: "POST",
       path: "/api/listings/export/apartments",
-      input: import_zod2.z.object({
-        propertyId: import_zod2.z.number(),
+      input: z2.object({
+        propertyId: z2.number(),
         mapping: listingFieldMappingSchema.optional()
       }),
       responses: {
-        200: import_zod2.z.object({
-          propertyId: import_zod2.z.number(),
-          platform: import_zod2.z.literal("apartments.com"),
-          payload: import_zod2.z.string(),
-          csv: import_zod2.z.string(),
-          missingFields: import_zod2.z.array(import_zod2.z.string())
+        200: z2.object({
+          propertyId: z2.number(),
+          platform: z2.literal("apartments.com"),
+          payload: z2.string(),
+          csv: z2.string(),
+          missingFields: z2.array(z2.string())
         })
       }
     },
     publishZillow: {
       method: "POST",
       path: "/api/listings/publish/zillow",
-      input: import_zod2.z.object({
-        propertyId: import_zod2.z.number(),
+      input: z2.object({
+        propertyId: z2.number(),
         mapping: listingFieldMappingSchema.optional()
       }),
       responses: {
-        200: import_zod2.z.object({
-          platform: import_zod2.z.literal("zillow"),
-          propertyId: import_zod2.z.number(),
-          success: import_zod2.z.boolean(),
-          statusCode: import_zod2.z.number(),
-          target: import_zod2.z.string(),
-          responseBody: import_zod2.z.string(),
-          publishedAt: import_zod2.z.string()
+        200: z2.object({
+          platform: z2.literal("zillow"),
+          propertyId: z2.number(),
+          success: z2.boolean(),
+          statusCode: z2.number(),
+          target: z2.string(),
+          responseBody: z2.string(),
+          publishedAt: z2.string()
         })
       }
     },
     publishApartments: {
       method: "POST",
       path: "/api/listings/publish/apartments",
-      input: import_zod2.z.object({
-        propertyId: import_zod2.z.number(),
-        format: import_zod2.z.enum(["json", "csv"]).optional(),
+      input: z2.object({
+        propertyId: z2.number(),
+        format: z2.enum(["json", "csv"]).optional(),
         mapping: listingFieldMappingSchema.optional()
       }),
       responses: {
-        200: import_zod2.z.object({
-          platform: import_zod2.z.literal("apartments.com"),
-          propertyId: import_zod2.z.number(),
-          success: import_zod2.z.boolean(),
-          statusCode: import_zod2.z.number(),
-          target: import_zod2.z.string(),
-          responseBody: import_zod2.z.string(),
-          publishedAt: import_zod2.z.string(),
-          format: import_zod2.z.enum(["json", "csv"])
+        200: z2.object({
+          platform: z2.literal("apartments.com"),
+          propertyId: z2.number(),
+          success: z2.boolean(),
+          statusCode: z2.number(),
+          target: z2.string(),
+          responseBody: z2.string(),
+          publishedAt: z2.string(),
+          format: z2.enum(["json", "csv"])
         })
       }
     },
@@ -1138,13 +1107,13 @@ var api = {
       method: "GET",
       path: "/api/listings/templates",
       responses: {
-        200: import_zod2.z.array(
-          import_zod2.z.object({
-            id: import_zod2.z.number(),
-            managerId: import_zod2.z.string(),
-            name: import_zod2.z.string(),
+        200: z2.array(
+          z2.object({
+            id: z2.number(),
+            managerId: z2.string(),
+            name: z2.string(),
             mapping: listingFieldMappingSchema,
-            createdAt: import_zod2.z.string().nullable()
+            createdAt: z2.string().nullable()
           })
         )
       }
@@ -1152,17 +1121,17 @@ var api = {
     templatesCreate: {
       method: "POST",
       path: "/api/listings/templates",
-      input: import_zod2.z.object({
-        name: import_zod2.z.string().min(1).max(120),
+      input: z2.object({
+        name: z2.string().min(1).max(120),
         mapping: listingFieldMappingSchema
       }),
       responses: {
-        201: import_zod2.z.object({
-          id: import_zod2.z.number(),
-          managerId: import_zod2.z.string(),
-          name: import_zod2.z.string(),
+        201: z2.object({
+          id: z2.number(),
+          managerId: z2.string(),
+          name: z2.string(),
           mapping: listingFieldMappingSchema,
-          createdAt: import_zod2.z.string().nullable()
+          createdAt: z2.string().nullable()
         })
       }
     },
@@ -1170,7 +1139,7 @@ var api = {
       method: "DELETE",
       path: "/api/listings/templates/:id",
       responses: {
-        204: import_zod2.z.void()
+        204: z2.void()
       }
     }
   },
@@ -1179,36 +1148,36 @@ var api = {
       method: "GET",
       path: "/api/str-market/listings/:id",
       responses: {
-        200: import_zod2.z.custom(),
+        200: z2.custom(),
         404: errorSchemas.notFound
       }
     },
     list: {
       method: "GET",
       path: "/api/str-market/listings",
-      input: import_zod2.z.object({
-        search: import_zod2.z.string().optional(),
-        city: import_zod2.z.string().optional(),
-        region: import_zod2.z.string().optional(),
-        roomType: import_zod2.z.string().optional(),
-        minAnnualReturn: import_zod2.z.coerce.number().nonnegative().optional(),
-        maxNightlyRate: import_zod2.z.coerce.number().positive().optional(),
-        minOccupancyRate: import_zod2.z.coerce.number().min(0).max(100).optional(),
-        limit: import_zod2.z.coerce.number().int().positive().max(5e3).optional()
+      input: z2.object({
+        search: z2.string().optional(),
+        city: z2.string().optional(),
+        region: z2.string().optional(),
+        roomType: z2.string().optional(),
+        minAnnualReturn: z2.coerce.number().nonnegative().optional(),
+        maxNightlyRate: z2.coerce.number().positive().optional(),
+        minOccupancyRate: z2.coerce.number().min(0).max(100).optional(),
+        limit: z2.coerce.number().int().positive().max(5e3).optional()
       }).optional(),
       responses: {
-        200: import_zod2.z.array(import_zod2.z.custom())
+        200: z2.array(z2.custom())
       }
     },
     sync: {
       method: "POST",
       path: "/api/str-market/sync",
       responses: {
-        200: import_zod2.z.object({
-          scrapedCount: import_zod2.z.number(),
-          storedCount: import_zod2.z.number(),
-          source: import_zod2.z.string(),
-          syncedAt: import_zod2.z.string()
+        200: z2.object({
+          scrapedCount: z2.number(),
+          storedCount: z2.number(),
+          source: z2.string(),
+          syncedAt: z2.string()
         })
       }
     }
@@ -1217,27 +1186,27 @@ var api = {
     list: {
       method: "GET",
       path: "/api/investor/multifamily/listings",
-      input: import_zod2.z.object({
-        search: import_zod2.z.string().optional(),
-        city: import_zod2.z.string().optional(),
-        region: import_zod2.z.string().optional(),
-        minPrice: import_zod2.z.coerce.number().nonnegative().optional(),
-        maxPrice: import_zod2.z.coerce.number().positive().optional(),
-        limit: import_zod2.z.coerce.number().int().positive().max(500).optional()
+      input: z2.object({
+        search: z2.string().optional(),
+        city: z2.string().optional(),
+        region: z2.string().optional(),
+        minPrice: z2.coerce.number().nonnegative().optional(),
+        maxPrice: z2.coerce.number().positive().optional(),
+        limit: z2.coerce.number().int().positive().max(500).optional()
       }).optional(),
       responses: {
-        200: import_zod2.z.array(import_zod2.z.custom())
+        200: z2.array(z2.custom())
       }
     },
     sync: {
       method: "POST",
       path: "/api/investor/multifamily/sync",
       responses: {
-        200: import_zod2.z.object({
-          fetchedCount: import_zod2.z.number(),
-          storedCount: import_zod2.z.number(),
-          source: import_zod2.z.string(),
-          syncedAt: import_zod2.z.string()
+        200: z2.object({
+          fetchedCount: z2.number(),
+          storedCount: z2.number(),
+          source: z2.string(),
+          syncedAt: z2.string()
         })
       }
     }
@@ -1247,7 +1216,7 @@ var api = {
       method: "GET",
       path: "/api/leases",
       responses: {
-        200: import_zod2.z.array(import_zod2.z.custom())
+        200: z2.array(z2.custom())
       }
     },
     create: {
@@ -1255,7 +1224,7 @@ var api = {
       path: "/api/leases",
       input: insertLeaseSchema,
       responses: {
-        201: import_zod2.z.custom(),
+        201: z2.custom(),
         400: errorSchemas.validation
       }
     },
@@ -1264,7 +1233,7 @@ var api = {
       path: "/api/leases/:id/generate",
       // AI generation endpoint
       responses: {
-        200: import_zod2.z.object({ documentText: import_zod2.z.string() }),
+        200: z2.object({ documentText: z2.string() }),
         404: errorSchemas.notFound
       }
     },
@@ -1272,12 +1241,12 @@ var api = {
       method: "POST",
       path: "/api/leases/:id/signing/request",
       responses: {
-        200: import_zod2.z.object({
-          leaseId: import_zod2.z.number(),
-          status: import_zod2.z.string(),
-          expiresAt: import_zod2.z.string(),
-          sentTo: import_zod2.z.string(),
-          signingLink: import_zod2.z.string().optional()
+        200: z2.object({
+          leaseId: z2.number(),
+          status: z2.string(),
+          expiresAt: z2.string(),
+          sentTo: z2.string(),
+          signingLink: z2.string().optional()
         })
       }
     },
@@ -1285,46 +1254,46 @@ var api = {
       method: "GET",
       path: "/api/leases/:id/signing-status",
       responses: {
-        200: import_zod2.z.object({
-          leaseId: import_zod2.z.number(),
-          status: import_zod2.z.string(),
-          createdAt: import_zod2.z.string().nullable(),
-          expiresAt: import_zod2.z.string().nullable(),
-          signedAt: import_zod2.z.string().nullable(),
-          signedFullName: import_zod2.z.string().nullable(),
-          tenantEmail: import_zod2.z.string().nullable()
+        200: z2.object({
+          leaseId: z2.number(),
+          status: z2.string(),
+          createdAt: z2.string().nullable(),
+          expiresAt: z2.string().nullable(),
+          signedAt: z2.string().nullable(),
+          signedFullName: z2.string().nullable(),
+          tenantEmail: z2.string().nullable()
         })
       }
     },
     signingValidate: {
       method: "GET",
       path: "/api/leases/signing/validate",
-      input: import_zod2.z.object({ token: import_zod2.z.string().min(20) }),
+      input: z2.object({ token: z2.string().min(20) }),
       responses: {
-        200: import_zod2.z.object({
-          valid: import_zod2.z.boolean(),
-          leaseId: import_zod2.z.number().optional(),
-          status: import_zod2.z.string().optional(),
-          expiresAt: import_zod2.z.string().optional(),
-          propertyAddress: import_zod2.z.string().optional(),
-          rentAmount: import_zod2.z.number().optional(),
-          tenantEmail: import_zod2.z.string().optional()
+        200: z2.object({
+          valid: z2.boolean(),
+          leaseId: z2.number().optional(),
+          status: z2.string().optional(),
+          expiresAt: z2.string().optional(),
+          propertyAddress: z2.string().optional(),
+          rentAmount: z2.number().optional(),
+          tenantEmail: z2.string().optional()
         })
       }
     },
     signingComplete: {
       method: "POST",
       path: "/api/leases/signing/complete",
-      input: import_zod2.z.object({
-        token: import_zod2.z.string().min(20),
-        fullName: import_zod2.z.string().min(2).max(120)
+      input: z2.object({
+        token: z2.string().min(20),
+        fullName: z2.string().min(2).max(120)
       }),
       responses: {
-        200: import_zod2.z.object({
-          message: import_zod2.z.string(),
-          leaseId: import_zod2.z.number(),
-          signedAt: import_zod2.z.string(),
-          signedFullName: import_zod2.z.string()
+        200: z2.object({
+          message: z2.string(),
+          leaseId: z2.number(),
+          signedAt: z2.string(),
+          signedFullName: z2.string()
         })
       }
     },
@@ -1332,11 +1301,11 @@ var api = {
       method: "GET",
       path: "/api/leases/expiry-notification-settings",
       responses: {
-        200: import_zod2.z.object({
-          managerId: import_zod2.z.string(),
-          enabled: import_zod2.z.boolean(),
-          daysBeforeExpiry: import_zod2.z.number().int().min(1).max(365),
-          updatedAt: import_zod2.z.string().nullable()
+        200: z2.object({
+          managerId: z2.string(),
+          enabled: z2.boolean(),
+          daysBeforeExpiry: z2.number().int().min(1).max(365),
+          updatedAt: z2.string().nullable()
         })
       }
     },
@@ -1348,11 +1317,11 @@ var api = {
         daysBeforeExpiry: true
       }),
       responses: {
-        200: import_zod2.z.object({
-          managerId: import_zod2.z.string(),
-          enabled: import_zod2.z.boolean(),
-          daysBeforeExpiry: import_zod2.z.number().int().min(1).max(365),
-          updatedAt: import_zod2.z.string().nullable()
+        200: z2.object({
+          managerId: z2.string(),
+          enabled: z2.boolean(),
+          daysBeforeExpiry: z2.number().int().min(1).max(365),
+          updatedAt: z2.string().nullable()
         })
       }
     }
@@ -1361,11 +1330,11 @@ var api = {
     list: {
       method: "GET",
       path: "/api/maintenance",
-      input: import_zod2.z.object({
-        status: import_zod2.z.string().optional()
+      input: z2.object({
+        status: z2.string().optional()
       }).optional(),
       responses: {
-        200: import_zod2.z.array(import_zod2.z.custom())
+        200: z2.array(z2.custom())
       }
     },
     create: {
@@ -1373,7 +1342,7 @@ var api = {
       path: "/api/maintenance",
       input: insertMaintenanceRequestSchema,
       responses: {
-        201: import_zod2.z.custom(),
+        201: z2.custom(),
         400: errorSchemas.validation
       }
     },
@@ -1382,7 +1351,7 @@ var api = {
       path: "/api/maintenance/:id/analyze",
       // AI analysis
       responses: {
-        200: import_zod2.z.object({ analysis: import_zod2.z.string() }),
+        200: z2.object({ analysis: z2.string() }),
         404: errorSchemas.notFound
       }
     },
@@ -1391,7 +1360,7 @@ var api = {
       path: "/api/maintenance/:id",
       input: insertMaintenanceRequestSchema.partial(),
       responses: {
-        200: import_zod2.z.custom(),
+        200: z2.custom(),
         404: errorSchemas.notFound
       }
     },
@@ -1399,12 +1368,12 @@ var api = {
       method: "GET",
       path: "/api/maintenance/automation-settings",
       responses: {
-        200: import_zod2.z.object({
-          managerId: import_zod2.z.string(),
-          autoTriageEnabled: import_zod2.z.boolean(),
-          autoEscalationEnabled: import_zod2.z.boolean(),
-          autoVendorAssignmentEnabled: import_zod2.z.boolean(),
-          updatedAt: import_zod2.z.string().nullable()
+        200: z2.object({
+          managerId: z2.string(),
+          autoTriageEnabled: z2.boolean(),
+          autoEscalationEnabled: z2.boolean(),
+          autoVendorAssignmentEnabled: z2.boolean(),
+          updatedAt: z2.string().nullable()
         })
       }
     },
@@ -1417,12 +1386,12 @@ var api = {
         autoVendorAssignmentEnabled: true
       }),
       responses: {
-        200: import_zod2.z.object({
-          managerId: import_zod2.z.string(),
-          autoTriageEnabled: import_zod2.z.boolean(),
-          autoEscalationEnabled: import_zod2.z.boolean(),
-          autoVendorAssignmentEnabled: import_zod2.z.boolean(),
-          updatedAt: import_zod2.z.string().nullable()
+        200: z2.object({
+          managerId: z2.string(),
+          autoTriageEnabled: z2.boolean(),
+          autoEscalationEnabled: z2.boolean(),
+          autoVendorAssignmentEnabled: z2.boolean(),
+          updatedAt: z2.string().nullable()
         })
       }
     }
@@ -1432,7 +1401,7 @@ var api = {
       method: "GET",
       path: "/api/payments",
       responses: {
-        200: import_zod2.z.array(import_zod2.z.custom())
+        200: z2.array(z2.custom())
       }
     },
     create: {
@@ -1440,7 +1409,7 @@ var api = {
       path: "/api/payments",
       input: insertPaymentSchema,
       responses: {
-        201: import_zod2.z.custom(),
+        201: z2.custom(),
         400: errorSchemas.validation
       }
     }
@@ -1450,17 +1419,17 @@ var api = {
       method: "GET",
       path: "/api/accounting/summary",
       responses: {
-        200: import_zod2.z.object({
-          totalCollected: import_zod2.z.number(),
-          pending: import_zod2.z.number(),
-          overdue: import_zod2.z.number(),
-          outstanding: import_zod2.z.number(),
-          paymentCount: import_zod2.z.number(),
-          chart: import_zod2.z.array(
-            import_zod2.z.object({
-              label: import_zod2.z.string(),
-              collected: import_zod2.z.number(),
-              outstanding: import_zod2.z.number()
+        200: z2.object({
+          totalCollected: z2.number(),
+          pending: z2.number(),
+          overdue: z2.number(),
+          outstanding: z2.number(),
+          paymentCount: z2.number(),
+          chart: z2.array(
+            z2.object({
+              label: z2.string(),
+              collected: z2.number(),
+              outstanding: z2.number()
             })
           )
         })
@@ -1470,11 +1439,11 @@ var api = {
       method: "GET",
       path: "/api/accounting/rent-overdue-notification-settings",
       responses: {
-        200: import_zod2.z.object({
-          managerId: import_zod2.z.string(),
-          enabled: import_zod2.z.boolean(),
-          overdueDays: import_zod2.z.number().int().min(1).max(60),
-          updatedAt: import_zod2.z.string().nullable()
+        200: z2.object({
+          managerId: z2.string(),
+          enabled: z2.boolean(),
+          overdueDays: z2.number().int().min(1).max(60),
+          updatedAt: z2.string().nullable()
         })
       }
     },
@@ -1486,11 +1455,11 @@ var api = {
         overdueDays: true
       }),
       responses: {
-        200: import_zod2.z.object({
-          managerId: import_zod2.z.string(),
-          enabled: import_zod2.z.boolean(),
-          overdueDays: import_zod2.z.number().int().min(1).max(60),
-          updatedAt: import_zod2.z.string().nullable()
+        200: z2.object({
+          managerId: z2.string(),
+          enabled: z2.boolean(),
+          overdueDays: z2.number().int().min(1).max(60),
+          updatedAt: z2.string().nullable()
         })
       }
     }
@@ -1500,25 +1469,25 @@ var api = {
       method: "GET",
       path: "/api/screenings",
       responses: {
-        200: import_zod2.z.object({
-          leads: import_zod2.z.array(import_zod2.z.custom()),
-          screenings: import_zod2.z.array(import_zod2.z.custom()),
-          tenants: import_zod2.z.array(import_zod2.z.object({
-            id: import_zod2.z.string(),
-            name: import_zod2.z.string(),
-            email: import_zod2.z.string()
+        200: z2.object({
+          leads: z2.array(z2.custom()),
+          screenings: z2.array(z2.custom()),
+          tenants: z2.array(z2.object({
+            id: z2.string(),
+            name: z2.string(),
+            email: z2.string()
           })),
-          properties: import_zod2.z.array(import_zod2.z.object({
-            id: import_zod2.z.number().int().positive(),
-            address: import_zod2.z.string(),
-            city: import_zod2.z.string(),
-            state: import_zod2.z.string()
+          properties: z2.array(z2.object({
+            id: z2.number().int().positive(),
+            address: z2.string(),
+            city: z2.string(),
+            state: z2.string()
           })),
-          summary: import_zod2.z.object({
-            totalLeads: import_zod2.z.number().int().nonnegative(),
-            pendingLeads: import_zod2.z.number().int().nonnegative(),
-            activeScreenings: import_zod2.z.number().int().nonnegative(),
-            approvedScreenings: import_zod2.z.number().int().nonnegative()
+          summary: z2.object({
+            totalLeads: z2.number().int().nonnegative(),
+            pendingLeads: z2.number().int().nonnegative(),
+            activeScreenings: z2.number().int().nonnegative(),
+            approvedScreenings: z2.number().int().nonnegative()
           })
         })
       }
@@ -1528,7 +1497,7 @@ var api = {
       path: "/api/screenings",
       input: insertScreeningSchema,
       responses: {
-        201: import_zod2.z.custom(),
+        201: z2.custom(),
         400: errorSchemas.validation
       }
     }
@@ -1540,10 +1509,10 @@ var api = {
         path: "/api/integrations/zillow/lead-delivery",
         input: zillowLeadDeliveryPayloadSchema,
         responses: {
-          202: import_zod2.z.object({
-            success: import_zod2.z.literal(true),
-            leadId: import_zod2.z.number().int().positive(),
-            externalLeadId: import_zod2.z.string()
+          202: z2.object({
+            success: z2.literal(true),
+            leadId: z2.number().int().positive(),
+            externalLeadId: z2.string()
           }),
           400: errorSchemas.validation,
           401: errorSchemas.validation
@@ -1554,7 +1523,7 @@ var api = {
         path: "/api/integrations/zillow/leads",
         input: insertZillowLeadSchema,
         responses: {
-          201: import_zod2.z.custom(),
+          201: z2.custom(),
           400: errorSchemas.validation
         }
       }
@@ -1563,30 +1532,30 @@ var api = {
 };
 
 // server/routes.ts
-var import_zod4 = require("zod");
+import { z as z4 } from "zod";
 
 // server/integrations/auth/oidcAuth.ts
-var client = __toESM(require("openid-client"), 1);
-var import_passport = require("openid-client/passport");
-var import_passport2 = __toESM(require("passport"), 1);
-var import_express_session = __toESM(require("express-session"), 1);
-var import_memoizee = __toESM(require("memoizee"), 1);
-var import_connect_pg_simple = __toESM(require("connect-pg-simple"), 1);
+import * as client from "openid-client";
+import { Strategy } from "openid-client/passport";
+import passport from "passport";
+import session from "express-session";
+import memoize from "memoizee";
+import connectPg from "connect-pg-simple";
 
 // server/integrations/auth/storage.ts
-var import_drizzle_orm5 = require("drizzle-orm");
-var import_crypto = require("crypto");
+import { and as and2, eq as eq2, gt } from "drizzle-orm";
+import { randomUUID } from "crypto";
 var AuthStorage = class {
   async getUser(id) {
-    const [user] = await db.select().from(users).where((0, import_drizzle_orm5.eq)(users.id, id));
+    const [user] = await db.select().from(users).where(eq2(users.id, id));
     return user;
   }
   async getUserByEmail(email) {
-    const [user] = await db.select().from(users).where((0, import_drizzle_orm5.eq)(users.email, email));
+    const [user] = await db.select().from(users).where(eq2(users.email, email));
     return user;
   }
   async getTenants() {
-    return await db.select().from(users).where((0, import_drizzle_orm5.eq)(users.role, "tenant"));
+    return await db.select().from(users).where(eq2(users.role, "tenant"));
   }
   async upsertUser(userData) {
     const allUsers = await db.select().from(users).limit(1);
@@ -1602,7 +1571,7 @@ var AuthStorage = class {
   }
   async createLocalUser(input) {
     const [user] = await db.insert(users).values({
-      id: `local_${(0, import_crypto.randomUUID)()}`,
+      id: `local_${randomUUID()}`,
       email: input.email,
       passwordHash: input.passwordHash,
       authProvider: "local",
@@ -1614,7 +1583,7 @@ var AuthStorage = class {
     return user;
   }
   async updateUserRole(id, role) {
-    const [user] = await db.update(users).set({ role, updatedAt: /* @__PURE__ */ new Date() }).where((0, import_drizzle_orm5.eq)(users.id, id)).returning();
+    const [user] = await db.update(users).set({ role, updatedAt: /* @__PURE__ */ new Date() }).where(eq2(users.id, id)).returning();
     return user;
   }
   async linkLocalCredentials(input) {
@@ -1625,7 +1594,7 @@ var AuthStorage = class {
       firstName: input.firstName,
       lastName: input.lastName,
       updatedAt: /* @__PURE__ */ new Date()
-    }).where((0, import_drizzle_orm5.eq)(users.id, input.userId)).returning();
+    }).where(eq2(users.id, input.userId)).returning();
     return user;
   }
   async setResetToken(userId, tokenHash, expiresAt) {
@@ -1633,10 +1602,10 @@ var AuthStorage = class {
       resetTokenHash: tokenHash,
       resetTokenExpiresAt: expiresAt,
       updatedAt: /* @__PURE__ */ new Date()
-    }).where((0, import_drizzle_orm5.eq)(users.id, userId));
+    }).where(eq2(users.id, userId));
   }
   async findUserByResetToken(tokenHash) {
-    const [user] = await db.select().from(users).where((0, import_drizzle_orm5.and)((0, import_drizzle_orm5.eq)(users.resetTokenHash, tokenHash), (0, import_drizzle_orm5.gt)(users.resetTokenExpiresAt, /* @__PURE__ */ new Date())));
+    const [user] = await db.select().from(users).where(and2(eq2(users.resetTokenHash, tokenHash), gt(users.resetTokenExpiresAt, /* @__PURE__ */ new Date())));
     return user;
   }
   async updatePassword(userId, passwordHash) {
@@ -1646,13 +1615,13 @@ var AuthStorage = class {
       resetTokenHash: null,
       resetTokenExpiresAt: null,
       updatedAt: /* @__PURE__ */ new Date()
-    }).where((0, import_drizzle_orm5.eq)(users.id, userId));
+    }).where(eq2(users.id, userId));
   }
   async markEmailVerified(userId) {
     await db.update(users).set({
       emailVerifiedAt: /* @__PURE__ */ new Date(),
       updatedAt: /* @__PURE__ */ new Date()
-    }).where((0, import_drizzle_orm5.eq)(users.id, userId));
+    }).where(eq2(users.id, userId));
   }
   async updateLoginSecurityState(input) {
     await db.update(users).set({
@@ -1660,7 +1629,7 @@ var AuthStorage = class {
       ...input.lockoutUntil !== void 0 ? { lockoutUntil: input.lockoutUntil } : {},
       ...input.lastLoginAt !== void 0 ? { lastLoginAt: input.lastLoginAt } : {},
       updatedAt: /* @__PURE__ */ new Date()
-    }).where((0, import_drizzle_orm5.eq)(users.id, input.userId));
+    }).where(eq2(users.id, input.userId));
   }
   async updateMfaConfig(input) {
     await db.update(users).set({
@@ -1668,17 +1637,17 @@ var AuthStorage = class {
       mfaSecret: input.secret ?? null,
       mfaBackupCodes: input.backupCodes ?? [],
       updatedAt: /* @__PURE__ */ new Date()
-    }).where((0, import_drizzle_orm5.eq)(users.id, input.userId));
+    }).where(eq2(users.id, input.userId));
   }
   async updateUserEmail(userId, email) {
     const [user] = await db.update(users).set({
       email,
       updatedAt: /* @__PURE__ */ new Date()
-    }).where((0, import_drizzle_orm5.eq)(users.id, userId)).returning();
+    }).where(eq2(users.id, userId)).returning();
     return user;
   }
   async getUserProfileSettings(userId) {
-    const [settings] = await db.select().from(userProfileSettings).where((0, import_drizzle_orm5.eq)(userProfileSettings.userId, userId));
+    const [settings] = await db.select().from(userProfileSettings).where(eq2(userProfileSettings.userId, userId));
     return settings;
   }
   async upsertUserProfileSettings(input) {
@@ -1700,7 +1669,7 @@ var AuthStorage = class {
 var authStorage = new AuthStorage();
 
 // server/integrations/auth/security.ts
-var import_crypto2 = require("crypto");
+import { createHash, createHmac, randomBytes, timingSafeEqual } from "crypto";
 var failedAttempts = /* @__PURE__ */ new Map();
 var lockedUsers = /* @__PURE__ */ new Map();
 var emailVerifyTokens = /* @__PURE__ */ new Map();
@@ -1744,7 +1713,7 @@ function hotp(secretBase32, counter) {
   const buffer = Buffer.alloc(8);
   buffer.writeUInt32BE(Math.floor(counter / 4294967296), 0);
   buffer.writeUInt32BE(counter & 4294967295, 4);
-  const hmac = (0, import_crypto2.createHmac)("sha1", key).update(buffer).digest();
+  const hmac = createHmac("sha1", key).update(buffer).digest();
   const offset = hmac[hmac.length - 1] & 15;
   const code = (hmac[offset] & 127) << 24 | (hmac[offset + 1] & 255) << 16 | (hmac[offset + 2] & 255) << 8 | hmac[offset + 3] & 255;
   return String(code % 1e6).padStart(6, "0");
@@ -1753,7 +1722,7 @@ function nowStep(stepSeconds = 30) {
   return Math.floor(Date.now() / 1e3 / stepSeconds);
 }
 function generateMfaSecret() {
-  return base32Encode((0, import_crypto2.randomBytes)(20));
+  return base32Encode(randomBytes(20));
 }
 function verifyTotp(secret, code) {
   const cleaned = code.replace(/\s+/g, "");
@@ -1764,15 +1733,15 @@ function verifyTotp(secret, code) {
   return false;
 }
 function generateBackupCodes() {
-  return Array.from({ length: 8 }, () => (0, import_crypto2.randomBytes)(4).toString("hex"));
+  return Array.from({ length: 8 }, () => randomBytes(4).toString("hex"));
 }
 function hashCode(code) {
-  return (0, import_crypto2.createHash)("sha256").update(code).digest("hex");
+  return createHash("sha256").update(code).digest("hex");
 }
 function verifyHashedCode(raw, hashed) {
   const a = Buffer.from(hashCode(raw), "hex");
   const b = Buffer.from(hashed, "hex");
-  return a.length === b.length && (0, import_crypto2.timingSafeEqual)(a, b);
+  return a.length === b.length && timingSafeEqual(a, b);
 }
 function isUserLocked(email) {
   const until = lockedUsers.get(email.toLowerCase()) ?? 0;
@@ -1799,7 +1768,7 @@ function clearFailedLogins(email, ip) {
   lockedUsers.delete(email.toLowerCase());
 }
 function createVerificationToken(userId) {
-  const token = (0, import_crypto2.randomBytes)(24).toString("hex");
+  const token = randomBytes(24).toString("hex");
   emailVerifyTokens.set(hashCode(token), { userId, expiresAt: Date.now() + 60 * 60 * 1e3 });
   return token;
 }
@@ -1811,7 +1780,7 @@ function consumeVerificationToken(token) {
   return payload.userId;
 }
 function createMagicLinkToken(userId) {
-  const token = (0, import_crypto2.randomBytes)(24).toString("hex");
+  const token = randomBytes(24).toString("hex");
   magicLinkTokens.set(hashCode(token), { userId, expiresAt: Date.now() + 15 * 60 * 1e3 });
   return token;
 }
@@ -1830,7 +1799,7 @@ function consumeMfaLoginToken(token) {
   return payload.userId;
 }
 function createRecoveryToken(userId) {
-  const token = (0, import_crypto2.randomBytes)(24).toString("hex");
+  const token = randomBytes(24).toString("hex");
   recoveryTokens.set(hashCode(token), {
     userId,
     expiresAt: Date.now() + 2 * 60 * 60 * 1e3,
@@ -1924,7 +1893,7 @@ function isOidcConfigured() {
   );
   return !isPlaceholder;
 }
-var getOidcConfig = (0, import_memoizee.default)(
+var getOidcConfig = memoize(
   async () => {
     return await client.discovery(
       new URL(process.env.ISSUER_URL ?? process.env.OIDC_ISSUER_URL),
@@ -1938,14 +1907,14 @@ function getSession() {
     throw new Error("SESSION_SECRET must be set and at least 32 characters long.");
   }
   const sessionTtl = 7 * 24 * 60 * 60 * 1e3;
-  const pgStore = (0, import_connect_pg_simple.default)(import_express_session.default);
+  const pgStore = connectPg(session);
   const sessionStore = new pgStore({
     conString: process.env.DATABASE_URL,
     createTableIfMissing: false,
     ttl: sessionTtl,
     tableName: "sessions"
   });
-  return (0, import_express_session.default)({
+  return session({
     name: process.env.NODE_ENV === "production" ? "__Host-propman.sid" : "propman.sid",
     secret: process.env.SESSION_SECRET || "dev-insecure-session-secret-change-me",
     store: sessionStore,
@@ -1987,8 +1956,8 @@ async function upsertUser(claims) {
 async function setupAuth(app) {
   app.set("trust proxy", process.env.NODE_ENV === "production" ? 1 : 0);
   app.use(getSession());
-  app.use(import_passport2.default.initialize());
-  app.use(import_passport2.default.session());
+  app.use(passport.initialize());
+  app.use(passport.session());
   app.use(async (req, res, next) => {
     try {
       const sid = req.sessionID;
@@ -2057,8 +2026,8 @@ async function setupAuth(app) {
     if (typeof req.logout === "function") return req.logout(finish);
     return finish();
   });
-  import_passport2.default.serializeUser((user, cb) => cb(null, user));
-  import_passport2.default.deserializeUser((user, cb) => cb(null, user));
+  passport.serializeUser((user, cb) => cb(null, user));
+  passport.deserializeUser((user, cb) => cb(null, user));
   if (isDevAuthBypassEnabled()) {
     const devUserId = process.env.DEV_AUTH_BYPASS_USER_ID ?? "dev-local-user";
     const devUserEmail = process.env.DEV_AUTH_BYPASS_EMAIL ?? "dev@localhost";
@@ -2142,7 +2111,7 @@ async function setupAuth(app) {
     const protocol = req.protocol || (req.secure ? "https" : "http");
     const strategyName = `oidcauth:${domain}`;
     if (!registeredStrategies.has(strategyName)) {
-      const strategy = new import_passport.Strategy(
+      const strategy = new Strategy(
         {
           name: strategyName,
           config,
@@ -2151,7 +2120,7 @@ async function setupAuth(app) {
         },
         verify
       );
-      import_passport2.default.use(strategy);
+      passport.use(strategy);
       registeredStrategies.add(strategyName);
     }
   };
@@ -2162,7 +2131,7 @@ async function setupAuth(app) {
     }
     ensureStrategy(req);
     const providerParams = provider === "google" ? { connection: "google-oauth2" } : provider === "facebook" ? { connection: "facebook" } : {};
-    import_passport2.default.authenticate(`oidcauth:${req.hostname}`, {
+    passport.authenticate(`oidcauth:${req.hostname}`, {
       prompt: "login consent",
       scope: ["openid", "email", "profile", "offline_access"],
       ...providerParams
@@ -2179,7 +2148,7 @@ async function setupAuth(app) {
   });
   app.get("/api/callback", (req, res, next) => {
     ensureStrategy(req);
-    import_passport2.default.authenticate(`oidcauth:${req.hostname}`, async (err, user) => {
+    passport.authenticate(`oidcauth:${req.hostname}`, async (err, user) => {
       if (err || !user) {
         return res.redirect("/api/login");
       }
@@ -2233,29 +2202,29 @@ var isAuthenticated = async (req, res, next) => {
 };
 
 // server/integrations/auth/routes.ts
-var import_zod3 = require("zod");
+import { z as z3 } from "zod";
 
 // server/integrations/auth/crypto.ts
-var import_crypto3 = require("crypto");
+import { createHash as createHash2, randomBytes as randomBytes2, scryptSync, timingSafeEqual as timingSafeEqual2 } from "crypto";
 function hashPassword(password) {
-  const salt = (0, import_crypto3.randomBytes)(16).toString("hex");
-  const derived = (0, import_crypto3.scryptSync)(password, salt, 64).toString("hex");
+  const salt = randomBytes2(16).toString("hex");
+  const derived = scryptSync(password, salt, 64).toString("hex");
   return `${salt}:${derived}`;
 }
 function verifyPassword(password, hashed) {
   const [salt, expected] = hashed.split(":");
   if (!salt || !expected) return false;
-  const derived = (0, import_crypto3.scryptSync)(password, salt, 64).toString("hex");
+  const derived = scryptSync(password, salt, 64).toString("hex");
   const expectedBuf = Buffer.from(expected, "hex");
   const derivedBuf = Buffer.from(derived, "hex");
   if (expectedBuf.length !== derivedBuf.length) return false;
-  return (0, import_crypto3.timingSafeEqual)(expectedBuf, derivedBuf);
+  return timingSafeEqual2(expectedBuf, derivedBuf);
 }
 function generateResetToken() {
-  return (0, import_crypto3.randomBytes)(32).toString("hex");
+  return randomBytes2(32).toString("hex");
 }
 function hashToken(token) {
-  return (0, import_crypto3.createHash)("sha256").update(token).digest("hex");
+  return createHash2("sha256").update(token).digest("hex");
 }
 
 // server/middleware/rateLimit.ts
@@ -2391,69 +2360,69 @@ async function sendRecoveryEmail(input) {
 }
 
 // server/integrations/auth/routes.ts
-var signupSchema = import_zod3.z.object({
-  email: import_zod3.z.string().email(),
-  password: import_zod3.z.string().min(8),
-  role: import_zod3.z.enum(["manager", "tenant", "investor"]),
-  firstName: import_zod3.z.string().optional(),
-  lastName: import_zod3.z.string().optional()
+var signupSchema = z3.object({
+  email: z3.string().email(),
+  password: z3.string().min(8),
+  role: z3.enum(["manager", "tenant", "investor"]),
+  firstName: z3.string().optional(),
+  lastName: z3.string().optional()
 });
-var loginSchema = import_zod3.z.object({
-  email: import_zod3.z.string().email(),
-  password: import_zod3.z.string().min(1),
-  role: import_zod3.z.enum(["manager", "tenant", "investor"])
+var loginSchema = z3.object({
+  email: z3.string().email(),
+  password: z3.string().min(1),
+  role: z3.enum(["manager", "tenant", "investor"])
 });
-var forgotSchema = import_zod3.z.object({
-  email: import_zod3.z.string().email()
+var forgotSchema = z3.object({
+  email: z3.string().email()
 });
-var resetSchema = import_zod3.z.object({
-  token: import_zod3.z.string().min(1),
-  password: import_zod3.z.string().min(8)
+var resetSchema = z3.object({
+  token: z3.string().min(1),
+  password: z3.string().min(8)
 });
-var mfaSetupSchema = import_zod3.z.object({
-  password: import_zod3.z.string().min(1)
+var mfaSetupSchema = z3.object({
+  password: z3.string().min(1)
 });
-var mfaEnableSchema = import_zod3.z.object({
-  secret: import_zod3.z.string().min(16),
-  code: import_zod3.z.string().min(6)
+var mfaEnableSchema = z3.object({
+  secret: z3.string().min(16),
+  code: z3.string().min(6)
 });
-var loginMfaVerifySchema = import_zod3.z.object({
-  loginToken: import_zod3.z.string().min(1),
-  code: import_zod3.z.string().optional(),
-  backupCode: import_zod3.z.string().optional()
+var loginMfaVerifySchema = z3.object({
+  loginToken: z3.string().min(1),
+  code: z3.string().optional(),
+  backupCode: z3.string().optional()
 });
-var emailVerifySchema = import_zod3.z.object({
-  token: import_zod3.z.string().min(1)
+var emailVerifySchema = z3.object({
+  token: z3.string().min(1)
 });
-var resendVerifySchema = import_zod3.z.object({
-  email: import_zod3.z.string().email()
+var resendVerifySchema = z3.object({
+  email: z3.string().email()
 });
-var magicLinkRequestSchema = import_zod3.z.object({
-  email: import_zod3.z.string().email()
+var magicLinkRequestSchema = z3.object({
+  email: z3.string().email()
 });
-var magicLinkConsumeSchema = import_zod3.z.object({
-  token: import_zod3.z.string().min(1),
-  role: import_zod3.z.enum(["manager", "tenant", "investor"]).optional()
+var magicLinkConsumeSchema = z3.object({
+  token: z3.string().min(1),
+  role: z3.enum(["manager", "tenant", "investor"]).optional()
 });
-var recoveryStartSchema = import_zod3.z.object({
-  email: import_zod3.z.string().email()
+var recoveryStartSchema = z3.object({
+  email: z3.string().email()
 });
-var recoveryCompleteSchema = import_zod3.z.object({
-  token: import_zod3.z.string().min(1),
-  password: import_zod3.z.string().min(12)
+var recoveryCompleteSchema = z3.object({
+  token: z3.string().min(1),
+  password: z3.string().min(12)
 });
-var stepUpCompleteSchema = import_zod3.z.object({
-  token: import_zod3.z.string().min(1),
-  password: import_zod3.z.string().min(1)
+var stepUpCompleteSchema = z3.object({
+  token: z3.string().min(1),
+  password: z3.string().min(1)
 });
-var reauthSchema = import_zod3.z.object({
-  password: import_zod3.z.string().min(1)
+var reauthSchema = z3.object({
+  password: z3.string().min(1)
 });
-var updateProfileSchema = import_zod3.z.object({
-  email: import_zod3.z.string().email(),
-  phoneNumber: import_zod3.z.string().trim().min(7).max(25).regex(/^[0-9+()\-\s]+$/, "Phone number contains invalid characters").optional().nullable(),
-  twoFactorEnabled: import_zod3.z.boolean().optional(),
-  twoFactorMethod: import_zod3.z.enum(["email", "phone"]).optional().nullable()
+var updateProfileSchema = z3.object({
+  email: z3.string().email(),
+  phoneNumber: z3.string().trim().min(7).max(25).regex(/^[0-9+()\-\s]+$/, "Phone number contains invalid characters").optional().nullable(),
+  twoFactorEnabled: z3.boolean().optional(),
+  twoFactorMethod: z3.enum(["email", "phone"]).optional().nullable()
 });
 function buildLocalSessionUser(user) {
   return {
@@ -2568,7 +2537,7 @@ function registerAuthRoutes(app) {
       if (process.env.NODE_ENV !== "production") payload.verificationToken = verificationToken;
       return res.status(201).json(payload);
     } catch (error) {
-      if (error instanceof import_zod3.z.ZodError) {
+      if (error instanceof z3.ZodError) {
         return res.status(400).json({ message: error.errors[0]?.message ?? "Invalid input." });
       }
       console.error("Signup error:", error);
@@ -2645,7 +2614,7 @@ function registerAuthRoutes(app) {
       });
       return establishSession(req, res, { id: user.id, email: user.email, role: user.role });
     } catch (error) {
-      if (error instanceof import_zod3.z.ZodError) {
+      if (error instanceof z3.ZodError) {
         return res.status(400).json({ message: error.errors[0]?.message ?? "Invalid input." });
       }
       console.error("Login error:", error);
@@ -2694,7 +2663,7 @@ function registerAuthRoutes(app) {
       });
       return res.json(payload);
     } catch (error) {
-      if (error instanceof import_zod3.z.ZodError) {
+      if (error instanceof z3.ZodError) {
         return res.status(400).json({ message: error.errors[0]?.message ?? "Invalid input." });
       }
       console.error("Forgot-password error:", error);
@@ -2720,7 +2689,7 @@ function registerAuthRoutes(app) {
       });
       return res.json({ message: "Password updated successfully." });
     } catch (error) {
-      if (error instanceof import_zod3.z.ZodError) {
+      if (error instanceof z3.ZodError) {
         return res.status(400).json({ message: error.errors[0]?.message ?? "Invalid input." });
       }
       console.error("Reset-password error:", error);
@@ -2735,7 +2704,7 @@ function registerAuthRoutes(app) {
       await authStorage.markEmailVerified(userId);
       return res.json({ message: "Email verified successfully." });
     } catch (error) {
-      if (error instanceof import_zod3.z.ZodError) return res.status(400).json({ message: "Invalid request." });
+      if (error instanceof z3.ZodError) return res.status(400).json({ message: "Invalid request." });
       return res.status(500).json({ message: mapAuthDbError(error) });
     }
   });
@@ -2762,7 +2731,7 @@ function registerAuthRoutes(app) {
       if (process.env.NODE_ENV !== "production") payload.verificationToken = token;
       return res.json(payload);
     } catch (error) {
-      if (error instanceof import_zod3.z.ZodError) return res.status(400).json({ message: "Invalid email." });
+      if (error instanceof z3.ZodError) return res.status(400).json({ message: "Invalid email." });
       return res.status(500).json({ message: mapAuthDbError(error) });
     }
   });
@@ -2792,7 +2761,7 @@ function registerAuthRoutes(app) {
       if (process.env.NODE_ENV !== "production") response.magicLinkToken = token;
       return res.json(response);
     } catch (error) {
-      if (error instanceof import_zod3.z.ZodError) return res.status(400).json({ message: "Invalid request." });
+      if (error instanceof z3.ZodError) return res.status(400).json({ message: "Invalid request." });
       return res.status(500).json({ message: mapAuthDbError(error) });
     }
   });
@@ -2806,7 +2775,7 @@ function registerAuthRoutes(app) {
       if (input.role && user.role !== input.role) return res.status(403).json({ message: "Role mismatch for magic-link sign in." });
       return establishSession(req, res, { id: user.id, email: user.email, role: user.role });
     } catch (error) {
-      if (error instanceof import_zod3.z.ZodError) return res.status(400).json({ message: "Invalid request." });
+      if (error instanceof z3.ZodError) return res.status(400).json({ message: "Invalid request." });
       return res.status(500).json({ message: mapAuthDbError(error) });
     }
   });
@@ -2841,7 +2810,7 @@ function registerAuthRoutes(app) {
       rememberDevice(user.id, deviceFingerprint(getClientIp3(req), String(req.headers["user-agent"] || "unknown")));
       return establishSession(req, res, { id: user.id, email: user.email, role: user.role });
     } catch (error) {
-      if (error instanceof import_zod3.z.ZodError) return res.status(400).json({ message: "Invalid request." });
+      if (error instanceof z3.ZodError) return res.status(400).json({ message: "Invalid request." });
       return res.status(500).json({ message: mapAuthDbError(error) });
     }
   });
@@ -2862,7 +2831,7 @@ function registerAuthRoutes(app) {
         backupCodes
       });
     } catch (error) {
-      if (error instanceof import_zod3.z.ZodError) return res.status(400).json({ message: "Invalid request." });
+      if (error instanceof z3.ZodError) return res.status(400).json({ message: "Invalid request." });
       return res.status(500).json({ message: mapAuthDbError(error) });
     }
   });
@@ -2880,7 +2849,7 @@ function registerAuthRoutes(app) {
       req.session.pendingMfaBackupCodes = void 0;
       return res.json({ message: "MFA enabled." });
     } catch (error) {
-      if (error instanceof import_zod3.z.ZodError) return res.status(400).json({ message: "Invalid request." });
+      if (error instanceof z3.ZodError) return res.status(400).json({ message: "Invalid request." });
       return res.status(500).json({ message: mapAuthDbError(error) });
     }
   });
@@ -2905,7 +2874,7 @@ function registerAuthRoutes(app) {
       if (!valid) return res.status(401).json({ message: "Invalid MFA code." });
       return establishSession(req, res, { id: user.id, email: user.email, role: user.role });
     } catch (error) {
-      if (error instanceof import_zod3.z.ZodError) return res.status(400).json({ message: "Invalid request." });
+      if (error instanceof z3.ZodError) return res.status(400).json({ message: "Invalid request." });
       return res.status(500).json({ message: mapAuthDbError(error) });
     }
   });
@@ -2961,7 +2930,7 @@ function registerAuthRoutes(app) {
       req.session.stepUpVerifiedAt = Date.now();
       return res.json({ message: "Re-authenticated." });
     } catch (error) {
-      if (error instanceof import_zod3.z.ZodError) return res.status(400).json({ message: "Invalid request." });
+      if (error instanceof z3.ZodError) return res.status(400).json({ message: "Invalid request." });
       return res.status(500).json({ message: mapAuthDbError(error) });
     }
   });
@@ -3079,7 +3048,7 @@ function registerAuthRoutes(app) {
         twoFactorMethod: updatedTwoFactorMethod
       });
     } catch (error) {
-      if (error instanceof import_zod3.z.ZodError) {
+      if (error instanceof z3.ZodError) {
         return res.status(400).json({ message: error.errors[0]?.message ?? "Invalid input." });
       }
       return res.status(500).json({ message: mapAuthDbError(error) });
@@ -3111,10 +3080,10 @@ function registerAuthRoutes(app) {
 }
 
 // server/integrations/chat/routes.ts
-var import_openai = __toESM(require("openai"), 1);
+import OpenAI from "openai";
 
 // server/integrations/chat/storage.ts
-var import_drizzle_orm6 = require("drizzle-orm");
+import { eq as eq3, desc as desc2 } from "drizzle-orm";
 var OWNER_PREFIX = "owner:";
 function withOwnerPrefix(userId, title) {
   return `${OWNER_PREFIX}${userId}:${title}`;
@@ -3133,7 +3102,7 @@ function extractOwnerAndTitle(rawTitle) {
 }
 var chatStorage = {
   async getConversation(id, userId) {
-    const [conversation] = await db.select().from(conversations).where((0, import_drizzle_orm6.eq)(conversations.id, id));
+    const [conversation] = await db.select().from(conversations).where(eq3(conversations.id, id));
     if (!conversation) return void 0;
     const owner = extractOwnerAndTitle(conversation.title);
     if (owner.ownerId !== userId) return void 0;
@@ -3143,7 +3112,7 @@ var chatStorage = {
     };
   },
   async getAllConversations(userId) {
-    const all = await db.select().from(conversations).orderBy((0, import_drizzle_orm6.desc)(conversations.createdAt));
+    const all = await db.select().from(conversations).orderBy(desc2(conversations.createdAt));
     return all.map((conversation) => {
       const owner = extractOwnerAndTitle(conversation.title);
       if (owner.ownerId !== userId) return null;
@@ -3164,11 +3133,11 @@ var chatStorage = {
   async deleteConversation(id, userId) {
     const conversation = await this.getConversation(id, userId);
     if (!conversation) return;
-    await db.delete(messages).where((0, import_drizzle_orm6.eq)(messages.conversationId, id));
-    await db.delete(conversations).where((0, import_drizzle_orm6.eq)(conversations.id, id));
+    await db.delete(messages).where(eq3(messages.conversationId, id));
+    await db.delete(conversations).where(eq3(conversations.id, id));
   },
   async getMessagesByConversation(conversationId) {
-    return db.select().from(messages).where((0, import_drizzle_orm6.eq)(messages.conversationId, conversationId)).orderBy(messages.createdAt);
+    return db.select().from(messages).where(eq3(messages.conversationId, conversationId)).orderBy(messages.createdAt);
   },
   async createMessage(conversationId, role, content) {
     const [message] = await db.insert(messages).values({ conversationId, role, content }).returning();
@@ -3177,7 +3146,7 @@ var chatStorage = {
 };
 
 // server/integrations/chat/routes.ts
-var openai = new import_openai.default({
+var openai = new OpenAI({
   apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY || "sk-placeholder",
   baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL
 });
@@ -3296,8 +3265,8 @@ function registerChatRoutes(app) {
 }
 
 // server/integrations/image/client.ts
-var import_openai2 = __toESM(require("openai"), 1);
-var openai2 = new import_openai2.default({
+import OpenAI2, { toFile } from "openai";
+var openai2 = new OpenAI2({
   apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY || "sk-placeholder",
   baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL
 });
@@ -3428,10 +3397,10 @@ async function seedDatabase() {
 }
 
 // server/routes.ts
-var import_openai3 = __toESM(require("openai"), 1);
+import OpenAI3 from "openai";
 
 // server/services/str-market.ts
-var import_zlib = require("zlib");
+import { gunzipSync } from "zlib";
 var STR_SOURCE = "insideairbnb";
 var INSIDE_AIRBNB_DATA_PAGE = "https://insideairbnb.com/get-the-data/";
 var MAX_DATASETS = 80;
@@ -3623,7 +3592,7 @@ async function scrapePublicStrListings() {
     const response = await fetch(dataset.url);
     if (!response.ok) continue;
     const compressedBuffer = Buffer.from(await response.arrayBuffer());
-    const csvText = (0, import_zlib.gunzipSync)(compressedBuffer).toString("utf-8");
+    const csvText = gunzipSync(compressedBuffer).toString("utf-8");
     const rows = parseCsv(csvText).slice(0, MAX_ROWS_PER_DATASET);
     for (const row of rows) {
       const listing = toStrListing(dataset, row);
@@ -3638,7 +3607,6 @@ async function scrapePublicStrListings() {
 var RENTCAST_BASE_URL = process.env.RENTCAST_BASE_URL || "https://api.rentcast.io/v1";
 var MULTIFAMILY_KEYWORDS = [
   "multi family",
-  "multi-family",
   "multifamily",
   "duplex",
   "triplex",
@@ -3745,7 +3713,6 @@ async function fetchMultifamilySaleListings(filters) {
   if (filters.city) params.set("city", filters.city);
   if (filters.region) params.set("state", filters.region);
   params.set("status", "Active");
-  params.set("propertyType", "Multi-Family");
   params.set("limit", String(Math.min(Math.max(filters.limit ?? 250, 1), 500)));
   const url = `${RENTCAST_BASE_URL.replace(/\/+$/, "")}/listings/sale?${params.toString()}`;
   const response = await fetch(url, {
@@ -3766,8 +3733,8 @@ async function fetchMultifamilySaleListings(filters) {
 }
 
 // server/routes.ts
-var import_node_crypto = require("node:crypto");
-var openai3 = new import_openai3.default({
+import { randomBytes as randomBytes3 } from "node:crypto";
+var openai3 = new OpenAI3({
   apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY || "sk-placeholder",
   baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL
 });
@@ -3950,12 +3917,12 @@ function getEscalatedPriority(priority) {
   if (priority === "medium") return "high";
   return "emergency";
 }
-var leaseSigningCompleteSchema = import_zod4.z.object({
-  token: import_zod4.z.string().min(20),
-  fullName: import_zod4.z.string().min(2).max(120)
+var leaseSigningCompleteSchema = z4.object({
+  token: z4.string().min(20),
+  fullName: z4.string().min(2).max(120)
 });
 var requireStepUpAuth = (req, res, next) => {
-  const verifiedAt = Number(req.session?.stepUpVerifiedAt || req.session?.createdAt || 0);
+  const verifiedAt = Number(req.session?.stepUpVerifiedAt || 0);
   if (!verifiedAt || Date.now() - verifiedAt > STEP_UP_TTL_MS) {
     return res.status(403).json({ message: "Step-up authentication required. Call /api/auth/reauth first." });
   }
@@ -4608,7 +4575,7 @@ ${items.map((item) => `Request #${item.id} (${item.propertyAddress}) escalated t
       });
       res.status(201).json(property);
     } catch (err) {
-      if (err instanceof import_zod4.z.ZodError) {
+      if (err instanceof z4.ZodError) {
         return res.status(400).json({ message: err.errors[0].message });
       }
       throw err;
@@ -4629,7 +4596,7 @@ ${items.map((item) => `Request #${item.id} (${item.propertyAddress}) escalated t
       if (!updated) return res.status(404).json({ message: "Property not found" });
       res.json(updated);
     } catch (err) {
-      if (err instanceof import_zod4.z.ZodError) {
+      if (err instanceof z4.ZodError) {
         return res.status(400).json({ message: err.errors[0].message });
       }
       throw err;
@@ -4740,13 +4707,13 @@ ${items.map((item) => `Request #${item.id} (${item.propertyAddress}) escalated t
     const property = await storage.getProperty(input.propertyId);
     if (!property) return res.status(404).json({ message: "Property not found" });
     if (property.managerId !== userId) return res.status(403).json({ message: "Forbidden" });
-    const exports2 = buildApartmentsPayload(property, input.mapping);
+    const exports = buildApartmentsPayload(property, input.mapping);
     const missingFields = collectMissingListingFields(property);
     res.json({
       propertyId: property.id,
       platform: "apartments.com",
-      payload: exports2.json,
-      csv: exports2.csv,
+      payload: exports.json,
+      csv: exports.csv,
       missingFields
     });
   });
@@ -4797,12 +4764,12 @@ ${items.map((item) => `Request #${item.id} (${item.propertyAddress}) escalated t
     const property = await storage.getProperty(input.propertyId);
     if (!property) return res.status(404).json({ message: "Property not found" });
     if (property.managerId !== userId) return res.status(403).json({ message: "Forbidden" });
-    const exports2 = buildApartmentsPayload(property, input.mapping);
+    const exports = buildApartmentsPayload(property, input.mapping);
     const format = input.format ?? "json";
     const isCsv = format === "csv";
     const result = await publishPayload({
       url: publishUrl,
-      payload: isCsv ? exports2.csv : exports2.json,
+      payload: isCsv ? exports.csv : exports.json,
       contentType: isCsv ? "text/csv" : "application/json",
       apiKey: process.env.LISTING_PUBLISH_APARTMENTS_API_KEY
     });
@@ -5048,7 +5015,7 @@ ${items.map((item) => `Request #${item.id} (${item.propertyAddress}) escalated t
       const lease = await storage.createLease(input);
       res.status(201).json(lease);
     } catch (err) {
-      if (err instanceof import_zod4.z.ZodError) return res.status(400).json({ message: err.message });
+      if (err instanceof z4.ZodError) return res.status(400).json({ message: err.message });
       throw err;
     }
   });
@@ -5170,7 +5137,7 @@ Note: This is a fallback template generated because AI quota is unavailable. Rev
       }
       const tenant = await storage.getUser(lease.tenantId);
       if (!tenant?.email) return res.status(400).json({ message: "Tenant email is missing." });
-      const rawToken = (0, import_node_crypto.randomBytes)(32).toString("hex");
+      const rawToken = randomBytes3(32).toString("hex");
       const tokenHash = hashToken(rawToken);
       const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1e3);
       const signingRequest = await storage.createLeaseSigningRequest({
@@ -5297,7 +5264,7 @@ Digitally signed by ${signed.signedFullName} on ${new Date(signed.signedAt).toLo
         signedFullName: signed.signedFullName
       });
     } catch (error) {
-      if (error instanceof import_zod4.z.ZodError) {
+      if (error instanceof z4.ZodError) {
         return res.status(400).json({ message: error.errors[0]?.message ?? "Invalid signature payload." });
       }
       if (isMissingRelationError(error)) {
@@ -5349,7 +5316,7 @@ Digitally signed by ${signed.signedFullName} on ${new Date(signed.signedAt).toLo
       if (isMissingRelationError(error)) {
         return res.status(503).json({ message: "Lease expiry settings tables are missing. Run database migrations first." });
       }
-      if (error instanceof import_zod4.z.ZodError) {
+      if (error instanceof z4.ZodError) {
         return res.status(400).json({ message: error.errors[0]?.message ?? "Invalid settings payload." });
       }
       return res.status(500).json({ message: "Failed to update settings." });
@@ -5428,7 +5395,7 @@ Digitally signed by ${signed.signedFullName} on ${new Date(signed.signedAt).toLo
       if (isMissingRelationError(error)) {
         return res.status(503).json({ message: "Maintenance settings table is missing. Run database migrations first." });
       }
-      if (error instanceof import_zod4.z.ZodError) {
+      if (error instanceof z4.ZodError) {
         return res.status(400).json({ message: error.errors[0]?.message ?? "Invalid settings payload." });
       }
       return res.status(500).json({ message: "Failed to update maintenance settings." });
@@ -5486,7 +5453,7 @@ Digitally signed by ${signed.signedFullName} on ${new Date(signed.signedAt).toLo
       });
       res.status(201).json(request);
     } catch (err) {
-      if (err instanceof import_zod4.z.ZodError) return res.status(400).json({ message: err.message });
+      if (err instanceof z4.ZodError) return res.status(400).json({ message: err.message });
       throw err;
     }
   });
@@ -5511,7 +5478,7 @@ Digitally signed by ${signed.signedFullName} on ${new Date(signed.signedAt).toLo
       if (!request) return res.status(404).json({ message: "Request not found" });
       res.json(request);
     } catch (err) {
-      if (err instanceof import_zod4.z.ZodError) return res.status(400).json({ message: err.message });
+      if (err instanceof z4.ZodError) return res.status(400).json({ message: err.message });
       throw err;
     }
   });
@@ -5656,7 +5623,7 @@ Digitally signed by ${signed.signedFullName} on ${new Date(signed.signedAt).toLo
       if (isMissingRelationError(error)) {
         return res.status(503).json({ message: "Notification settings tables are missing. Run database migrations first." });
       }
-      if (error instanceof import_zod4.z.ZodError) {
+      if (error instanceof z4.ZodError) {
         return res.status(400).json({ message: error.errors[0]?.message ?? "Invalid settings payload." });
       }
       return res.status(500).json({ message: "Failed to update settings." });
@@ -5955,7 +5922,7 @@ Digitally signed by ${signed.signedFullName} on ${new Date(signed.signedAt).toLo
       const payment = await storage.createPayment(input);
       res.status(201).json(payment);
     } catch (err) {
-      if (err instanceof import_zod4.z.ZodError) return res.status(400).json({ message: err.message });
+      if (err instanceof z4.ZodError) return res.status(400).json({ message: err.message });
       throw err;
     }
   });
@@ -6035,7 +6002,7 @@ Digitally signed by ${signed.signedFullName} on ${new Date(signed.signedAt).toLo
         externalLeadId: lead.externalLeadId
       });
     } catch (err) {
-      if (err instanceof import_zod4.z.ZodError) return res.status(400).json({ message: err.message });
+      if (err instanceof z4.ZodError) return res.status(400).json({ message: err.message });
       throw err;
     }
   });
@@ -6045,7 +6012,7 @@ Digitally signed by ${signed.signedFullName} on ${new Date(signed.signedAt).toLo
       const lead = await storage.upsertZillowLeadByExternalId(payload);
       res.status(201).json(lead);
     } catch (err) {
-      if (err instanceof import_zod4.z.ZodError) return res.status(400).json({ message: err.message });
+      if (err instanceof z4.ZodError) return res.status(400).json({ message: err.message });
       throw err;
     }
   });
@@ -6098,7 +6065,7 @@ Digitally signed by ${signed.signedFullName} on ${new Date(signed.signedAt).toLo
       const screening = await storage.createScreening(input);
       res.status(201).json(screening);
     } catch (err) {
-      if (err instanceof import_zod4.z.ZodError) return res.status(400).json({ message: err.message });
+      if (err instanceof z4.ZodError) return res.status(400).json({ message: err.message });
       throw err;
     }
   });
@@ -6106,19 +6073,19 @@ Digitally signed by ${signed.signedFullName} on ${new Date(signed.signedAt).toLo
 }
 
 // server/static.ts
-var import_express = __toESM(require("express"), 1);
-var import_fs = __toESM(require("fs"), 1);
-var import_path = __toESM(require("path"), 1);
+import express from "express";
+import fs from "fs";
+import path from "path";
 function serveStatic(app) {
-  const distPath = import_path.default.resolve(__dirname, "public");
-  if (!import_fs.default.existsSync(distPath)) {
+  const distPath = path.resolve(__dirname, "public");
+  if (!fs.existsSync(distPath)) {
     throw new Error(
       `Could not find the build directory: ${distPath}, make sure to build the client first`
     );
   }
-  app.use(import_express.default.static(distPath));
+  app.use(express.static(distPath));
   app.use("/{*path}", (_req, res) => {
-    res.sendFile(import_path.default.resolve(distPath, "index.html"));
+    res.sendFile(path.resolve(distPath, "index.html"));
   });
 }
 
@@ -6133,19 +6100,19 @@ function log(message, source = "express") {
   console.log(`${formattedTime} [${source}] ${message}`);
 }
 async function createApp(runtime = "server") {
-  const app = (0, import_express2.default)();
-  const httpServer = (0, import_http.createServer)(app);
+  const app = express2();
+  const httpServer = createServer(app);
   app.disable("x-powered-by");
   app.set("trust proxy", process.env.NODE_ENV === "production" ? 1 : 0);
   app.use(
-    import_express2.default.json({
+    express2.json({
       limit: "1mb",
       verify: (req, _res, buf) => {
         req.rawBody = buf;
       }
     })
   );
-  app.use(import_express2.default.urlencoded({ extended: false, limit: "256kb" }));
+  app.use(express2.urlencoded({ extended: false, limit: "256kb" }));
   app.use((req, res, next) => {
     res.setHeader("X-Content-Type-Options", "nosniff");
     res.setHeader("X-Frame-Options", "DENY");
@@ -6213,3 +6180,6 @@ async function handler(req, res) {
   const app = await appPromise;
   return app(req, res);
 }
+export {
+  handler as default
+};

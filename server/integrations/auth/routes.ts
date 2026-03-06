@@ -121,6 +121,8 @@ const updateProfileSchema = z.object({
     .regex(/^[0-9+()\-\s]+$/, "Phone number contains invalid characters")
     .optional()
     .nullable(),
+  twoFactorEnabled: z.boolean().optional(),
+  twoFactorMethod: z.enum(["email", "phone"]).optional().nullable(),
 });
 
 function buildLocalSessionUser(user: { id: string; email: string | null }) {
@@ -782,6 +784,9 @@ export function registerAuthRoutes(app: Express): void {
         email: user.email,
         phoneNumber: settings?.phoneNumber ?? null,
         mfaEnabled: Boolean(user.mfaEnabled),
+        twoFactorMethod: settings?.twoFactorMethod === "email" || settings?.twoFactorMethod === "phone"
+          ? settings.twoFactorMethod
+          : null,
       });
     } catch (error) {
       return res.status(500).json({ message: mapAuthDbError(error) });
@@ -796,6 +801,21 @@ export function registerAuthRoutes(app: Express): void {
       const normalizedPhoneNumber = input.phoneNumber?.trim() || null;
       const currentUser = await authStorage.getUser(userId);
       if (!currentUser) return res.status(404).json({ message: "User not found." });
+      const currentSettings = await authStorage.getUserProfileSettings(userId);
+      const nextTwoFactorEnabled = input.twoFactorEnabled ?? Boolean(currentUser.mfaEnabled);
+      const requestedTwoFactorMethod = input.twoFactorMethod ?? currentSettings?.twoFactorMethod ?? null;
+      const normalizedTwoFactorMethod: "email" | "phone" | null =
+        requestedTwoFactorMethod === "email" || requestedTwoFactorMethod === "phone"
+          ? requestedTwoFactorMethod
+          : null;
+      const nextTwoFactorMethod = nextTwoFactorEnabled ? normalizedTwoFactorMethod : null;
+
+      if (nextTwoFactorEnabled && (nextTwoFactorMethod !== "email" && nextTwoFactorMethod !== "phone")) {
+        return res.status(400).json({ message: "Please choose a 2FA method: email or phone." });
+      }
+      if (nextTwoFactorEnabled && nextTwoFactorMethod === "phone" && !normalizedPhoneNumber) {
+        return res.status(400).json({ message: "Phone number is required for phone-based 2FA." });
+      }
 
       if (currentUser.email !== normalizedEmail) {
         const existing = await authStorage.getUserByEmail(normalizedEmail);
@@ -808,13 +828,26 @@ export function registerAuthRoutes(app: Express): void {
       await authStorage.upsertUserProfileSettings({
         userId,
         phoneNumber: normalizedPhoneNumber,
+        twoFactorMethod: nextTwoFactorMethod,
+      });
+      await authStorage.updateMfaConfig({
+        userId,
+        enabled: nextTwoFactorEnabled,
+        secret: nextTwoFactorEnabled ? (currentUser.mfaSecret ?? null) : null,
+        backupCodes: nextTwoFactorEnabled ? ((currentUser.mfaBackupCodes ?? []) as string[]) : [],
       });
 
       const updatedUser = await authStorage.getUser(userId);
+      const updatedSettings = await authStorage.getUserProfileSettings(userId);
+      const updatedTwoFactorMethod =
+        updatedSettings?.twoFactorMethod === "email" || updatedSettings?.twoFactorMethod === "phone"
+          ? updatedSettings.twoFactorMethod
+          : null;
       return res.json({
         email: updatedUser?.email ?? normalizedEmail,
         phoneNumber: normalizedPhoneNumber,
         mfaEnabled: Boolean(updatedUser?.mfaEnabled),
+        twoFactorMethod: updatedTwoFactorMethod,
       });
     } catch (error) {
       if (error instanceof z.ZodError) {

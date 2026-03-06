@@ -93,7 +93,6 @@ export async function seedDatabase() {
   await storage.createPayment({
     leaseId: lease1.id,
     amount: "3500.00",
-    date: new Date("2023-10-01"),
     status: "paid",
     type: "rent",
   });
@@ -101,7 +100,6 @@ export async function seedDatabase() {
   await storage.createPayment({
     leaseId: lease1.id,
     amount: "3500.00",
-    date: new Date("2023-11-01"),
     status: "paid",
     type: "rent",
   });
@@ -109,7 +107,6 @@ export async function seedDatabase() {
    await storage.createPayment({
     leaseId: lease1.id,
     amount: "3500.00",
-    date: new Date("2023-12-01"),
     status: "pending",
     type: "rent",
   });

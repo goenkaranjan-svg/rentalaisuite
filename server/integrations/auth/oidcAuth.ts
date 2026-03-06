@@ -105,51 +105,81 @@ export async function setupAuth(app: Express) {
   app.use(passport.initialize());
   app.use(passport.session());
 
-  app.use((req: any, res, next) => {
-    const sid = req.sessionID;
-    if (!sid) return next();
+  app.use(async (req: any, res, next) => {
+    try {
+      const sid = req.sessionID;
+      if (!sid) return next();
 
-    if (req.user?.claims?.sub) {
-      const ip = getClientIp(req);
-      const ua = String(req.headers["user-agent"] || "unknown");
-      const fp = deviceFingerprint(ip, ua);
+      if (req.user?.claims?.sub) {
+        const ip = getClientIp(req);
+        const ua = String(req.headers["user-agent"] || "unknown");
+        const fp = deviceFingerprint(ip, ua);
 
-      if (!req.session.securityBinding) {
-        req.session.securityBinding = fp;
-      } else if (req.session.securityBinding !== fp) {
-        req.logout?.(() => {
-          req.session?.destroy(() => {
-            removeSession(sid);
-            return res.status(401).json({ message: "Session security check failed. Please sign in again." });
+        if (!req.session.securityBinding) {
+          req.session.securityBinding = fp;
+        } else if (req.session.securityBinding !== fp) {
+          req.logout?.(() => {
+            req.session?.destroy(() => {
+              removeSession(sid);
+              return res.status(401).json({ message: "Session security check failed. Please sign in again." });
+            });
           });
+          return;
+        }
+
+        let userRole = String(req.session.userRole || "").trim();
+        if (!userRole) {
+          const dbUser = await authStorage.getUser(req.user.claims.sub);
+          if (dbUser?.role) {
+            userRole = dbUser.role;
+            req.session.userRole = userRole;
+          }
+        }
+
+        const defaultIdleMaxMs = Number(process.env.SESSION_IDLE_TIMEOUT_MS || 30 * 60 * 1000);
+        const adminIdleRequestedMs = Number(process.env.ADMIN_SESSION_IDLE_TIMEOUT_MS || 10 * 60 * 1000);
+        const adminIdleMaxMs = Math.min(10 * 60 * 1000, Math.max(5 * 60 * 1000, adminIdleRequestedMs));
+        const idleMaxMs = userRole === "manager" ? adminIdleMaxMs : defaultIdleMaxMs;
+
+        const lastActivityAt = Number(req.session.lastActivityAt || Date.now());
+        if (Date.now() - lastActivityAt > idleMaxMs) {
+          req.logout?.(() => {
+            req.session?.destroy(() => {
+              removeSession(sid);
+              return res.status(401).json({ message: "Session expired due to inactivity." });
+            });
+          });
+          return;
+        }
+
+        req.session.lastActivityAt = Date.now();
+        touchSession(sid);
+        trackSession({
+          sid,
+          userId: req.user.claims.sub,
+          ip,
+          userAgent: ua,
+          createdAt: Number(req.session.createdAt || Date.now()),
+          lastSeenAt: Date.now(),
         });
-        return;
       }
 
-      const idleMaxMs = Number(process.env.SESSION_IDLE_TIMEOUT_MS || 30 * 60 * 1000);
-      const lastActivityAt = Number(req.session.lastActivityAt || Date.now());
-      if (Date.now() - lastActivityAt > idleMaxMs) {
-        req.logout?.(() => {
-          req.session?.destroy(() => {
-            removeSession(sid);
-            return res.status(401).json({ message: "Session expired due to inactivity." });
-          });
-        });
-        return;
-      }
-      req.session.lastActivityAt = Date.now();
-      touchSession(sid);
-      trackSession({
-        sid,
-        userId: req.user.claims.sub,
-        ip,
-        userAgent: ua,
-        createdAt: Number(req.session.createdAt || Date.now()),
-        lastSeenAt: Date.now(),
-      });
+      next();
+    } catch (error) {
+      next(error);
     }
+  });
 
-    next();
+  app.post("/api/auth/logout", (req: any, res) => {
+    const sid = req.sessionID;
+    const finish = () => {
+      req.session?.destroy(() => {
+        if (sid) removeSession(sid);
+        res.status(204).send();
+      });
+    };
+    if (typeof req.logout === "function") return req.logout(finish);
+    return finish();
   });
 
   passport.serializeUser((user: Express.User, cb) => cb(null, user));

@@ -64,14 +64,30 @@ function formatMoney(value: string | number): string {
   });
 }
 
+function buildForSaleLocation(listing: StrMarketListing): string {
+  return [listing.neighbourhood, listing.sourceCity, listing.sourceRegion?.toUpperCase()]
+    .filter(Boolean)
+    .join(", ");
+}
+
+function buildSearchLink(location: string, site: "zillow" | "redfin"): string {
+  const normalized = location.trim();
+  if (!normalized) return site === "zillow" ? "https://www.zillow.com/homes/for_sale/" : "https://www.redfin.com/";
+
+  if (site === "zillow") {
+    const zillowSlug = normalized.replace(/\s+/g, "-");
+    return `https://www.zillow.com/homes/for_sale/${encodeURIComponent(zillowSlug)}_rb/`;
+  }
+
+  return `https://www.redfin.com/search?q=${encodeURIComponent(normalized)}`;
+}
+
 export default function InvestorPortal() {
   const { toast } = useToast();
   const [search, setSearch] = useState("");
   const [city, setCity] = useState("");
   const [region, setRegion] = useState("");
-  const [roomType, setRoomType] = useState("");
   const [minAnnualReturn, setMinAnnualReturn] = useState("0");
-  const [maxNightlyRate, setMaxNightlyRate] = useState("");
   const [locationDefault, setLocationDefault] = useState<string | null>(null);
   const [locationApplied, setLocationApplied] = useState(false);
   const [locationStatus, setLocationStatus] = useState<"idle" | "applied" | "unsupported" | "denied" | "unavailable">("idle");
@@ -80,9 +96,7 @@ export default function InvestorPortal() {
     search: search || undefined,
     city: city || undefined,
     region: region || undefined,
-    roomType: roomType || undefined,
     minAnnualReturn: Number(minAnnualReturn) > 0 ? Number(minAnnualReturn) : undefined,
-    maxNightlyRate: Number(maxNightlyRate) > 0 ? Number(maxNightlyRate) : undefined,
     limit: 100,
   };
 
@@ -94,17 +108,15 @@ export default function InvestorPortal() {
   const avgAnnual = topListings.length
     ? topListings.reduce((sum, item) => sum + Number(item.expectedAnnualReturn), 0) / topListings.length
     : 0;
-  const avgNightly = topListings.length
-    ? topListings.reduce((sum, item) => sum + Number(item.nightlyRate), 0) / topListings.length
+  const avgSalePrice = topListings.length
+    ? topListings.reduce((sum, item) => sum + Number(item.estimatedSalePrice), 0) / topListings.length
     : 0;
-  const hasActiveFilters = Boolean(search || city || region || roomType || Number(minAnnualReturn) > 0 || Number(maxNightlyRate) > 0);
+  const hasActiveFilters = Boolean(search || city || region || Number(minAnnualReturn) > 0);
   const activeFilterCount = [
     Boolean(search),
     Boolean(city),
     Boolean(region),
-    Boolean(roomType),
     Number(minAnnualReturn) > 0,
-    Number(maxNightlyRate) > 0,
   ].filter(Boolean).length;
 
   const cities = useMemo(
@@ -115,11 +127,6 @@ export default function InvestorPortal() {
     () => Array.from(new Set((allListings ?? []).map((item) => item.sourceRegion).filter(Boolean))).sort(),
     [allListings]
   );
-  const roomTypes = useMemo(
-    () => Array.from(new Set((allListings ?? []).map((item) => item.roomType).filter(Boolean))).sort(),
-    [allListings]
-  );
-
   const autoApplyLocationFilter = (coords: GeolocationCoordinates, candidates: StrMarketListing[]) => {
     const withCoordinates = candidates.filter((item) => item.latitude && item.longitude);
     if (withCoordinates.length === 0) return;
@@ -264,10 +271,10 @@ export default function InvestorPortal() {
         </Card>
         <Card className="border-slate-200 shadow-sm bg-white/90">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-slate-500">Avg Nightly Rate</CardTitle>
+            <CardTitle className="text-sm text-slate-500">Avg Estimated Sale Price</CardTitle>
           </CardHeader>
           <CardContent className="flex items-center justify-between">
-            <p className="text-3xl font-bold text-slate-900">{formatMoney(avgNightly)}</p>
+            <p className="text-3xl font-bold text-slate-900">{formatMoney(avgSalePrice)}</p>
             <div className="rounded-full bg-amber-100 p-2.5">
               <MapPin className="w-5 h-5 text-amber-700" />
             </div>
@@ -338,22 +345,6 @@ export default function InvestorPortal() {
           </div>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
             <div className="space-y-1.5">
-              <p className="text-xs font-medium text-slate-600">Room Type</p>
-              <Select value={roomType || "all"} onValueChange={(value) => setRoomType(value === "all" ? "" : value)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="All room types" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All room types</SelectItem>
-                  {roomTypes.map((item) => (
-                    <SelectItem key={item!} value={item!}>
-                      {item}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
               <p className="text-xs font-medium text-slate-600">Min Annual Return (USD)</p>
               <Input
                 type="number"
@@ -361,16 +352,6 @@ export default function InvestorPortal() {
                 placeholder="e.g. 25000"
                 value={minAnnualReturn}
                 onChange={(e) => setMinAnnualReturn(e.target.value)}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <p className="text-xs font-medium text-slate-600">Max Nightly Rate (USD)</p>
-              <Input
-                type="number"
-                min={0}
-                placeholder="e.g. 300"
-                value={maxNightlyRate}
-                onChange={(e) => setMaxNightlyRate(e.target.value)}
               />
             </div>
           </div>
@@ -397,20 +378,11 @@ export default function InvestorPortal() {
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={() => setMaxNightlyRate("300")}
-              >
-                Under $300/night
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
                 onClick={() => {
                   setSearch("");
                   setCity("");
                   setRegion("");
-                  setRoomType("");
                   setMinAnnualReturn("0");
-                  setMaxNightlyRate("");
                   setLocationDefault(null);
                   setLocationApplied(false);
                   setLocationStatus("idle");
@@ -426,7 +398,7 @@ export default function InvestorPortal() {
       <Card className="border-slate-200 shadow-sm">
         <CardHeader>
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <CardTitle>Top STR Deals by Expected Annual Return</CardTitle>
+            <CardTitle>Top For-Sale Opportunities</CardTitle>
             <div className="flex items-center gap-2">
               <Badge variant="secondary">{topListings.length} results</Badge>
               {hasActiveFilters && <Badge>{activeFilterCount} filter{activeFilterCount === 1 ? "" : "s"} active</Badge>}
@@ -434,10 +406,10 @@ export default function InvestorPortal() {
           </div>
         </CardHeader>
         <CardContent className="space-y-3">
-          {isLoading && <p className="text-sm text-slate-500">Loading STR opportunities...</p>}
+          {isLoading && <p className="text-sm text-slate-500">Loading for-sale opportunities...</p>}
           {!isLoading && topListings.length === 0 && (
             <p className="text-sm text-slate-500">
-              No STR data stored yet. Click <span className="font-medium">Refresh Public STR Data</span> to ingest it.
+              No opportunities available yet. Click <span className="font-medium">Refresh Public STR Data</span> to ingest data.
             </p>
           )}
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -459,10 +431,10 @@ export default function InvestorPortal() {
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div>
                     <p className="font-medium text-slate-900">
-                      {listing.title || `${listing.roomType || "STR"} in ${listing.sourceCity}`}
+                      {listing.title || `Property in ${listing.sourceCity}`}
                     </p>
                     <p className="text-sm text-slate-500 mt-1">
-                      {listing.sourceCity}, {listing.sourceRegion?.toUpperCase()} • {listing.roomType || "Unknown type"}
+                      {listing.sourceCity}, {listing.sourceRegion?.toUpperCase()}
                       {listing.neighbourhood ? ` • ${listing.neighbourhood}` : ""}
                     </p>
                     <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
@@ -472,16 +444,6 @@ export default function InvestorPortal() {
                       >
                         {extractDisplayAddress(listing)}
                       </Link>
-                      <span className="text-slate-300">•</span>
-                      <a
-                        href={listing.listingUrl || listing.sourceUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center text-slate-600 hover:text-slate-900"
-                      >
-                        Listing Site
-                        <ExternalLink className="ml-1 h-3.5 w-3.5" />
-                      </a>
                     </div>
                   </div>
                   <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700">
@@ -490,10 +452,6 @@ export default function InvestorPortal() {
                 </div>
                 <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
                   <div className="rounded-md border border-slate-200 bg-slate-50 p-2.5">
-                    <p className="text-xs text-slate-500">Nightly Rate</p>
-                    <p className="font-semibold text-slate-900">{formatMoney(listing.nightlyRate)}</p>
-                  </div>
-                  <div className="rounded-md border border-slate-200 bg-slate-50 p-2.5">
                     <p className="text-xs text-slate-500">Monthly Return</p>
                     <p className="font-semibold text-slate-900">{formatMoney(listing.expectedMonthlyReturn)}</p>
                   </div>
@@ -501,10 +459,26 @@ export default function InvestorPortal() {
                     <p className="text-xs text-slate-500">Sale Price</p>
                     <p className="font-semibold text-slate-900">{formatMoney(listing.estimatedSalePrice)}</p>
                   </div>
-                  <div className="rounded-md border border-slate-200 bg-slate-50 p-2.5">
-                    <p className="text-xs text-slate-500">Occupancy</p>
-                    <p className="font-semibold text-slate-900">{Number(listing.expectedOccupancyRate).toFixed(1)}%</p>
-                  </div>
+                </div>
+                <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+                  <a
+                    href={buildSearchLink(buildForSaleLocation(listing), "zillow")}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center rounded-md border border-slate-200 px-2.5 py-1.5 text-slate-700 hover:bg-slate-50"
+                  >
+                    Find For-Sale on Zillow
+                    <ExternalLink className="ml-1.5 h-3.5 w-3.5" />
+                  </a>
+                  <a
+                    href={buildSearchLink(buildForSaleLocation(listing), "redfin")}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center rounded-md border border-slate-200 px-2.5 py-1.5 text-slate-700 hover:bg-slate-50"
+                  >
+                    Find For-Sale on Redfin
+                    <ExternalLink className="ml-1.5 h-3.5 w-3.5" />
+                  </a>
                 </div>
                 <div className="mt-4">
                   <Link href={`/investor/deals/${listing.id}`}>

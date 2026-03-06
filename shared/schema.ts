@@ -137,6 +137,7 @@ export const managerMaintenanceAutomationSettings = pgTable("manager_maintenance
 export const userProfileSettings = pgTable("user_profile_settings", {
   userId: varchar("user_id").notNull().references(() => users.id),
   phoneNumber: text("phone_number"),
+  twoFactorMethod: text("two_factor_method"),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => [
   primaryKey({ columns: [table.userId] }),
@@ -249,6 +250,55 @@ export const strMarketListings = pgTable(
   ]
 );
 
+export const multifamilySaleListings = pgTable(
+  "multifamily_sale_listings",
+  {
+    id: serial("id").primaryKey(),
+    source: text("source").notNull().default("rentcast"),
+    sourceListingId: text("source_listing_id").notNull(),
+    formattedAddress: text("formatted_address"),
+    addressLine1: text("address_line_1"),
+    addressLine2: text("address_line_2"),
+    city: text("city").notNull(),
+    state: text("state"),
+    stateFips: text("state_fips"),
+    zipCode: text("zip_code"),
+    county: text("county"),
+    countyFips: text("county_fips"),
+    latitude: decimal("latitude", { precision: 9, scale: 6 }),
+    longitude: decimal("longitude", { precision: 9, scale: 6 }),
+    propertyType: text("property_type"),
+    bedrooms: decimal("bedrooms", { precision: 4, scale: 1 }),
+    bathrooms: decimal("bathrooms", { precision: 4, scale: 1 }),
+    squareFootage: integer("square_footage"),
+    lotSize: integer("lot_size"),
+    yearBuilt: integer("year_built"),
+    status: text("status"),
+    price: decimal("price", { precision: 12, scale: 2 }).notNull(),
+    listingType: text("listing_type"),
+    listedDate: text("listed_date"),
+    removedDate: text("removed_date"),
+    createdDate: text("created_date"),
+    lastSeenDate: text("last_seen_date"),
+    daysOnMarket: integer("days_on_market"),
+    mlsName: text("mls_name"),
+    mlsNumber: text("mls_number"),
+    listingAgent: jsonb("listing_agent"),
+    listingOffice: jsonb("listing_office"),
+    history: jsonb("history"),
+    projectedAnnualReturn: decimal("projected_annual_return", { precision: 12, scale: 2 }),
+    currency: text("currency").notNull().default("USD"),
+    listingUrl: text("listing_url"),
+    photoUrl: text("photo_url"),
+    rawPayload: jsonb("raw_payload").notNull(),
+    lastSyncedAt: timestamp("last_synced_at").defaultNow().notNull(),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("multifamily_sale_source_listing_idx").on(table.source, table.sourceListingId),
+  ]
+);
+
 // === RELATIONS ===
 export const propertiesRelations = relations(properties, ({ one, many }) => ({
   leases: many(leases),
@@ -296,6 +346,10 @@ export const insertZillowLeadSchema = createInsertSchema(zillowLeads).omit({
 });
 export const insertListingMappingTemplateSchema = createInsertSchema(listingMappingTemplates).omit({ id: true, createdAt: true });
 export const insertStrMarketListingSchema = createInsertSchema(strMarketListings).omit({ id: true, createdAt: true });
+export const insertMultifamilySaleListingSchema = createInsertSchema(multifamilySaleListings).omit({
+  id: true,
+  createdAt: true,
+});
 export const upsertManagerRentNotificationSettingsSchema = createInsertSchema(managerRentNotificationSettings, {
   overdueDays: z.coerce.number().int().min(1).max(60),
 }).omit({ updatedAt: true });
@@ -312,6 +366,7 @@ export const upsertUserProfileSettingsSchema = createInsertSchema(userProfileSet
     .regex(/^[0-9+()\-\s]+$/, "Phone number contains invalid characters")
     .nullable()
     .optional(),
+  twoFactorMethod: z.enum(["email", "phone"]).nullable().optional(),
 }).omit({ updatedAt: true });
 export const insertLeaseSigningRequestSchema = createInsertSchema(leaseSigningRequests).omit({
   id: true,
@@ -365,3 +420,6 @@ export type InsertListingMappingTemplate = z.infer<typeof insertListingMappingTe
 
 export type StrMarketListing = typeof strMarketListings.$inferSelect;
 export type InsertStrMarketListing = z.infer<typeof insertStrMarketListingSchema>;
+
+export type MultifamilySaleListing = typeof multifamilySaleListings.$inferSelect;
+export type InsertMultifamilySaleListing = z.infer<typeof insertMultifamilySaleListingSchema>;

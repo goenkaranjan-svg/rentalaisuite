@@ -43,7 +43,11 @@ export interface IAuthStorage {
   }): Promise<void>;
   updateUserEmail(userId: string, email: string): Promise<User | undefined>;
   getUserProfileSettings(userId: string): Promise<UserProfileSettings | undefined>;
-  upsertUserProfileSettings(input: { userId: string; phoneNumber?: string | null }): Promise<UserProfileSettings>;
+  upsertUserProfileSettings(input: {
+    userId: string;
+    phoneNumber?: string | null;
+    twoFactorMethod?: "email" | "phone" | null;
+  }): Promise<UserProfileSettings>;
 }
 
 class AuthStorage implements IAuthStorage {
@@ -230,17 +234,23 @@ class AuthStorage implements IAuthStorage {
     return settings;
   }
 
-  async upsertUserProfileSettings(input: { userId: string; phoneNumber?: string | null }): Promise<UserProfileSettings> {
+  async upsertUserProfileSettings(input: {
+    userId: string;
+    phoneNumber?: string | null;
+    twoFactorMethod?: "email" | "phone" | null;
+  }): Promise<UserProfileSettings> {
     const [settings] = await db
       .insert(userProfileSettings)
       .values({
         userId: input.userId,
         phoneNumber: input.phoneNumber ?? null,
+        twoFactorMethod: input.twoFactorMethod ?? null,
       })
       .onConflictDoUpdate({
         target: userProfileSettings.userId,
         set: {
           phoneNumber: input.phoneNumber ?? null,
+          twoFactorMethod: input.twoFactorMethod ?? null,
           updatedAt: new Date(),
         },
       })

@@ -11,7 +11,7 @@ import {
   Menu,
   Send,
   TrendingUp,
-  UserCircle2,
+  Home,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
@@ -24,14 +24,13 @@ function getNavigation(role?: string) {
     return [
       { name: "Renter Portal", href: "/renter", icon: LayoutDashboard },
       { name: "Messages", href: "/messages", icon: MessageSquare },
-      { name: "Profile", href: "/profile", icon: UserCircle2 },
     ];
   }
   if (role === "investor") {
     return [
       { name: "STR Market", href: "/investor", icon: TrendingUp },
+      { name: "Multifamily", href: "/investor/multifamily", icon: Home },
       { name: "Messages", href: "/messages", icon: MessageSquare },
-      { name: "Profile", href: "/profile", icon: UserCircle2 },
     ];
   }
   return [
@@ -43,7 +42,6 @@ function getNavigation(role?: string) {
     { name: "Syndication", href: "/listing-exports", icon: Send },
     { name: "Screening", href: "/screenings", icon: UserSearch },
     { name: "Messages", href: "/messages", icon: MessageSquare },
-    { name: "Profile", href: "/profile", icon: UserCircle2 },
   ];
 }
 
@@ -87,23 +85,28 @@ export function Sidebar() {
       </div>
 
       <div className="mt-auto p-6 border-t border-slate-800">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center overflow-hidden">
-            {user?.profileImageUrl ? (
-              <img src={user.profileImageUrl} alt="Profile" className="w-full h-full object-cover" />
-            ) : (
-              <span className="text-lg font-bold text-slate-300">
-                {user?.firstName?.[0] || user?.email?.[0]?.toUpperCase() || "U"}
-              </span>
-            )}
+        <Link href="/profile">
+          <div
+            className="flex items-center gap-3 mb-4 rounded-lg px-2 py-1.5 cursor-pointer hover:bg-slate-800"
+            onClick={() => setIsOpen(false)}
+          >
+            <div className="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center overflow-hidden">
+              {user?.profileImageUrl ? (
+                <img src={user.profileImageUrl} alt="Profile" className="w-full h-full object-cover" />
+              ) : (
+                <span className="text-lg font-bold text-slate-300">
+                  {user?.firstName?.[0] || user?.email?.[0]?.toUpperCase() || "U"}
+                </span>
+              )}
+            </div>
+            <div className="flex-1 overflow-hidden">
+              <p className="text-sm font-medium truncate">{user?.firstName || user?.email}</p>
+              <p className="text-xs text-slate-500 truncate">
+                {user?.role === "tenant" ? "Renter" : user?.role === "investor" ? "Investor" : "Property Manager"}
+              </p>
+            </div>
           </div>
-          <div className="flex-1 overflow-hidden">
-            <p className="text-sm font-medium truncate">{user?.firstName || user?.email}</p>
-            <p className="text-xs text-slate-500 truncate">
-              {user?.role === "tenant" ? "Renter" : user?.role === "investor" ? "Investor" : "Property Manager"}
-            </p>
-          </div>
-        </div>
+        </Link>
         <Button 
           variant="outline" 
           className="w-full justify-start text-slate-400 hover:text-white border-slate-700 hover:bg-slate-800"
