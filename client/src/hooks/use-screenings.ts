@@ -32,8 +32,15 @@ export function useScreeningOverview() {
     queryKey: [api.screenings.list.path],
     queryFn: async () => {
       const res = await fetch(api.screenings.list.path, { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to fetch screening data");
-      return await res.json();
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const message =
+          typeof body?.message === "string" && body.message.trim()
+            ? body.message
+            : `Failed to fetch screening data (HTTP ${res.status})`;
+        throw new Error(message);
+      }
+      return body as ScreeningOverview;
     },
   });
 }

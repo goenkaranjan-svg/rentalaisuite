@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
-import { Building2, ShieldCheck, Users, TrendingUp, LogIn, UserPlus, KeyRound, Menu, type LucideIcon } from "lucide-react";
+import { Building2, ShieldCheck, Users, TrendingUp, LogIn, UserPlus, KeyRound, Menu, Eye, EyeOff, type LucideIcon } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 
 import { useAuth } from "@/hooks/use-auth";
@@ -48,6 +48,8 @@ const modeConfig: Record<AuthMode, { label: string; title: string; description: 
   },
 };
 
+const TEMP_PASSWORD_REVEAL_MS = 5000;
+
 export default function Login() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
@@ -81,6 +83,8 @@ export default function Login() {
   const [devResetToken, setDevResetToken] = useState<string | null>(null);
   const [showResendVerification, setShowResendVerification] = useState(false);
   const [heroWordIndex, setHeroWordIndex] = useState(0);
+  const [showPasswordTemporarily, setShowPasswordTemporarily] = useState(false);
+  const [showNewPasswordTemporarily, setShowNewPasswordTemporarily] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -95,6 +99,18 @@ export default function Login() {
     }, 2200);
     return () => clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    if (!showPasswordTemporarily) return;
+    const timer = setTimeout(() => setShowPasswordTemporarily(false), TEMP_PASSWORD_REVEAL_MS);
+    return () => clearTimeout(timer);
+  }, [showPasswordTemporarily]);
+
+  useEffect(() => {
+    if (!showNewPasswordTemporarily) return;
+    const timer = setTimeout(() => setShowNewPasswordTemporarily(false), TEMP_PASSWORD_REVEAL_MS);
+    return () => clearTimeout(timer);
+  }, [showNewPasswordTemporarily]);
 
   const redirectByRole = (nextRole: UserRole | string | undefined) => {
     if (nextRole === "tenant") {
@@ -323,13 +339,23 @@ export default function Login() {
                 </div>
                 <div className="space-y-2">
                   <Label className="text-sm">Password</Label>
-                  <Input
-                    type="password"
-                    placeholder="Enter your password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="h-12 text-base bg-slate-900/80 border-slate-600 text-slate-100 placeholder:text-slate-400 focus-visible:ring-2 focus-visible:ring-emerald-500/20 focus-visible:border-emerald-500"
-                  />
+                  <div className="relative">
+                    <Input
+                      type={showPasswordTemporarily ? "text" : "password"}
+                      placeholder="Enter your password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="h-12 pr-12 text-base bg-slate-900/80 border-slate-600 text-slate-100 placeholder:text-slate-400 focus-visible:ring-2 focus-visible:ring-emerald-500/20 focus-visible:border-emerald-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPasswordTemporarily((current) => !current)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-100"
+                      aria-label={showPasswordTemporarily ? "Hide password" : "Show password for 5 seconds"}
+                    >
+                      {showPasswordTemporarily ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
                 </div>
                 <Button type="submit" className="w-full h-12 text-base bg-emerald-500 hover:bg-emerald-600 text-white transition-all duration-200 px-4" disabled={isLoggingIn}>
                   {isLoggingIn ? "Signing in..." : "Sign in"}
@@ -407,13 +433,23 @@ export default function Login() {
                 </div>
                 <div className="space-y-2">
                   <Label>Password</Label>
-                  <Input
-                    type="password"
-                    placeholder="Create a secure password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="h-11 bg-slate-900/80 border-slate-600 text-slate-100 placeholder:text-slate-400 focus-visible:ring-2 focus-visible:ring-emerald-500/20 focus-visible:border-emerald-500"
-                  />
+                  <div className="relative">
+                    <Input
+                      type={showPasswordTemporarily ? "text" : "password"}
+                      placeholder="Create a secure password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="h-11 pr-12 bg-slate-900/80 border-slate-600 text-slate-100 placeholder:text-slate-400 focus-visible:ring-2 focus-visible:ring-emerald-500/20 focus-visible:border-emerald-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPasswordTemporarily((current) => !current)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-100"
+                      aria-label={showPasswordTemporarily ? "Hide password" : "Show password for 5 seconds"}
+                    >
+                      {showPasswordTemporarily ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
                 </div>
                 <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
                   <p className="text-[11px] sm:text-xs font-medium text-slate-700 mb-2">Password complexity requirements</p>
@@ -482,13 +518,23 @@ export default function Login() {
                 </div>
                 <div className="space-y-2">
                   <Label>New Password</Label>
-                  <Input
-                    type="password"
-                    placeholder="Enter a new password"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    className="h-11 bg-slate-900/80 border-slate-600 text-slate-100 placeholder:text-slate-400 focus-visible:ring-2 focus-visible:ring-emerald-500/20 focus-visible:border-emerald-500"
-                  />
+                  <div className="relative">
+                    <Input
+                      type={showNewPasswordTemporarily ? "text" : "password"}
+                      placeholder="Enter a new password"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      className="h-11 pr-12 bg-slate-900/80 border-slate-600 text-slate-100 placeholder:text-slate-400 focus-visible:ring-2 focus-visible:ring-emerald-500/20 focus-visible:border-emerald-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowNewPasswordTemporarily((current) => !current)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-100"
+                      aria-label={showNewPasswordTemporarily ? "Hide new password" : "Show new password for 5 seconds"}
+                    >
+                      {showNewPasswordTemporarily ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
                 </div>
                 <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
                   <p className="text-[11px] sm:text-xs font-medium text-slate-700 mb-2">Password complexity requirements</p>
