@@ -6,7 +6,6 @@ import {
   FileText, 
   DollarSign, 
   UserSearch, 
-  MessageSquare, 
   LogOut,
   Menu,
   Send,
@@ -23,14 +22,12 @@ function getNavigation(role?: string) {
   if (role === "tenant") {
     return [
       { name: "Renter Portal", href: "/renter", icon: LayoutDashboard },
-      { name: "Messages", href: "/messages", icon: MessageSquare },
     ];
   }
   if (role === "investor") {
     return [
       { name: "STR Market", href: "/investor", icon: TrendingUp },
       { name: "Multifamily", href: "/investor/multifamily", icon: Home },
-      { name: "Messages", href: "/messages", icon: MessageSquare },
     ];
   }
   return [
@@ -41,7 +38,6 @@ function getNavigation(role?: string) {
     { name: "Accounting", href: "/accounting", icon: DollarSign },
     { name: "Syndication", href: "/listing-exports", icon: Send },
     { name: "Screening", href: "/screenings", icon: UserSearch },
-    { name: "Messages", href: "/messages", icon: MessageSquare },
   ];
 }
 

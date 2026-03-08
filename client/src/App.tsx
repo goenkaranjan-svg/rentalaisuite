@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/use-auth";
 import { Sidebar } from "@/components/Sidebar";
+import { AIAssistantFab } from "@/components/AIAssistantFab";
 import { Loader2 } from "lucide-react";
 import { useEffect, useRef } from "react";
 
@@ -15,7 +16,6 @@ import Properties from "@/pages/Properties";
 import PropertyDetails from "@/pages/PropertyDetails";
 import Maintenance from "@/pages/Maintenance";
 import Leases from "@/pages/Leases";
-import Messages from "@/pages/Messages";
 import Accounting from "@/pages/Accounting";
 import RenterPortal from "@/pages/RenterPortal";
 import ListingExports from "@/pages/ListingExports";
@@ -87,7 +87,7 @@ function ProtectedLayout({ children }: { children: React.ReactNode }) {
   }
 
   if (user.role === "tenant") {
-    const allowedTenantRoutes = ["/renter", "/messages", "/profile", "/login"];
+    const allowedTenantRoutes = ["/renter", "/profile", "/login"];
     const tenantDetailRoutes = ["/properties/"];
     const isAllowed =
       allowedTenantRoutes.includes(location) ||
@@ -98,7 +98,7 @@ function ProtectedLayout({ children }: { children: React.ReactNode }) {
     }
   }
   if (user.role === "investor") {
-    const allowedInvestorRoutes = ["/investor", "/investor/multifamily", "/messages", "/profile", "/login"];
+    const allowedInvestorRoutes = ["/investor", "/investor/multifamily", "/profile", "/login"];
     const investorDetailRoutes = ["/investor/deals/"];
     const isAllowedInvestorRoute =
       allowedInvestorRoutes.includes(location) ||
@@ -130,6 +130,7 @@ function ProtectedLayout({ children }: { children: React.ReactNode }) {
           {children}
         </div>
       </main>
+      <AIAssistantFab />
     </div>
   );
 }
@@ -167,9 +168,6 @@ function Router() {
       </Route>
       <Route path="/leases">
         <ProtectedLayout><Leases /></ProtectedLayout>
-      </Route>
-      <Route path="/messages">
-        <ProtectedLayout><Messages /></ProtectedLayout>
       </Route>
       <Route path="/accounting">
         <ProtectedLayout><Accounting /></ProtectedLayout>

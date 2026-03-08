@@ -10,6 +10,7 @@ import { sendAuthEmail } from "./integrations/auth/mailer";
 import { hashToken } from "./integrations/auth/crypto";
 import { registerChatRoutes } from "./integrations/chat";
 import { registerImageRoutes } from "./integrations/image";
+import { runAssistantChat } from "./integrations/assistant";
 import { seedDatabase } from "./seed";
 import OpenAI from "openai";
 import { scrapePublicStrListings } from "./services/str-market";
@@ -22,6 +23,16 @@ import { randomBytes } from "node:crypto";
 const openai = new OpenAI({
   apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY || "sk-placeholder",
   baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+});
+
+const assistantHistoryMessageSchema = z.object({
+  role: z.enum(["user", "assistant"]),
+  content: z.string().trim().min(1).max(2000),
+});
+
+const assistantChatRequestSchema = z.object({
+  message: z.string().trim().min(1).max(2000),
+  history: z.array(assistantHistoryMessageSchema).max(20).optional(),
 });
 
 function escapeXml(value: string): string {
@@ -989,6 +1000,32 @@ export async function registerRoutes(
   registerImageRoutes(app);
 
   // 3. Application Routes
+  app.post("/api/assistant/chat", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const input = assistantChatRequestSchema.parse(req.body ?? {});
+      const userId = (req as any).user?.claims?.sub;
+      if (!userId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      const result = await runAssistantChat({
+        userId,
+        message: input.message,
+        history: input.history ?? [],
+      });
+
+      return res.json(result);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: error.errors[0]?.message ?? "Invalid request body." });
+      }
+      if (error instanceof Error && error.message === "Unauthorized") {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      console.error("Assistant chat failed:", error);
+      return res.status(500).json({ message: "Failed to generate assistant response." });
+    }
+  });
   
   // === Properties ===
   app.get(api.properties.list.path, isAuthenticated, async (req: any, res) => {
