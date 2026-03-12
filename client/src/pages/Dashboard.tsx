@@ -47,13 +47,13 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-8 animate-in">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-3xl font-bold font-display text-slate-900">Dashboard</h1>
           <p className="text-slate-500 mt-1">Overview of your rental portfolio performance.</p>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="text-sm text-slate-500">
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          <div className="hidden text-sm text-slate-500 sm:block">
             Last updated: Today, 9:41 AM
           </div>
           <DropdownMenu>

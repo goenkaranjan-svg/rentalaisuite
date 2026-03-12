@@ -164,7 +164,7 @@ export default function Screenings() {
       </div>
 
       <Card className="border-slate-200 shadow-sm">
-        <CardHeader className="flex flex-row items-center justify-between gap-4">
+        <CardHeader className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
           <CardTitle className="text-lg">Zillow Lead Inbox</CardTitle>
           <Button
             variant="outline"
@@ -185,43 +185,72 @@ export default function Screenings() {
           ) : !data?.leads.length ? (
             <div className="py-12 text-center text-slate-500">No leads available yet.</div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Applicant</TableHead>
-                  <TableHead>Property</TableHead>
-                  <TableHead>Move-In</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Received</TableHead>
-                  <TableHead className="text-right">Action</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
+            <>
+              <div className="space-y-3 md:hidden">
                 {data.leads.map((lead) => (
-                  <TableRow key={lead.id}>
-                    <TableCell>
-                      <div className="font-medium text-slate-900">{lead.applicantName || "Unknown applicant"}</div>
-                      <div className="text-xs text-slate-500">{lead.applicantEmail || "No email provided"}</div>
-                    </TableCell>
-                    <TableCell className="text-slate-600">
-                      {propertyLabelByExternalId.get(lead.propertyExternalId || "") || lead.propertyExternalId || "Unmapped listing"}
-                    </TableCell>
-                    <TableCell className="text-slate-600">{lead.moveInDate || "N/A"}</TableCell>
-                    <TableCell>
+                  <div key={lead.id} className="rounded-lg border border-slate-200 p-4 space-y-2">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-medium text-slate-900">{lead.applicantName || "Unknown applicant"}</p>
+                        <p className="text-xs text-slate-500">{lead.applicantEmail || "No email provided"}</p>
+                      </div>
                       <Badge variant="outline" className={getLeadBadgeClass(lead.status)}>
                         {lead.status}
                       </Badge>
-                    </TableCell>
-                    <TableCell className="text-slate-600">{formatDate(lead.receivedAt)}</TableCell>
-                    <TableCell className="text-right">
-                      <Button size="sm" variant="outline" className="border-slate-200" onClick={() => startScreening(lead)}>
-                        Start Screening
-                      </Button>
-                    </TableCell>
-                  </TableRow>
+                    </div>
+                    <p className="text-sm text-slate-600">
+                      {propertyLabelByExternalId.get(lead.propertyExternalId || "") || lead.propertyExternalId || "Unmapped listing"}
+                    </p>
+                    <div className="flex items-center justify-between text-sm text-slate-600">
+                      <span>Move-in: {lead.moveInDate || "N/A"}</span>
+                      <span>{formatDate(lead.receivedAt)}</span>
+                    </div>
+                    <Button size="sm" variant="outline" className="w-full border-slate-200" onClick={() => startScreening(lead)}>
+                      Start Screening
+                    </Button>
+                  </div>
                 ))}
-              </TableBody>
-            </Table>
+              </div>
+              <div className="hidden md:block">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Applicant</TableHead>
+                      <TableHead>Property</TableHead>
+                      <TableHead>Move-In</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Received</TableHead>
+                      <TableHead className="text-right">Action</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {data.leads.map((lead) => (
+                      <TableRow key={lead.id}>
+                        <TableCell>
+                          <div className="font-medium text-slate-900">{lead.applicantName || "Unknown applicant"}</div>
+                          <div className="text-xs text-slate-500">{lead.applicantEmail || "No email provided"}</div>
+                        </TableCell>
+                        <TableCell className="text-slate-600">
+                          {propertyLabelByExternalId.get(lead.propertyExternalId || "") || lead.propertyExternalId || "Unmapped listing"}
+                        </TableCell>
+                        <TableCell className="text-slate-600">{lead.moveInDate || "N/A"}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className={getLeadBadgeClass(lead.status)}>
+                            {lead.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-slate-600">{formatDate(lead.receivedAt)}</TableCell>
+                        <TableCell className="text-right">
+                          <Button size="sm" variant="outline" className="border-slate-200" onClick={() => startScreening(lead)}>
+                            Start Screening
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>
@@ -240,36 +269,60 @@ export default function Screenings() {
           ) : !data?.screenings.length ? (
             <div className="py-12 text-center text-slate-500">No screenings created yet.</div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Tenant</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Credit</TableHead>
-                  <TableHead>Background</TableHead>
-                  <TableHead>Created</TableHead>
-                  <TableHead>Notes</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
+            <>
+              <div className="space-y-3 md:hidden">
                 {data.screenings.map((screening) => (
-                  <TableRow key={screening.id}>
-                    <TableCell className="font-medium text-slate-900">
-                      {tenantNameById.get(screening.tenantId) || screening.tenantId}
-                    </TableCell>
-                    <TableCell>
+                  <div key={screening.id} className="rounded-lg border border-slate-200 p-4 space-y-2">
+                    <div className="flex items-start justify-between gap-3">
+                      <p className="font-medium text-slate-900">
+                        {tenantNameById.get(screening.tenantId) || screening.tenantId}
+                      </p>
                       <Badge variant="outline" className={getScreeningBadgeClass(screening.status)}>
                         {screening.status}
                       </Badge>
-                    </TableCell>
-                    <TableCell className="text-slate-600">{screening.creditScore ?? "N/A"}</TableCell>
-                    <TableCell className="text-slate-600">{screening.backgroundCheck || "N/A"}</TableCell>
-                    <TableCell className="text-slate-600">{formatDate(screening.createdAt)}</TableCell>
-                    <TableCell className="max-w-[280px] truncate text-slate-600">{screening.notes || "N/A"}</TableCell>
-                  </TableRow>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-sm text-slate-600">
+                      <p>Credit: {screening.creditScore ?? "N/A"}</p>
+                      <p>Background: {screening.backgroundCheck || "N/A"}</p>
+                    </div>
+                    <p className="text-sm text-slate-600">Created: {formatDate(screening.createdAt)}</p>
+                    <p className="text-sm text-slate-600">{screening.notes || "N/A"}</p>
+                  </div>
                 ))}
-              </TableBody>
-            </Table>
+              </div>
+              <div className="hidden md:block">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Tenant</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Credit</TableHead>
+                      <TableHead>Background</TableHead>
+                      <TableHead>Created</TableHead>
+                      <TableHead>Notes</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {data.screenings.map((screening) => (
+                      <TableRow key={screening.id}>
+                        <TableCell className="font-medium text-slate-900">
+                          {tenantNameById.get(screening.tenantId) || screening.tenantId}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className={getScreeningBadgeClass(screening.status)}>
+                            {screening.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-slate-600">{screening.creditScore ?? "N/A"}</TableCell>
+                        <TableCell className="text-slate-600">{screening.backgroundCheck || "N/A"}</TableCell>
+                        <TableCell className="text-slate-600">{formatDate(screening.createdAt)}</TableCell>
+                        <TableCell className="max-w-[280px] truncate text-slate-600">{screening.notes || "N/A"}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>

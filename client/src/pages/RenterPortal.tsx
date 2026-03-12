@@ -121,29 +121,46 @@ export default function RenterPortal() {
         <Card className="border-slate-200">
           <CardHeader><CardTitle>Payment History</CardTitle></CardHeader>
           <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Amount</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {myPayments.slice(0, 8).map((p) => (
-                  <TableRow key={p.id}>
-                    <TableCell>{p.date ? format(new Date(p.date), "MMM d, yyyy") : "-"}</TableCell>
-                    <TableCell className="capitalize">{p.type}</TableCell>
-                    <TableCell><Badge variant="outline" className="capitalize">{p.status}</Badge></TableCell>
-                    <TableCell className="text-right">${Number(p.amount).toLocaleString()}</TableCell>
+            <div className="space-y-3 md:hidden">
+              {myPayments.slice(0, 8).map((p) => (
+                <div key={p.id} className="rounded-lg border border-slate-200 p-4 space-y-2">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm text-slate-600">{p.date ? format(new Date(p.date), "MMM d, yyyy") : "-"}</p>
+                      <p className="capitalize font-medium text-slate-900">{p.type}</p>
+                    </div>
+                    <p className="font-medium text-slate-900">${Number(p.amount).toLocaleString()}</p>
+                  </div>
+                  <Badge variant="outline" className="capitalize">{p.status}</Badge>
+                </div>
+              ))}
+              {myPayments.length === 0 && <p className="text-center text-slate-500 py-8">No payments found.</p>}
+            </div>
+            <div className="hidden md:block">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Amount</TableHead>
                   </TableRow>
-                ))}
-                {myPayments.length === 0 && (
-                  <TableRow><TableCell colSpan={4} className="text-center text-slate-500 py-8">No payments found.</TableCell></TableRow>
-                )}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {myPayments.slice(0, 8).map((p) => (
+                    <TableRow key={p.id}>
+                      <TableCell>{p.date ? format(new Date(p.date), "MMM d, yyyy") : "-"}</TableCell>
+                      <TableCell className="capitalize">{p.type}</TableCell>
+                      <TableCell><Badge variant="outline" className="capitalize">{p.status}</Badge></TableCell>
+                      <TableCell className="text-right">${Number(p.amount).toLocaleString()}</TableCell>
+                    </TableRow>
+                  ))}
+                  {myPayments.length === 0 && (
+                    <TableRow><TableCell colSpan={4} className="text-center text-slate-500 py-8">No payments found.</TableCell></TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
           </CardContent>
         </Card>
 

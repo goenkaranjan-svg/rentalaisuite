@@ -146,7 +146,7 @@ export default function Accounting() {
 
   return (
     <div className="space-y-8 animate-in">
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold font-display text-slate-900">Accounting</h1>
           <p className="text-slate-500 mt-1">Collections, receivables, and rent roll management.</p>
@@ -164,7 +164,7 @@ export default function Accounting() {
                   <Settings2 className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-[24rem] p-3 space-y-2">
+              <DropdownMenuContent align="end" className="w-[95vw] max-w-[24rem] p-3 space-y-2">
                 <div className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50/60 px-3 py-2">
                   <div className="text-sm font-medium text-slate-700">Overdue rent email alerts</div>
                   <div className="flex items-center gap-2">
@@ -272,46 +272,74 @@ export default function Accounting() {
           <CardTitle>Recent Transactions</CardTitle>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Date</TableHead>
-                <TableHead>Property</TableHead>
-                <TableHead>Tenant</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Amount</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {recentTransactions.map((payment) => {
-                const lease = leaseLookup.get(payment.leaseId);
-                const propertyName = lease ? propertyLookup.get(lease.propertyId) : undefined;
-                const tenantName = lease ? tenantLookup.get(lease.tenantId) : undefined;
-                return (
-                  <TableRow key={payment.id}>
-                    <TableCell>{payment.date ? format(new Date(payment.date), "MMM d, yyyy") : "-"}</TableCell>
-                    <TableCell>{propertyName ?? `Lease ${payment.leaseId}`}</TableCell>
-                    <TableCell>{tenantName ?? "-"}</TableCell>
-                    <TableCell className="capitalize">{payment.type}</TableCell>
-                    <TableCell>
-                      <Badge className="capitalize" variant="outline">
-                        {payment.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right font-medium">${Number(payment.amount).toLocaleString()}</TableCell>
-                  </TableRow>
-                );
-              })}
-              {recentTransactions.length === 0 && (
+          <div className="space-y-3 md:hidden">
+            {recentTransactions.map((payment) => {
+              const lease = leaseLookup.get(payment.leaseId);
+              const propertyName = lease ? propertyLookup.get(lease.propertyId) : undefined;
+              const tenantName = lease ? tenantLookup.get(lease.tenantId) : undefined;
+              return (
+                <div key={payment.id} className="rounded-lg border border-slate-200 p-4 space-y-2">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-medium text-slate-900">{propertyName ?? `Lease ${payment.leaseId}`}</p>
+                      <p className="text-sm text-slate-500">{tenantName ?? "-"}</p>
+                    </div>
+                    <p className="font-medium text-slate-900">${Number(payment.amount).toLocaleString()}</p>
+                  </div>
+                  <div className="flex items-center justify-between text-sm text-slate-600">
+                    <span>{payment.date ? format(new Date(payment.date), "MMM d, yyyy") : "-"}</span>
+                    <span className="capitalize">{payment.type}</span>
+                  </div>
+                  <Badge className="capitalize" variant="outline">
+                    {payment.status}
+                  </Badge>
+                </div>
+              );
+            })}
+            {recentTransactions.length === 0 && <p className="text-center text-slate-500 py-8">No transactions yet.</p>}
+          </div>
+          <div className="hidden md:block">
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center text-slate-500 py-10">
-                    No transactions yet.
-                  </TableCell>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Property</TableHead>
+                  <TableHead>Tenant</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Amount</TableHead>
                 </TableRow>
-              )}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {recentTransactions.map((payment) => {
+                  const lease = leaseLookup.get(payment.leaseId);
+                  const propertyName = lease ? propertyLookup.get(lease.propertyId) : undefined;
+                  const tenantName = lease ? tenantLookup.get(lease.tenantId) : undefined;
+                  return (
+                    <TableRow key={payment.id}>
+                      <TableCell>{payment.date ? format(new Date(payment.date), "MMM d, yyyy") : "-"}</TableCell>
+                      <TableCell>{propertyName ?? `Lease ${payment.leaseId}`}</TableCell>
+                      <TableCell>{tenantName ?? "-"}</TableCell>
+                      <TableCell className="capitalize">{payment.type}</TableCell>
+                      <TableCell>
+                        <Badge className="capitalize" variant="outline">
+                          {payment.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right font-medium">${Number(payment.amount).toLocaleString()}</TableCell>
+                    </TableRow>
+                  );
+                })}
+                {recentTransactions.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center text-slate-500 py-10">
+                      No transactions yet.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
 
@@ -320,35 +348,62 @@ export default function Accounting() {
           <CardTitle>Rent Roll (Current Month)</CardTitle>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Property</TableHead>
-                <TableHead>Tenant</TableHead>
-                <TableHead className="text-right">Expected</TableHead>
-                <TableHead className="text-right">Collected</TableHead>
-                <TableHead className="text-right">Balance</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rentRoll.map((row) => (
-                <TableRow key={row.lease.id}>
-                  <TableCell>{propertyLookup.get(row.lease.propertyId) ?? `Property ${row.lease.propertyId}`}</TableCell>
-                  <TableCell>{tenantLookup.get(row.lease.tenantId) ?? row.lease.tenantId}</TableCell>
-                  <TableCell className="text-right">${row.expected.toLocaleString()}</TableCell>
-                  <TableCell className="text-right">${row.collected.toLocaleString()}</TableCell>
-                  <TableCell className="text-right font-medium text-amber-700">${row.balance.toLocaleString()}</TableCell>
-                </TableRow>
-              ))}
-              {rentRoll.length === 0 && (
+          <div className="space-y-3 md:hidden">
+            {rentRoll.map((row) => (
+              <div key={row.lease.id} className="rounded-lg border border-slate-200 p-4 space-y-2">
+                <p className="font-medium text-slate-900">
+                  {propertyLookup.get(row.lease.propertyId) ?? `Property ${row.lease.propertyId}`}
+                </p>
+                <p className="text-sm text-slate-500">{tenantLookup.get(row.lease.tenantId) ?? row.lease.tenantId}</p>
+                <div className="grid grid-cols-3 gap-2 text-sm">
+                  <div>
+                    <p className="text-slate-500">Expected</p>
+                    <p className="font-medium">${row.expected.toLocaleString()}</p>
+                  </div>
+                  <div>
+                    <p className="text-slate-500">Collected</p>
+                    <p className="font-medium">${row.collected.toLocaleString()}</p>
+                  </div>
+                  <div>
+                    <p className="text-slate-500">Balance</p>
+                    <p className="font-medium text-amber-700">${row.balance.toLocaleString()}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+            {rentRoll.length === 0 && <p className="text-center text-slate-500 py-8">No active leases found.</p>}
+          </div>
+          <div className="hidden md:block">
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center text-slate-500 py-10">
-                    No active leases found.
-                  </TableCell>
+                  <TableHead>Property</TableHead>
+                  <TableHead>Tenant</TableHead>
+                  <TableHead className="text-right">Expected</TableHead>
+                  <TableHead className="text-right">Collected</TableHead>
+                  <TableHead className="text-right">Balance</TableHead>
                 </TableRow>
-              )}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {rentRoll.map((row) => (
+                  <TableRow key={row.lease.id}>
+                    <TableCell>{propertyLookup.get(row.lease.propertyId) ?? `Property ${row.lease.propertyId}`}</TableCell>
+                    <TableCell>{tenantLookup.get(row.lease.tenantId) ?? row.lease.tenantId}</TableCell>
+                    <TableCell className="text-right">${row.expected.toLocaleString()}</TableCell>
+                    <TableCell className="text-right">${row.collected.toLocaleString()}</TableCell>
+                    <TableCell className="text-right font-medium text-amber-700">${row.balance.toLocaleString()}</TableCell>
+                  </TableRow>
+                ))}
+                {rentRoll.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center text-slate-500 py-10">
+                      No active leases found.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
     </div>

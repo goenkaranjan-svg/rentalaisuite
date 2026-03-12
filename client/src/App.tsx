@@ -123,10 +123,10 @@ function ProtectedLayout({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex">
+    <div className="min-h-dvh bg-slate-50 flex overflow-x-hidden">
       <Sidebar />
-      <main className="flex-1 lg:ml-72 p-4 md:p-8 overflow-y-auto h-screen">
-        <div className="max-w-6xl mx-auto pt-14 lg:pt-0 pb-20">
+      <main className="flex-1 min-w-0 lg:ml-72 p-4 md:p-8 overflow-y-auto min-h-dvh">
+        <div className="max-w-6xl mx-auto pt-16 lg:pt-0 pb-20">
           {children}
         </div>
       </main>

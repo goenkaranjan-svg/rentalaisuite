@@ -118,10 +118,10 @@ export function Sidebar() {
   return (
     <>
       {/* Mobile Trigger */}
-      <div className="lg:hidden fixed top-4 left-4 z-50">
+      <div className="lg:hidden fixed top-3 left-3 z-50">
         <Sheet open={isOpen} onOpenChange={setIsOpen}>
           <SheetTrigger asChild>
-            <Button variant="outline" size="icon" className="bg-white shadow-md">
+            <Button variant="outline" size="icon" className="bg-white/95 shadow-md">
               <Menu className="w-5 h-5" />
             </Button>
           </SheetTrigger>

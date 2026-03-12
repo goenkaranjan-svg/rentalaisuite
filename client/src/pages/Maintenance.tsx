@@ -84,7 +84,7 @@ export default function Maintenance() {
 
   return (
     <div className="space-y-8 animate-in">
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold font-display text-slate-900">Maintenance Requests</h1>
           <p className="text-slate-500 mt-1">Track and manage property repairs.</p>
@@ -101,7 +101,7 @@ export default function Maintenance() {
                 <Settings2 className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-80 p-3 space-y-2">
+            <DropdownMenuContent align="end" className="w-[95vw] max-w-80 p-3 space-y-2">
               <div className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50/60 px-3 py-2">
                 <span className="text-sm text-slate-700">Enable auto-triage</span>
                 <Switch checked={autoTriageEnabled} onCheckedChange={setAutoTriageEnabled} />
@@ -182,14 +182,14 @@ export default function Maintenance() {
                     )}
                   </div>
 
-                  <div className="flex flex-col gap-3 min-w-[200px]">
-                    <div className="flex items-center gap-2 text-sm font-medium text-slate-700">
+                  <div className="flex flex-col gap-3 md:min-w-[200px]">
+                    <div className="flex flex-col items-start gap-2 text-sm font-medium text-slate-700 sm:flex-row sm:items-center">
                       Status:
                       <Select 
                         defaultValue={req.status} 
                         onValueChange={(val) => updateStatus({ id: req.id, status: val })}
                       >
-                        <SelectTrigger className="w-[140px] h-8">
+                        <SelectTrigger className="h-8 w-full sm:w-[140px]">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>

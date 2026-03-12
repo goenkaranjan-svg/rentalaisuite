@@ -44,7 +44,7 @@ export default function PropertyDetails() {
       </Link>
 
       <Card className="overflow-hidden border-slate-200">
-        <div className="h-72 bg-slate-100">
+        <div className="h-56 bg-slate-100 sm:h-72">
           <img
             src={property.imageUrl || `https://placehold.co/1200x600/e2e8f0/94a3b8?text=Property+${property.id}`}
             alt={property.address}
@@ -52,7 +52,7 @@ export default function PropertyDetails() {
           />
         </div>
         <CardHeader>
-          <div className="flex items-start justify-between gap-4">
+          <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:gap-4">
             <div>
               <CardTitle className="text-2xl">{property.address}</CardTitle>
               <p className="text-slate-500 mt-2 flex items-center">
@@ -64,10 +64,10 @@ export default function PropertyDetails() {
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="text-3xl font-bold text-slate-900">
+          <div className="text-2xl font-bold text-slate-900 sm:text-3xl">
             ${Number(property.price).toLocaleString()}/mo
           </div>
-          <div className="grid grid-cols-3 gap-4 text-slate-700">
+          <div className="grid grid-cols-1 gap-3 text-slate-700 sm:grid-cols-3 sm:gap-4">
             <div className="flex items-center gap-2"><BedDouble className="w-4 h-4" /> {property.bedrooms} beds</div>
             <div className="flex items-center gap-2"><Bath className="w-4 h-4" /> {Number(property.bathrooms)} baths</div>
             <div className="flex items-center gap-2"><Ruler className="w-4 h-4" /> {property.sqft} sqft</div>
