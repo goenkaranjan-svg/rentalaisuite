@@ -2,6 +2,7 @@
 import { db } from "./db";
 import { 
   users, properties, leases, maintenanceRequests, payments, screenings, listingMappingTemplates, strMarketListings, multifamilySaleListings,
+  vendors,
   zillowLeads,
   managerRentNotificationSettings, rentOverdueNotificationHistory,
   managerLeaseExpiryNotificationSettings, leaseExpiryNotificationHistory,
@@ -17,6 +18,7 @@ import {
   type LeaseSigningRequest, type InsertLeaseSigningRequest,
   type ManagerLeaseExpiryNotificationSettings, type UpsertManagerLeaseExpiryNotificationSettings,
   type ManagerMaintenanceAutomationSettings, type UpsertManagerMaintenanceAutomationSettings
+  , type Vendor, type InsertVendor
 } from "@shared/schema";
 import { and, eq, desc, ilike, inArray, or } from "drizzle-orm";
 
@@ -52,6 +54,10 @@ export interface IStorage {
   upsertManagerMaintenanceAutomationSettings(
     settings: UpsertManagerMaintenanceAutomationSettings,
   ): Promise<ManagerMaintenanceAutomationSettings>;
+  getVendorsByManager(managerId: string, filters?: { search?: string; trade?: string }): Promise<Vendor[]>;
+  createVendor(vendor: InsertVendor): Promise<Vendor>;
+  getVendor(id: number): Promise<Vendor | undefined>;
+  findVendorBySourceExternalId(params: { managerId: string; source: string; sourceExternalId?: string | null }): Promise<Vendor | undefined>;
 
   // Payments
   getPayments(): Promise<Payment[]>;
@@ -238,6 +244,41 @@ export class DatabaseStorage implements IStorage {
       })
       .returning();
     return upserted;
+  }
+  async getVendorsByManager(managerId: string, filters?: { search?: string; trade?: string }) {
+    const clauses = [eq(vendors.managerId, managerId)];
+    if (filters?.search?.trim()) {
+      clauses.push(ilike(vendors.name, `%${filters.search.trim()}%`));
+    }
+    const results = await db.select().from(vendors).where(and(...clauses)).orderBy(desc(vendors.createdAt));
+    if (!filters?.trade?.trim()) return results;
+    const trade = filters.trade.trim().toLowerCase();
+    return results.filter((vendor) =>
+      Array.isArray(vendor.tradeCategories) &&
+      vendor.tradeCategories.some((category) => category.toLowerCase().includes(trade)),
+    );
+  }
+  async createVendor(insertVendor: InsertVendor) {
+    const [vendor] = await db.insert(vendors).values(insertVendor).returning();
+    return vendor;
+  }
+  async getVendor(id: number) {
+    const [vendor] = await db.select().from(vendors).where(eq(vendors.id, id));
+    return vendor;
+  }
+  async findVendorBySourceExternalId(params: { managerId: string; source: string; sourceExternalId?: string | null }) {
+    if (!params.sourceExternalId) return undefined;
+    const [vendor] = await db
+      .select()
+      .from(vendors)
+      .where(
+        and(
+          eq(vendors.managerId, params.managerId),
+          eq(vendors.source, params.source),
+          eq(vendors.sourceExternalId, params.sourceExternalId),
+        ),
+      );
+    return vendor;
   }
 
   // Payments

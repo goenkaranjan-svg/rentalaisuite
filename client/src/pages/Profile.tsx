@@ -17,6 +17,9 @@ export default function Profile() {
 
   const [email, setEmail] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
+  const [city, setCity] = useState("");
+  const [state, setState] = useState("");
+  const [zipCode, setZipCode] = useState("");
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
   const [twoFactorMethod, setTwoFactorMethod] = useState<"email" | "phone" | "">("");
 
@@ -24,6 +27,9 @@ export default function Profile() {
     if (!profile) return;
     setEmail(profile.email ?? "");
     setPhoneNumber(profile.phoneNumber ?? "");
+    setCity(profile.city ?? "");
+    setState(profile.state ?? "");
+    setZipCode(profile.zipCode ?? "");
     setTwoFactorEnabled(Boolean(profile.mfaEnabled));
     setTwoFactorMethod(profile.twoFactorMethod ?? "");
   }, [profile]);
@@ -49,6 +55,9 @@ export default function Profile() {
       await updateProfile.mutateAsync({
         email,
         phoneNumber: phoneNumber.trim() || null,
+        city: city.trim() || null,
+        state: state.trim() || null,
+        zipCode: zipCode.trim() || null,
         twoFactorEnabled,
         twoFactorMethod:
           twoFactorEnabled && (twoFactorMethod === "email" || twoFactorMethod === "phone")
@@ -68,7 +77,7 @@ export default function Profile() {
     <div className="space-y-8 animate-in">
       <div>
         <h1 className="text-3xl font-bold font-display text-slate-900">Profile</h1>
-        <p className="text-slate-500 mt-1">Manage your email, phone number, and two-factor authentication.</p>
+        <p className="text-slate-500 mt-1">Manage your contact details, default location, and two-factor authentication.</p>
       </div>
 
       <Card className="border-slate-200">
@@ -108,6 +117,36 @@ export default function Profile() {
                   onChange={(e) => setPhoneNumber(e.target.value)}
                   placeholder="+1 (555) 123-4567"
                 />
+              </div>
+              <div className="grid gap-4 sm:grid-cols-3">
+                <div className="space-y-2">
+                  <Label htmlFor="profile-city">City</Label>
+                  <Input
+                    id="profile-city"
+                    value={city}
+                    onChange={(e) => setCity(e.target.value)}
+                    placeholder="Atlanta"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="profile-state">State</Label>
+                  <Input
+                    id="profile-state"
+                    value={state}
+                    onChange={(e) => setState(e.target.value)}
+                    placeholder="GA"
+                    maxLength={2}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="profile-zip">Zip code</Label>
+                  <Input
+                    id="profile-zip"
+                    value={zipCode}
+                    onChange={(e) => setZipCode(e.target.value)}
+                    placeholder="30303"
+                  />
+                </div>
               </div>
               <Button onClick={saveProfile} disabled={updateProfile.isPending}>
                 {updateProfile.isPending ? "Saving..." : "Save changes"}

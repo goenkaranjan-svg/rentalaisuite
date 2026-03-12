@@ -15,6 +15,7 @@ import Dashboard from "@/pages/Dashboard";
 import Properties from "@/pages/Properties";
 import PropertyDetails from "@/pages/PropertyDetails";
 import Maintenance from "@/pages/Maintenance";
+import Vendors from "@/pages/Vendors";
 import Leases from "@/pages/Leases";
 import Accounting from "@/pages/Accounting";
 import RenterPortal from "@/pages/RenterPortal";
@@ -165,6 +166,9 @@ function Router() {
       </Route>
       <Route path="/maintenance">
         <ProtectedLayout><Maintenance /></ProtectedLayout>
+      </Route>
+      <Route path="/vendors">
+        <ProtectedLayout><Vendors /></ProtectedLayout>
       </Route>
       <Route path="/leases">
         <ProtectedLayout><Leases /></ProtectedLayout>

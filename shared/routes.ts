@@ -4,6 +4,7 @@ import {
   insertPropertySchema, properties, 
   insertLeaseSchema, leases,
   insertMaintenanceRequestSchema, maintenanceRequests,
+  insertVendorSchema, vendors,
   insertPaymentSchema, payments,
   insertScreeningSchema, screenings,
   insertZillowLeadSchema, zillowLeads,
@@ -508,6 +509,74 @@ export const api = {
           autoVendorAssignmentEnabled: z.boolean(),
           updatedAt: z.string().nullable(),
         }),
+      },
+    },
+  },
+  vendors: {
+    list: {
+      method: "GET" as const,
+      path: "/api/vendors" as const,
+      input: z.object({
+        search: z.string().optional(),
+        trade: z.string().optional(),
+      }).optional(),
+      responses: {
+        200: z.array(z.custom<typeof vendors.$inferSelect>()),
+      },
+    },
+    create: {
+      method: "POST" as const,
+      path: "/api/vendors" as const,
+      input: insertVendorSchema,
+      responses: {
+        201: z.custom<typeof vendors.$inferSelect>(),
+      },
+    },
+    discover: {
+      method: "POST" as const,
+      path: "/api/vendors/discover" as const,
+      input: z.object({
+        propertyId: z.number().optional(),
+        city: z.string().trim().min(2).optional(),
+        state: z.string().trim().min(2).max(2).optional(),
+        zipCode: z.string().trim().min(3).optional(),
+        trade: z.string().trim().min(2),
+        query: z.string().trim().min(2).optional(),
+      }).refine((value) => Boolean(value.propertyId || value.zipCode || (value.city && value.state)), {
+        message: "Provide a property, zip code, or city/state to search.",
+      }),
+      responses: {
+        200: z.object({
+          provider: z.string(),
+          candidates: z.array(z.object({
+            name: z.string(),
+            tradeCategories: z.array(z.string()),
+            serviceStates: z.array(z.string()),
+            serviceCities: z.array(z.string()),
+            serviceZipCodes: z.array(z.string()),
+            phone: z.string().nullable(),
+            email: z.string().nullable(),
+            website: z.string().nullable(),
+            rating: z.string().nullable(),
+            reviewCount: z.number().nullable(),
+            isOnCall: z.boolean(),
+            isActive: z.boolean(),
+            source: z.string(),
+            sourceExternalId: z.string().nullable(),
+            confidenceScore: z.string().nullable(),
+            rawIntakeData: z.unknown().nullable(),
+          })),
+        }),
+      },
+    },
+    importCandidate: {
+      method: "POST" as const,
+      path: "/api/vendors/import-candidate" as const,
+      input: z.object({
+        candidate: insertVendorSchema.omit({ managerId: true }),
+      }),
+      responses: {
+        201: z.custom<typeof vendors.$inferSelect>(),
       },
     },
   },

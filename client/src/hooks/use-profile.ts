@@ -4,6 +4,9 @@ import { useToast } from "@/hooks/use-toast";
 export type UserProfile = {
   email: string | null;
   phoneNumber: string | null;
+  city: string | null;
+  state: string | null;
+  zipCode: string | null;
   mfaEnabled: boolean;
   twoFactorMethod: "email" | "phone" | null;
 };
@@ -11,6 +14,9 @@ export type UserProfile = {
 type UpdateUserProfileInput = {
   email: string;
   phoneNumber?: string | null;
+  city?: string | null;
+  state?: string | null;
+  zipCode?: string | null;
   twoFactorEnabled?: boolean;
   twoFactorMethod?: "email" | "phone" | null;
 };

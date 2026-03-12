@@ -121,6 +121,9 @@ const updateProfileSchema = z.object({
     .regex(/^[0-9+()\-\s]+$/, "Phone number contains invalid characters")
     .optional()
     .nullable(),
+  city: z.string().trim().min(2).max(120).optional().nullable(),
+  state: z.string().trim().length(2, "State must be a 2-letter code").optional().nullable(),
+  zipCode: z.string().trim().min(3).max(12).optional().nullable(),
   twoFactorEnabled: z.boolean().optional(),
   twoFactorMethod: z.enum(["email", "phone"]).optional().nullable(),
 });
@@ -783,6 +786,9 @@ export function registerAuthRoutes(app: Express): void {
       return res.json({
         email: user.email,
         phoneNumber: settings?.phoneNumber ?? null,
+        city: settings?.city ?? null,
+        state: settings?.state ?? null,
+        zipCode: settings?.zipCode ?? null,
         mfaEnabled: Boolean(user.mfaEnabled),
         twoFactorMethod: settings?.twoFactorMethod === "email" || settings?.twoFactorMethod === "phone"
           ? settings.twoFactorMethod
@@ -799,6 +805,9 @@ export function registerAuthRoutes(app: Express): void {
       const input = updateProfileSchema.parse(req.body);
       const normalizedEmail = input.email.trim().toLowerCase();
       const normalizedPhoneNumber = input.phoneNumber?.trim() || null;
+      const normalizedCity = input.city?.trim() || null;
+      const normalizedState = input.state?.trim().toUpperCase() || null;
+      const normalizedZipCode = input.zipCode?.trim() || null;
       const currentUser = await authStorage.getUser(userId);
       if (!currentUser) return res.status(404).json({ message: "User not found." });
       const currentSettings = await authStorage.getUserProfileSettings(userId);
@@ -828,6 +837,9 @@ export function registerAuthRoutes(app: Express): void {
       await authStorage.upsertUserProfileSettings({
         userId,
         phoneNumber: normalizedPhoneNumber,
+        city: normalizedCity,
+        state: normalizedState,
+        zipCode: normalizedZipCode,
         twoFactorMethod: nextTwoFactorMethod,
       });
       await authStorage.updateMfaConfig({
@@ -846,6 +858,9 @@ export function registerAuthRoutes(app: Express): void {
       return res.json({
         email: updatedUser?.email ?? normalizedEmail,
         phoneNumber: normalizedPhoneNumber,
+        city: normalizedCity,
+        state: normalizedState,
+        zipCode: normalizedZipCode,
         mfaEnabled: Boolean(updatedUser?.mfaEnabled),
         twoFactorMethod: updatedTwoFactorMethod,
       });

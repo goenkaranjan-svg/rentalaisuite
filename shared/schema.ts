@@ -76,6 +76,32 @@ export const maintenanceRequests = pgTable("maintenance_requests", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const vendors = pgTable("vendors", {
+  id: serial("id").primaryKey(),
+  managerId: varchar("manager_id").notNull().references(() => users.id),
+  name: text("name").notNull(),
+  tradeCategories: jsonb("trade_categories").$type<string[]>().notNull().default([]),
+  serviceStates: jsonb("service_states").$type<string[]>().notNull().default([]),
+  serviceCities: jsonb("service_cities").$type<string[]>().notNull().default([]),
+  serviceZipCodes: jsonb("service_zip_codes").$type<string[]>().notNull().default([]),
+  phone: text("phone"),
+  email: text("email"),
+  website: text("website"),
+  rating: decimal("rating", { precision: 3, scale: 2 }),
+  reviewCount: integer("review_count"),
+  licenseNumber: text("license_number"),
+  insuranceExpiry: timestamp("insurance_expiry"),
+  isOnCall: boolean("is_on_call").notNull().default(false),
+  isActive: boolean("is_active").notNull().default(true),
+  source: text("source").notNull().default("manual"),
+  sourceExternalId: text("source_external_id"),
+  confidenceScore: decimal("confidence_score", { precision: 4, scale: 3 }),
+  rawIntakeData: jsonb("raw_intake_data"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  uniqueIndex("vendors_manager_source_external_idx").on(table.managerId, table.source, table.sourceExternalId),
+]);
+
 export const payments = pgTable("payments", {
   id: serial("id").primaryKey(),
   leaseId: integer("lease_id").notNull().references(() => leases.id),
@@ -137,6 +163,9 @@ export const managerMaintenanceAutomationSettings = pgTable("manager_maintenance
 export const userProfileSettings = pgTable("user_profile_settings", {
   userId: varchar("user_id").notNull().references(() => users.id),
   phoneNumber: text("phone_number"),
+  city: text("city"),
+  state: text("state"),
+  zipCode: text("zip_code"),
   twoFactorMethod: text("two_factor_method"),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => [
@@ -305,6 +334,13 @@ export const propertiesRelations = relations(properties, ({ one, many }) => ({
   maintenanceRequests: many(maintenanceRequests),
 }));
 
+export const vendorsRelations = relations(vendors, ({ one }) => ({
+  manager: one(users, {
+    fields: [vendors.managerId],
+    references: [users.id],
+  }),
+}));
+
 export const leasesRelations = relations(leases, ({ one, many }) => ({
   property: one(properties, {
     fields: [leases.propertyId],
@@ -337,6 +373,15 @@ export const insertMaintenanceRequestSchema = createInsertSchema(maintenanceRequ
   assignedVendor: true,
   assignmentNote: true,
 });
+export const insertVendorSchema = createInsertSchema(vendors, {
+  tradeCategories: z.array(z.string().trim().min(1)).default([]),
+  serviceStates: z.array(z.string().trim().min(1)).default([]),
+  serviceCities: z.array(z.string().trim().min(1)).default([]),
+  serviceZipCodes: z.array(z.string().trim().min(1)).default([]),
+  rating: z.union([z.string(), z.number()]).transform((value) => value.toString()).optional().nullable(),
+  confidenceScore: z.union([z.string(), z.number()]).transform((value) => value.toString()).optional().nullable(),
+  insuranceExpiry: z.coerce.date().optional().nullable(),
+}).omit({ id: true, createdAt: true });
 export const insertPaymentSchema = createInsertSchema(payments).omit({ id: true, date: true });
 export const insertScreeningSchema = createInsertSchema(screenings).omit({ id: true, createdAt: true });
 export const insertZillowLeadSchema = createInsertSchema(zillowLeads).omit({
@@ -366,6 +411,9 @@ export const upsertUserProfileSettingsSchema = createInsertSchema(userProfileSet
     .regex(/^[0-9+()\-\s]+$/, "Phone number contains invalid characters")
     .nullable()
     .optional(),
+  city: z.string().trim().min(2).max(120).nullable().optional(),
+  state: z.string().trim().length(2, "State must be a 2-letter code").nullable().optional(),
+  zipCode: z.string().trim().min(3).max(12).nullable().optional(),
   twoFactorMethod: z.enum(["email", "phone"]).nullable().optional(),
 }).omit({ updatedAt: true });
 export const insertLeaseSigningRequestSchema = createInsertSchema(leaseSigningRequests).omit({
@@ -389,6 +437,9 @@ export type InsertLeaseSigningRequest = z.infer<typeof insertLeaseSigningRequest
 export type MaintenanceRequest = typeof maintenanceRequests.$inferSelect;
 export type MaintenanceRequestInsert = typeof maintenanceRequests.$inferInsert;
 export type InsertMaintenanceRequest = z.infer<typeof insertMaintenanceRequestSchema>;
+
+export type Vendor = typeof vendors.$inferSelect;
+export type InsertVendor = z.infer<typeof insertVendorSchema>;
 
 export type Payment = typeof payments.$inferSelect;
 export type InsertPayment = z.infer<typeof insertPaymentSchema>;

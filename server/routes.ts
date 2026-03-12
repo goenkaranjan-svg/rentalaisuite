@@ -15,6 +15,7 @@ import { seedDatabase } from "./seed";
 import OpenAI from "openai";
 import { scrapePublicStrListings } from "./services/str-market";
 import { fetchMultifamilySaleListings } from "./services/multifamily-sale";
+import { discoverVendors, scoreVendorForMaintenanceAssignment } from "./services/vendor-discovery";
 import type { Request, Response, NextFunction } from "express";
 import { randomBytes } from "node:crypto";
 
@@ -251,7 +252,7 @@ function triageMaintenanceRequest(title: string, description: string) {
   };
 }
 
-function autoAssignVendor(params: { category: MaintenanceCategory; propertyState?: string | null }) {
+function autoAssignFallbackVendor(params: { category: MaintenanceCategory; propertyState?: string | null }) {
   const propertyState = (params.propertyState || "").toUpperCase();
   const categoryMatches = AUTO_ASSIGN_VENDOR_POOL.filter((vendor) =>
     vendor.categories.includes(params.category),
@@ -267,6 +268,47 @@ function autoAssignVendor(params: { category: MaintenanceCategory; propertyState
       ? "Auto-assigned to on-call vendor by trade."
       : "Auto-assigned to default vendor queue.";
   return { vendorName: chosen.name, note };
+}
+
+async function resolveVendorAssignment(params: {
+  managerId: string;
+  category: MaintenanceCategory;
+  propertyState?: string | null;
+  propertyCity?: string | null;
+  propertyZipCode?: string | null;
+}) {
+  try {
+    const vendors = await storage.getVendorsByManager(params.managerId, { trade: params.category });
+    const ranked = vendors
+      .map((vendor) => ({
+        vendor,
+        score: scoreVendorForMaintenanceAssignment(vendor, {
+          category: params.category,
+          propertyState: params.propertyState,
+          propertyCity: params.propertyCity,
+          propertyZipCode: params.propertyZipCode,
+        }),
+      }))
+      .filter((entry) => entry.score >= 0)
+      .sort((left, right) => right.score - left.score);
+
+    const best = ranked[0];
+    if (best) {
+      return {
+        vendorName: best.vendor.name,
+        note: `Auto-assigned from vendor directory (score ${best.score.toFixed(2)}).`,
+      };
+    }
+  } catch (error) {
+    if (!isMissingRelationError(error)) {
+      console.error("Vendor assignment failed:", error);
+    }
+  }
+
+  return autoAssignFallbackVendor({
+    category: params.category,
+    propertyState: params.propertyState,
+  });
 }
 
 function getEscalatedPriority(priority: string): "medium" | "high" | "emergency" {
@@ -1999,9 +2041,12 @@ export async function registerRoutes(
       const resolvedPriority = managerSettings.autoTriageEnabled ? triage.priority : (input.priority || "medium");
       const slaDueAt = new Date(Date.now() + getSlaHoursForPriority(resolvedPriority) * 60 * 60 * 1000);
       const assignment = managerSettings.autoVendorAssignmentEnabled
-        ? autoAssignVendor({
+        ? await resolveVendorAssignment({
+            managerId: property.managerId,
             category: resolvedCategory,
             propertyState: property.state,
+            propertyCity: property.city,
+            propertyZipCode: property.zipCode,
           })
         : null;
       const automationSummary = managerSettings.autoTriageEnabled
@@ -2049,6 +2094,101 @@ export async function registerRoutes(
     } catch (err) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.message });
       throw err;
+    }
+  });
+
+  // === Vendors ===
+  app.get(api.vendors.list.path, isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user?.claims?.sub;
+      if (!userId) return res.status(401).json({ message: "Unauthorized" });
+      const dbUser = await storage.getUser(userId);
+      if (dbUser?.role !== "manager") return res.status(403).json({ message: "Forbidden" });
+      const search = typeof req.query.search === "string" ? req.query.search : undefined;
+      const trade = typeof req.query.trade === "string" ? req.query.trade : undefined;
+      const vendors = await storage.getVendorsByManager(userId, { search, trade });
+      return res.json(vendors);
+    } catch (error) {
+      if (isMissingRelationError(error)) {
+        return res.status(503).json({ message: "Vendor table is missing. Run database migrations first." });
+      }
+      return res.status(500).json({ message: "Failed to load vendors." });
+    }
+  });
+
+  app.post(api.vendors.create.path, isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user?.claims?.sub;
+      if (!userId) return res.status(401).json({ message: "Unauthorized" });
+      const dbUser = await storage.getUser(userId);
+      if (dbUser?.role !== "manager") return res.status(403).json({ message: "Forbidden" });
+      const input = api.vendors.create.input.parse({ ...req.body, managerId: userId });
+      const vendor = await storage.createVendor(input);
+      return res.status(201).json(vendor);
+    } catch (error) {
+      if (isMissingRelationError(error)) {
+        return res.status(503).json({ message: "Vendor table is missing. Run database migrations first." });
+      }
+      if (error instanceof z.ZodError) return res.status(400).json({ message: error.message });
+      return res.status(500).json({ message: "Failed to create vendor." });
+    }
+  });
+
+  app.post(api.vendors.discover.path, isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user?.claims?.sub;
+      if (!userId) return res.status(401).json({ message: "Unauthorized" });
+      const dbUser = await storage.getUser(userId);
+      if (dbUser?.role !== "manager") return res.status(403).json({ message: "Forbidden" });
+
+      const input = api.vendors.discover.input.parse(req.body);
+      const property = input.propertyId ? await storage.getProperty(input.propertyId) : undefined;
+      if (input.propertyId && !property) return res.status(404).json({ message: "Property not found" });
+      if (property && property.managerId !== userId) return res.status(403).json({ message: "Forbidden" });
+
+      const result = await discoverVendors({
+        property,
+        city: input.city,
+        state: input.state,
+        zipCode: input.zipCode,
+        trade: input.trade,
+        query: input.query,
+      });
+      return res.json(result);
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ message: error.message });
+      return res.status(500).json({ message: "Failed to discover vendors." });
+    }
+  });
+
+  app.post(api.vendors.importCandidate.path, isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user?.claims?.sub;
+      if (!userId) return res.status(401).json({ message: "Unauthorized" });
+      const dbUser = await storage.getUser(userId);
+      if (dbUser?.role !== "manager") return res.status(403).json({ message: "Forbidden" });
+
+      const input = api.vendors.importCandidate.input.parse(req.body);
+      const source = input.candidate.source || "manual";
+      const existing = await storage.findVendorBySourceExternalId({
+        managerId: userId,
+        source,
+        sourceExternalId: input.candidate.sourceExternalId,
+      });
+      if (existing) return res.status(200).json(existing);
+
+      const vendor = await storage.createVendor({
+        ...input.candidate,
+        source,
+        managerId: userId,
+      });
+      return res.status(201).json(vendor);
+    } catch (error) {
+      if (isMissingRelationError(error)) {
+        return res.status(503).json({ message: "Vendor table is missing. Run database migrations first." });
+      }
+      if (error instanceof z.ZodError) return res.status(400).json({ message: error.message });
+      return res.status(500).json({ message: "Failed to import vendor candidate." });
     }
   });
 

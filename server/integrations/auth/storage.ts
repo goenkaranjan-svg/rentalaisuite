@@ -46,6 +46,9 @@ export interface IAuthStorage {
   upsertUserProfileSettings(input: {
     userId: string;
     phoneNumber?: string | null;
+    city?: string | null;
+    state?: string | null;
+    zipCode?: string | null;
     twoFactorMethod?: "email" | "phone" | null;
   }): Promise<UserProfileSettings>;
 }
@@ -237,6 +240,9 @@ class AuthStorage implements IAuthStorage {
   async upsertUserProfileSettings(input: {
     userId: string;
     phoneNumber?: string | null;
+    city?: string | null;
+    state?: string | null;
+    zipCode?: string | null;
     twoFactorMethod?: "email" | "phone" | null;
   }): Promise<UserProfileSettings> {
     const [settings] = await db
@@ -244,12 +250,18 @@ class AuthStorage implements IAuthStorage {
       .values({
         userId: input.userId,
         phoneNumber: input.phoneNumber ?? null,
+        city: input.city ?? null,
+        state: input.state ?? null,
+        zipCode: input.zipCode ?? null,
         twoFactorMethod: input.twoFactorMethod ?? null,
       })
       .onConflictDoUpdate({
         target: userProfileSettings.userId,
         set: {
           phoneNumber: input.phoneNumber ?? null,
+          city: input.city ?? null,
+          state: input.state ?? null,
+          zipCode: input.zipCode ?? null,
           twoFactorMethod: input.twoFactorMethod ?? null,
           updatedAt: new Date(),
         },
