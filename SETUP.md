@@ -54,6 +54,8 @@ Update `.env` with your configuration:
 - **AI_INTEGRATIONS_OPENAI_API_KEY**: OpenAI API key (for AI features)
 - **AI_INTEGRATIONS_OPENAI_BASE_URL**: OpenAI API base URL (defaults to OpenAI)
 - **PORT**: Server port (defaults to 5001)
+- **DEV_HTTPS_CERT_PATH**: Absolute path to a local development TLS certificate for `https://localhost`
+- **DEV_HTTPS_KEY_PATH**: Absolute path to the matching local development TLS private key
 - **REQUIRE_EMAIL_VERIFICATION**: Require verified email before login (`true` recommended)
 - **AUTH_EMAIL_PROVIDER**: Email provider for auth tokens (`resend`)
 - **RESEND_API_KEY**: Resend API key for verification/reset/magic-link/recovery emails
@@ -113,6 +115,41 @@ This creates all necessary tables in your database.
 ```bash
 npm run dev
 ```
+
+#### Optional: Local HTTPS for microphone and secure-context browser APIs
+
+If you want browser microphone access on localhost, run the dev server over HTTPS with a local certificate:
+
+```bash
+brew install mkcert
+brew install nss
+mkcert -install
+mkcert -cert-file localhost.pem -key-file localhost-key.pem localhost 127.0.0.1 ::1
+```
+
+Then add these to `.env` with absolute paths:
+
+```env
+DEV_HTTPS_CERT_PATH=/Users/you/path/to/localhost.pem
+DEV_HTTPS_KEY_PATH=/Users/you/path/to/localhost-key.pem
+```
+
+Restart the app and open:
+
+```text
+https://localhost:5001
+```
+
+#### Optional: Human avatar asset
+
+The assistant can load a rigged humanoid avatar from the public asset folder. Drop one of these files into `client/public/avatar/`:
+
+```text
+aster.vrm
+aster.glb
+```
+
+`VRM` is the preferred format because it supports facial expressions and visemes more consistently in the browser.
 
 **Production mode:**
 ```bash

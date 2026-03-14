@@ -2,6 +2,7 @@ export type AssistantIntent =
   | "highest_rent_property"
   | "overdue_rent"
   | "maintenance_summary"
+  | "create_maintenance_request"
   | "general";
 
 export type AssistantMode = "tool" | "rag" | "hybrid" | "general";
@@ -47,6 +48,23 @@ export function routeAssistantIntent(message: string): AssistantRoute {
     return {
       intent: "overdue_rent",
       mode: wantsRag ? "hybrid" : "tool",
+    };
+  }
+
+  if (
+    (normalized.includes("create") ||
+      normalized.includes("submit") ||
+      normalized.includes("open") ||
+      normalized.includes("report")) &&
+    (normalized.includes("maintenance") ||
+      normalized.includes("repair request") ||
+      normalized.includes("work order") ||
+      normalized.includes("fix") ||
+      normalized.includes("broken"))
+  ) {
+    return {
+      intent: "create_maintenance_request",
+      mode: "tool",
     };
   }
 

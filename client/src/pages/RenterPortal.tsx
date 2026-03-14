@@ -5,6 +5,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useLeases } from "@/hooks/use-leases";
 import { useMaintenanceRequests, useCreateMaintenanceRequest } from "@/hooks/use-maintenance";
 import { usePayments, useCreatePayment } from "@/hooks/use-payments";
+import { useProperties } from "@/hooks/use-properties";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -16,6 +17,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 export default function RenterPortal() {
   const { user } = useAuth();
   const { data: leases } = useLeases();
+  const { data: properties } = useProperties();
   const { data: maintenance } = useMaintenanceRequests();
   const { data: payments } = usePayments();
   const { mutate: createMaintenance, isPending: isSubmittingRequest } = useCreateMaintenanceRequest();
@@ -27,6 +29,10 @@ export default function RenterPortal() {
   const activeLease = useMemo(
     () => (leases ?? []).find((l) => l.status === "active") ?? null,
     [leases],
+  );
+  const activeProperty = useMemo(
+    () => (properties ?? []).find((property) => property.id === activeLease?.propertyId) ?? null,
+    [activeLease?.propertyId, properties],
   );
 
   const myPayments = useMemo(
@@ -108,10 +114,41 @@ export default function RenterPortal() {
         <CardContent>
           {!activeLease && <p className="text-slate-500">No active lease found.</p>}
           {activeLease && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+            <div className="grid grid-cols-1 gap-4 text-sm md:grid-cols-2 xl:grid-cols-4">
               <div><span className="text-slate-500">Lease ID:</span> #{activeLease.id}</div>
               <div><span className="text-slate-500">Start:</span> {format(new Date(activeLease.startDate), "MMM d, yyyy")}</div>
               <div><span className="text-slate-500">End:</span> {format(new Date(activeLease.endDate), "MMM d, yyyy")}</div>
+              <div><span className="text-slate-500">Monthly Rent:</span> ${monthlyRent.toLocaleString()}</div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card className="border-slate-200">
+        <CardHeader>
+          <CardTitle>Property Details</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {!activeProperty && <p className="text-slate-500">Property details are not available yet.</p>}
+          {activeProperty && (
+            <div className="grid grid-cols-1 gap-4 text-sm md:grid-cols-2 xl:grid-cols-4">
+              <div className="md:col-span-2 xl:col-span-4">
+                <span className="text-slate-500">Address:</span>{" "}
+                <span className="font-medium text-slate-900">
+                  {activeProperty.address}, {activeProperty.city}, {activeProperty.state} {activeProperty.zipCode}
+                </span>
+              </div>
+              <div><span className="text-slate-500">Status:</span> <span className="capitalize">{activeProperty.status}</span></div>
+              <div><span className="text-slate-500">Bedrooms:</span> {activeProperty.bedrooms}</div>
+              <div><span className="text-slate-500">Bathrooms:</span> {activeProperty.bathrooms}</div>
+              <div><span className="text-slate-500">Square Feet:</span> {activeProperty.sqft.toLocaleString()}</div>
+              <div><span className="text-slate-500">Listed Rent:</span> ${Number(activeProperty.price).toLocaleString()}</div>
+              {activeProperty.description ? (
+                <div className="md:col-span-2 xl:col-span-4">
+                  <span className="text-slate-500">Description:</span>{" "}
+                  <span className="text-slate-700">{activeProperty.description}</span>
+                </div>
+              ) : null}
             </div>
           )}
         </CardContent>

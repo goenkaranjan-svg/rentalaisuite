@@ -3,6 +3,7 @@ import { createApp, log } from "./app";
 
 (async () => {
   const { httpServer } = await createApp("server");
+  const isHttps = Boolean(process.env.DEV_HTTPS_CERT_PATH && process.env.DEV_HTTPS_KEY_PATH && process.env.NODE_ENV !== "production");
 
   // Serve on the configured port; use HOST if provided.
   // Some environments do not support binding with all socket options on 0.0.0.0,
@@ -13,7 +14,7 @@ import { createApp, log } from "./app";
 
   const startServer = (host: string) => {
     httpServer.listen({ port, host }, () => {
-      log(`serving on http://${host}:${port}`);
+      log(`serving on ${isHttps ? "https" : "http"}://${host}:${port}`);
     });
   };
 

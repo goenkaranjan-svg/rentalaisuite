@@ -1,8 +1,10 @@
 import express, { type Request, type Response, type NextFunction } from "express";
 import { createServer, type Server } from "http";
+import { createServer as createHttpsServer } from "https";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createRateLimiter } from "./middleware/rateLimit";
+import fs from "fs";
 
 declare module "http" {
   interface IncomingMessage {
@@ -23,9 +25,23 @@ export function log(message: string, source = "express") {
 
 type AppRuntime = "server" | "serverless";
 
+function createHttpServer(app: express.Express): Server {
+  const certPath = process.env.DEV_HTTPS_CERT_PATH;
+  const keyPath = process.env.DEV_HTTPS_KEY_PATH;
+  const useHttps = process.env.NODE_ENV !== "production" && certPath && keyPath;
+
+  if (!useHttps) {
+    return createServer(app);
+  }
+
+  const cert = fs.readFileSync(certPath);
+  const key = fs.readFileSync(keyPath);
+  return createHttpsServer({ cert, key }, app) as unknown as Server;
+}
+
 export async function createApp(runtime: AppRuntime = "server"): Promise<{ app: express.Express; httpServer: Server }> {
   const app = express();
-  const httpServer = createServer(app);
+  const httpServer = createHttpServer(app);
   app.disable("x-powered-by");
   app.set("trust proxy", process.env.NODE_ENV === "production" ? 1 : 0);
 
@@ -45,7 +61,7 @@ export async function createApp(runtime: AppRuntime = "server"): Promise<{ app: 
     res.setHeader("Referrer-Policy", "no-referrer");
     res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
     res.setHeader("Cross-Origin-Resource-Policy", "same-site");
-    res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=(self)");
+    res.setHeader("Permissions-Policy", "camera=(), microphone=(self), geolocation=(self)");
     if (process.env.NODE_ENV === "production") {
       res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload");
     }

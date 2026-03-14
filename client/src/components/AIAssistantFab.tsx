@@ -1,11 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
-import { Bot, MessageCircle, Send, X } from "lucide-react";
+import { Component, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Bot, MessageCircle, Mic, MicOff, Send, Volume2, VolumeX, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
+import type { AssistantAvatarExpression, AssistantAvatarMode } from "@/components/AssistantAvatarScene";
 
 type ChatRole = "user" | "assistant";
 
@@ -15,7 +16,44 @@ type ChatMessage = {
   content: string;
 };
 
-type AssistantIntent = "highest_rent_property" | "overdue_rent" | "maintenance_summary" | "general";
+type AssistantIntent =
+  | "highest_rent_property"
+  | "overdue_rent"
+  | "maintenance_summary"
+  | "create_maintenance_request"
+  | "general";
+type AssistantAction = {
+  type?: string;
+  status?: string;
+  requestId?: number;
+};
+
+type SpeechRecognitionAlternative = {
+  transcript: string;
+};
+
+type SpeechRecognitionResult = {
+  isFinal: boolean;
+  0: SpeechRecognitionAlternative;
+};
+
+type SpeechRecognitionEvent = Event & {
+  results: ArrayLike<SpeechRecognitionResult>;
+};
+
+type BrowserSpeechRecognition = EventTarget & {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  onresult: ((event: SpeechRecognitionEvent) => void) | null;
+  onerror: ((event: Event) => void) | null;
+  onend: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+};
+
+type SpeechRecognitionConstructor = new () => BrowserSpeechRecognition;
+type MicPermissionState = "unknown" | "prompt" | "granted" | "denied" | "unsupported";
 
 const QUICK_ACTIONS = [
   {
@@ -29,6 +67,10 @@ const QUICK_ACTIONS = [
   {
     label: "Maintenance summary",
     prompt: "Show my maintenance summary",
+  },
+  {
+    label: "Create maintenance request",
+    prompt: "I want to create a maintenance request.",
   },
 ];
 
@@ -48,6 +90,11 @@ const SUGGESTIONS_BY_INTENT: Record<AssistantIntent, { label: string; prompt: st
     { label: "Highest rent", prompt: "Show my highest rent property" },
     { label: "Overdue rent", prompt: "Show my overdue rent summary" },
   ],
+  create_maintenance_request: [
+    { label: "Describe issue", prompt: "The kitchen sink is leaking under the cabinet." },
+    { label: "Add property", prompt: "It's for my Duluth property." },
+    { label: "Maintenance summary", prompt: "Show my maintenance summary" },
+  ],
   general: [
     { label: "Highest rent", prompt: "Show my highest rent property" },
     { label: "Overdue rent", prompt: "Show my overdue rent summary" },
@@ -56,6 +103,140 @@ const SUGGESTIONS_BY_INTENT: Record<AssistantIntent, { label: string; prompt: st
 };
 
 const ASSISTANT_STORAGE_KEY = "assistant-chat-history-v1";
+const ASSISTANT_NAME = "Aster";
+const REPLY_REVEAL_INTERVAL_MS = 18;
+const PERSONALITIES = ["Friendly", "Formal", "Witty"] as const;
+const MAX_ASSISTANT_HISTORY = 20;
+const AssistantAvatarScene = lazy(() =>
+  import("@/components/AssistantAvatarScene").then((module) => ({ default: module.AssistantAvatarScene })),
+);
+
+class AvatarErrorBoundary extends Component<
+  { children: React.ReactNode; fallback: React.ReactNode },
+  { hasError: boolean }
+> {
+  state = { hasError: false };
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: unknown) {
+    console.error("Avatar scene crashed:", error);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return this.props.fallback;
+    }
+    return this.props.children;
+  }
+}
+
+function AvatarPanelFallback() {
+  return (
+    <div className="h-60 rounded-[1.8rem] border border-emerald-200/70 bg-emerald-50/80 px-5 py-5 shadow-inner shadow-emerald-950/5">
+      <div className="flex h-full flex-col justify-between rounded-[1.4rem] border border-white/80 bg-white/65 px-4 py-4 backdrop-blur-sm">
+        <div>
+          <p className="text-xs uppercase tracking-[0.24em] text-emerald-900/60">Aster</p>
+          <p className="mt-2 text-lg font-semibold text-slate-900">Avatar unavailable</p>
+          <p className="mt-2 text-sm text-slate-600">
+            The 3D avatar runtime failed, but chat is still available. You can keep using the assistant normally.
+          </p>
+        </div>
+        <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-xs text-emerald-900/80">
+          If this keeps happening, restart the dev server and refresh the page.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function getMicCapabilityMessage(params: {
+  isSecureContext: boolean;
+  hasMediaDevices: boolean;
+  hasGetUserMedia: boolean;
+  hasSpeechRecognition: boolean;
+}) {
+  if (!params.isSecureContext) {
+    return "Microphone requires a secure context (HTTPS or localhost).";
+  }
+  if (!params.hasMediaDevices) {
+    return "navigator.mediaDevices is unavailable in this runtime.";
+  }
+  if (!params.hasGetUserMedia) {
+    return "getUserMedia is unavailable in this browser runtime.";
+  }
+  if (!params.hasSpeechRecognition) {
+    return "SpeechRecognition is unavailable in this browser runtime.";
+  }
+  return "Microphone access is not supported in this browser.";
+}
+
+function getMicPromptCopy(permission: MicPermissionState, capabilityMessage: string) {
+  if (permission === "denied") {
+    return {
+      title: "Microphone blocked",
+      body: "Chrome will not show the mic prompt again until you change this site's microphone setting to Allow, then reload the page.",
+      button: "Retry after allowing",
+    };
+  }
+
+  if (permission === "unsupported") {
+    return {
+      title: "Microphone unavailable",
+      body: capabilityMessage,
+      button: "Unavailable",
+    };
+  }
+
+  return {
+    title: "Enable microphone access",
+    body: "Let Aster hear your voice so you can speak requests instead of typing them.",
+    button: "Allow mic",
+  };
+}
+
+function getExpressionFromReply(reply: string): AssistantAvatarExpression {
+  const normalized = reply.toLowerCase();
+
+  if (
+    normalized.includes("great") ||
+    normalized.includes("done") ||
+    normalized.includes("created") ||
+    normalized.includes("completed") ||
+    normalized.includes("approved") ||
+    normalized.includes("good news") ||
+    normalized.includes("all set")
+  ) {
+    return "happy";
+  }
+
+  if (
+    normalized.includes("important") ||
+    normalized.includes("alert") ||
+    normalized.includes("emergency") ||
+    normalized.includes("immediately") ||
+    normalized.includes("surprising") ||
+    normalized.includes("unexpected")
+  ) {
+    return "surprised";
+  }
+
+  if (
+    normalized.includes("unclear") ||
+    normalized.includes("i need") ||
+    normalized.includes("missing") ||
+    normalized.includes("not enough") ||
+    normalized.includes("could not") ||
+    normalized.includes("please provide") ||
+    normalized.includes("which property")
+  ) {
+    return "confused";
+  }
+
+  return "neutral";
+}
 
 export function AIAssistantFab() {
   const { user, isAuthenticated } = useAuth();
@@ -65,14 +246,112 @@ export function AIAssistantFab() {
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [followUpSuggestions, setFollowUpSuggestions] = useState(QUICK_ACTIONS);
+  const [avatarMode, setAvatarMode] = useState<AssistantAvatarMode>("idle");
+  const [avatarExpression, setAvatarExpression] = useState<AssistantAvatarExpression>("neutral");
+  const [isListening, setIsListening] = useState(false);
+  const [voiceEnabled, setVoiceEnabled] = useState(true);
+  const [isRevealingReply, setIsRevealingReply] = useState(false);
+  const [micPermission, setMicPermission] = useState<MicPermissionState>("unknown");
+  const [speechText, setSpeechText] = useState("");
+  const [speechCursor, setSpeechCursor] = useState(0);
+  const [selectedPersonality, setSelectedPersonality] = useState<(typeof PERSONALITIES)[number]>("Friendly");
+  const [hasRestoredHistory, setHasRestoredHistory] = useState(false);
+  const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
+  const lastSpokenReplyRef = useRef<string>("");
+  const revealTimerRef = useRef<number | null>(null);
+  const previousUserIdRef = useRef<string | null>(null);
 
   const history = useMemo(() => messages.map(({ role, content }) => ({ role, content })), [messages]);
+  const assistantStorageKey = useMemo(
+    () => `${ASSISTANT_STORAGE_KEY}:${user?.id ?? "anonymous"}`,
+    [user?.id],
+  );
   const firstName = user?.firstName?.trim() || user?.email?.split("@")[0] || "there";
   const showQuickActions = messages.length === 0;
+  const isSecureContextAvailable = typeof window !== "undefined" ? window.isSecureContext : false;
+  const hasMediaDevices = typeof navigator !== "undefined" && Boolean(navigator.mediaDevices);
+  const hasGetUserMedia = typeof navigator !== "undefined" && typeof navigator.mediaDevices?.getUserMedia === "function";
+  const supportsSpeechSynthesis = typeof window !== "undefined" && "speechSynthesis" in window;
+  const supportsSpeechRecognition =
+    typeof window !== "undefined" &&
+    Boolean((window as Window & { SpeechRecognition?: SpeechRecognitionConstructor; webkitSpeechRecognition?: SpeechRecognitionConstructor }).SpeechRecognition ||
+      (window as Window & { SpeechRecognition?: SpeechRecognitionConstructor; webkitSpeechRecognition?: SpeechRecognitionConstructor }).webkitSpeechRecognition);
+  const micCapabilityMessage = getMicCapabilityMessage({
+    isSecureContext: isSecureContextAvailable,
+    hasMediaDevices,
+    hasGetUserMedia,
+    hasSpeechRecognition: supportsSpeechRecognition,
+  });
+  const micPromptCopy = getMicPromptCopy(micPermission, micCapabilityMessage);
 
   useEffect(() => {
-    const raw = window.sessionStorage.getItem(ASSISTANT_STORAGE_KEY);
-    if (!raw) return;
+    if (!supportsSpeechRecognition || typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia || !isSecureContextAvailable) {
+      setMicPermission("unsupported");
+      return;
+    }
+
+    const permissionsApi = (navigator as Navigator & {
+      permissions?: {
+        query: (descriptor: { name: "microphone" }) => Promise<{ state: PermissionState; onchange: (() => void) | null }>;
+      };
+    }).permissions;
+
+    if (!permissionsApi?.query) {
+      setMicPermission("prompt");
+      return;
+    }
+
+    let cancelled = false;
+    let statusRef: { onchange: (() => void) | null } | null = null;
+
+    void permissionsApi
+      .query({ name: "microphone" })
+      .then((status) => {
+        if (cancelled) return;
+        statusRef = status;
+        setMicPermission(status.state as MicPermissionState);
+        status.onchange = () => {
+          setMicPermission(status.state as MicPermissionState);
+        };
+      })
+      .catch(() => {
+        setMicPermission("prompt");
+      });
+
+    return () => {
+      cancelled = true;
+      if (statusRef) statusRef.onchange = null;
+    };
+  }, [isSecureContextAvailable, supportsSpeechRecognition]);
+
+  useEffect(() => {
+    const currentUserId = user?.id ?? null;
+    const previousUserId = previousUserIdRef.current;
+    const shouldClearStoredHistory =
+      currentUserId !== null && previousUserId !== currentUserId;
+
+    previousUserIdRef.current = currentUserId;
+
+    if (shouldClearStoredHistory) {
+      window.sessionStorage.removeItem(assistantStorageKey);
+    }
+
+    setMessages([]);
+    setSpeechText("");
+    setSpeechCursor(0);
+    lastSpokenReplyRef.current = "";
+    setHasRestoredHistory(false);
+
+    if (shouldClearStoredHistory) {
+      setHasRestoredHistory(true);
+      return;
+    }
+
+    const raw = window.sessionStorage.getItem(assistantStorageKey);
+    if (!raw) {
+      setHasRestoredHistory(true);
+      return;
+    }
     try {
       const parsed = JSON.parse(raw) as ChatMessage[];
       if (!Array.isArray(parsed)) return;
@@ -83,22 +362,156 @@ export function AIAssistantFab() {
           typeof item?.content === "string",
       );
       setMessages(safeMessages);
+      const lastAssistantMessage = [...safeMessages].reverse().find((item) => item.role === "assistant");
+      if (lastAssistantMessage) {
+        lastSpokenReplyRef.current = lastAssistantMessage.content;
+        setSpeechText(lastAssistantMessage.content);
+        setSpeechCursor(lastAssistantMessage.content.length);
+      }
     } catch {
       // Ignore malformed local state.
+    } finally {
+      setHasRestoredHistory(true);
     }
+  }, [assistantStorageKey]);
+
+  useEffect(() => {
+    if (!hasRestoredHistory) return;
+    window.sessionStorage.setItem(assistantStorageKey, JSON.stringify(messages));
+  }, [assistantStorageKey, hasRestoredHistory, messages]);
+
+  useEffect(() => {
+    return () => {
+      if (revealTimerRef.current !== null) {
+        window.clearInterval(revealTimerRef.current);
+      }
+    };
   }, []);
 
   useEffect(() => {
-    window.sessionStorage.setItem(ASSISTANT_STORAGE_KEY, JSON.stringify(messages));
-  }, [messages]);
+    if (!supportsSpeechSynthesis || !hasRestoredHistory) return;
+    if (!voiceEnabled) {
+      window.speechSynthesis.cancel();
+      lastSpokenReplyRef.current = "";
+      setSpeechCursor(0);
+      return;
+    }
+
+    const latest = messages[messages.length - 1];
+    if (latest?.role !== "assistant" || isRevealingReply) return;
+    if (latest.content === lastSpokenReplyRef.current) return;
+
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(latest.content);
+    utterance.rate = 1.02;
+    utterance.pitch = 1.04;
+    utterance.lang = "en-US";
+    utterance.onstart = () => {
+      setAvatarMode("speaking");
+      setSpeechText(latest.content);
+      setSpeechCursor(0);
+    };
+    utterance.onboundary = (event) => {
+      if ("charIndex" in event && typeof event.charIndex === "number") {
+        setSpeechCursor(event.charIndex);
+      }
+    };
+    utterance.onend = () => {
+      setAvatarMode("idle");
+      setSpeechCursor(latest.content.length);
+      lastSpokenReplyRef.current = latest.content;
+    };
+    utterance.onerror = () => {
+      setSpeechCursor(latest.content.length);
+      lastSpokenReplyRef.current = latest.content;
+    };
+    window.speechSynthesis.speak(utterance);
+
+    return () => {
+      window.speechSynthesis.cancel();
+    };
+  }, [hasRestoredHistory, isRevealingReply, messages, supportsSpeechSynthesis, voiceEnabled]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setAvatarMode("idle");
+      setAvatarExpression("neutral");
+      return;
+    }
+    if (isSending) {
+      setAvatarMode("thinking");
+      return;
+    }
+    if (isRevealingReply) {
+      setAvatarMode("speaking");
+      return;
+    }
+    const latest = messages[messages.length - 1];
+    if (latest?.role === "assistant") {
+      setAvatarMode("speaking");
+      setAvatarExpression(getExpressionFromReply(latest.content));
+      const timer = window.setTimeout(() => setAvatarMode("idle"), 2400);
+      return () => window.clearTimeout(timer);
+    }
+    setAvatarMode("idle");
+  }, [isOpen, isRevealingReply, isSending, messages]);
 
   if (!isAuthenticated || !user) {
     return null;
   }
 
-  const sendMessage = async (overrideMessage?: string) => {
+  const revealAssistantReply = useCallback((reply: string, intent: AssistantIntent) => {
+    if (revealTimerRef.current !== null) {
+      window.clearInterval(revealTimerRef.current);
+    }
+
+    const messageId = `${Date.now()}-assistant`;
+    setIsRevealingReply(true);
+    setAvatarMode("speaking");
+    setAvatarExpression(getExpressionFromReply(reply));
+    setSpeechText(reply);
+    setSpeechCursor(0);
+    setFollowUpSuggestions(SUGGESTIONS_BY_INTENT[intent] ?? SUGGESTIONS_BY_INTENT.general);
+
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: messageId,
+        role: "assistant",
+        content: "",
+      },
+    ]);
+
+    let index = 0;
+    revealTimerRef.current = window.setInterval(() => {
+      index = Math.min(index + 2, reply.length);
+      const nextContent = reply.slice(0, index);
+      setSpeechCursor(index);
+
+      setMessages((prev) =>
+        prev.map((message) =>
+          message.id === messageId
+            ? {
+                ...message,
+                content: nextContent,
+              }
+            : message,
+        ),
+      );
+
+      if (index >= reply.length) {
+        if (revealTimerRef.current !== null) {
+          window.clearInterval(revealTimerRef.current);
+          revealTimerRef.current = null;
+        }
+        setIsRevealingReply(false);
+      }
+    }, REPLY_REVEAL_INTERVAL_MS);
+  }, []);
+
+  const sendMessage = useCallback(async (overrideMessage?: string) => {
     const content = (overrideMessage ?? input).trim();
-    if (!content || isSending) return;
+    if (!content || isSending || isRevealingReply) return;
 
     const userMessage: ChatMessage = {
       id: `${Date.now()}-user`,
@@ -119,7 +532,7 @@ export function AIAssistantFab() {
         credentials: "include",
         body: JSON.stringify({
           message: content,
-          history: [...history, { role: "user", content }],
+          history: [...history, { role: "user", content }].slice(-MAX_ASSISTANT_HISTORY),
         }),
       });
 
@@ -136,118 +549,365 @@ export function AIAssistantFab() {
           ? body.reply.trim()
           : "I could not generate a response. Please try again.";
       const intent: AssistantIntent = body?.intent;
-
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: `${Date.now()}-assistant`,
-          role: "assistant",
-          content: reply,
-        },
-      ]);
-      setFollowUpSuggestions(SUGGESTIONS_BY_INTENT[intent] ?? SUGGESTIONS_BY_INTENT.general);
+      setAvatarExpression("neutral");
+      revealAssistantReply(reply, intent);
     } catch (requestError) {
       const message = requestError instanceof Error ? requestError.message : "Assistant request failed.";
       setError(message);
     } finally {
       setIsSending(false);
     }
+  }, [history, input, isRevealingReply, isSending, revealAssistantReply]);
+
+  useEffect(() => {
+    if (!supportsSpeechRecognition) return;
+    const SpeechRecognitionApi =
+      (window as Window & { SpeechRecognition?: SpeechRecognitionConstructor; webkitSpeechRecognition?: SpeechRecognitionConstructor }).SpeechRecognition ||
+      (window as Window & { SpeechRecognition?: SpeechRecognitionConstructor; webkitSpeechRecognition?: SpeechRecognitionConstructor }).webkitSpeechRecognition;
+    if (!SpeechRecognitionApi) return;
+
+    const recognition = new SpeechRecognitionApi();
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.lang = "en-US";
+
+    recognition.onresult = (event) => {
+      const transcript = Array.from(event.results)
+        .map((result) => result[0]?.transcript ?? "")
+        .join(" ")
+        .trim();
+      setInput(transcript);
+
+      const finalResult = Array.from(event.results).some((result) => result.isFinal);
+      if (finalResult && transcript.length > 0) {
+        void sendMessage(transcript);
+      }
+    };
+
+    recognition.onerror = () => {
+      setIsListening(false);
+      setError("Voice input failed. Check microphone permissions and try again.");
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+    };
+
+    recognitionRef.current = recognition;
+
+    return () => {
+      recognition.stop();
+      recognitionRef.current = null;
+    };
+  }, [sendMessage, supportsSpeechRecognition]);
+
+  const toggleListening = () => {
+    if (!supportsSpeechRecognition || !recognitionRef.current || isSending || isRevealingReply) return;
+    setError(null);
+
+    if (isListening) {
+      recognitionRef.current.stop();
+      setIsListening(false);
+      return;
+    }
+
+    try {
+      recognitionRef.current.start();
+      setIsListening(true);
+      setAvatarMode("thinking");
+    } catch {
+      setError("Microphone input could not be started.");
+      setIsListening(false);
+    }
+  };
+
+  const requestMicrophonePermission = useCallback(async () => {
+    if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
+      setMicPermission("unsupported");
+      setError(micCapabilityMessage);
+      return false;
+    }
+    if (!isSecureContextAvailable) {
+      setMicPermission("unsupported");
+      setError(micCapabilityMessage);
+      return false;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach((track) => track.stop());
+      setMicPermission("granted");
+      setError(null);
+      return true;
+    } catch {
+      setMicPermission("denied");
+      setError("Microphone permission was denied. Allow microphone access in the browser and try again.");
+      return false;
+    }
+  }, [isSecureContextAvailable, micCapabilityMessage]);
+
+  const handleMicButton = async () => {
+    if (isListening) {
+      toggleListening();
+      return;
+    }
+
+    if (micPermission !== "granted") {
+      const granted = await requestMicrophonePermission();
+      if (!granted) return;
+    }
+
+    toggleListening();
+  };
+
+  const toggleVoice = () => {
+    setVoiceEnabled((current) => {
+      const next = !current;
+      if (!next && supportsSpeechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
+      return next;
+    });
   };
 
   return (
     <div className="fixed bottom-5 right-5 z-[60]">
       {isOpen ? (
-        <Card className="w-[min(92vw,24rem)] h-[30rem] shadow-2xl border-slate-200 bg-white flex flex-col overflow-hidden">
-          <div className="px-4 py-3 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center">
-                <Bot className="w-4 h-4" />
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-slate-900">Personal Assistant</p>
-                <p className="text-xs text-slate-500">AI Chat</p>
-              </div>
-            </div>
-            <Button variant="ghost" size="icon" onClick={() => setIsOpen(false)} aria-label="Close assistant">
-              <X className="w-4 h-4" />
-            </Button>
-          </div>
+        <Card className="w-[min(92vw,48rem)] h-[min(76vh,34rem)] overflow-hidden rounded-[1.5rem] border border-stone-200 bg-stone-50/95 shadow-[0_16px_42px_rgba(19,17,34,0.14)] backdrop-blur-sm">
+          <div className="grid h-full md:grid-cols-[0.4fr_0.6fr]">
+            <aside className="relative flex min-h-[14rem] flex-col overflow-hidden bg-[linear-gradient(180deg,#2b2a45_0%,#2d2c53_68%,#343262_100%)] px-4 py-5 text-white">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setIsOpen(false)}
+                aria-label="Close assistant"
+                className="absolute right-4 top-4 z-10 text-white/80 hover:bg-white/10 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </Button>
 
-          <ScrollArea className="flex-1 px-3 py-3">
-            <div className="space-y-3">
-              {showQuickActions ? (
-                <div className="bg-slate-100 text-slate-800 rounded-2xl rounded-bl-md px-3 py-3 text-sm">
-                  <p className="font-medium">Hi {firstName}, I can help you with quick rental insights:</p>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {QUICK_ACTIONS.map((item) => (
-                      <button
-                        key={item.label}
-                        type="button"
-                        className="px-2.5 py-1.5 rounded-full text-xs border border-slate-300 bg-white hover:bg-slate-50 transition-colors"
-                        onClick={() => {
-                          void sendMessage(item.prompt);
-                        }}
-                        disabled={isSending}
+              <div className="mx-auto flex w-full max-w-[15rem] flex-1 flex-col items-center text-center">
+                <div className="relative mt-1 w-full">
+                  <div className="absolute inset-6 rounded-full border border-white/10" />
+                  <div className="rounded-[1.2rem] p-1.5">
+                    <AvatarErrorBoundary fallback={<AvatarPanelFallback />}>
+                      <Suspense
+                        fallback={<div className="h-44 rounded-[1.15rem] border border-white/10 bg-white/5" />}
                       >
-                        {item.label}
-                      </button>
-                    ))}
+                        <div className="rounded-[1.15rem] border border-white/10 bg-white/[0.03] p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+                          <AssistantAvatarScene
+                            mode={avatarMode}
+                            expression={avatarExpression}
+                            name={ASSISTANT_NAME}
+                            speechText={speechText}
+                            speechCursor={speechCursor}
+                          />
+                        </div>
+                      </Suspense>
+                    </AvatarErrorBoundary>
                   </div>
                 </div>
-              ) : null}
-              {messages.map((message) => (
-                <div
+
+                <div className="mt-4">
+                  <h2 className="font-display text-3xl leading-none tracking-tight text-white">{ASSISTANT_NAME}</h2>
+                  <p className="mt-2 text-xs uppercase tracking-[0.34em] text-white/45">AI Assistant</p>
+                </div>
+
+                <div className="mt-5 inline-flex items-center gap-2.5 rounded-full border border-white/10 bg-white/8 px-4 py-2 text-sm text-white/80 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
+                  <span className={cn("h-2.5 w-2.5 rounded-full", {
+                    "bg-emerald-400": !isSending && !isListening,
+                    "bg-amber-300": isSending || isListening,
+                  })} />
+                  <span>{isListening ? "Listening" : isSending || isRevealingReply ? "Thinking" : "Ready"}</span>
+                </div>
+
+                {micPermission !== "granted" && micPermission !== "unsupported" ? (
+                  <div className="mt-4 w-full rounded-[1rem] border border-white/10 bg-white/8 p-3 text-left text-xs text-white/80">
+                    <p className="font-medium text-white">{micPromptCopy.title}</p>
+                    <p className="mt-2 text-xs leading-5 text-white/65">{micPromptCopy.body}</p>
+                    {micPermission === "denied" ? (
+                      <p className="mt-2 text-[11px] text-white/55">
+                        Chrome: address bar icon / Site settings / Microphone / Allow.
+                      </p>
+                    ) : null}
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="mt-4 rounded-full border border-white/15 bg-white/10 px-5 text-white hover:bg-white/15"
+                      onClick={() => {
+                        void requestMicrophonePermission();
+                      }}
+                      disabled={isSending || isRevealingReply || micPermission === "unsupported"}
+                    >
+                      {micPromptCopy.button}
+                    </Button>
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                {PERSONALITIES.map((personality) => (
+                  <button
+                    key={personality}
+                    type="button"
+                    onClick={() => setSelectedPersonality(personality)}
+                    className={cn(
+                      "rounded-[0.85rem] border px-3.5 py-2 text-[11px] transition-all",
+                      selectedPersonality === personality
+                        ? "border-white/25 bg-white/14 text-white shadow-[0_8px_18px_rgba(6,7,18,0.22)]"
+                        : "border-black/15 bg-black/8 text-white/70 hover:border-white/15 hover:bg-white/8 hover:text-white",
+                    )}
+                  >
+                    {personality}
+                  </button>
+                ))}
+              </div>
+            </aside>
+
+            <section className="flex min-h-0 flex-col bg-[#f8f6f1]">
+              <header className="flex items-center justify-between border-b border-stone-200 px-5 py-4">
+                <div>
+                  <h3 className="font-display text-xl leading-none tracking-tight text-stone-950">Chat with {ASSISTANT_NAME}</h3>
+                  <p className="mt-1.5 text-xs text-stone-400">
+                    Rental operations concierge
+                    <span className="mx-2 text-stone-300">•</span>
+                    {selectedPersonality}
+                  </p>
+                </div>
+                <div className="inline-flex items-center gap-2 rounded-full border border-emerald-300 bg-emerald-50 px-3.5 py-1 text-xs text-emerald-600">
+                  <span className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
+                  Online
+                </div>
+              </header>
+
+              <ScrollArea className="min-h-0 flex-1 px-4 py-4">
+                <div className="mx-auto flex h-full w-full max-w-3xl flex-col justify-end space-y-4">
+                  {showQuickActions ? (
+                    <div className="rounded-[1.7rem] border border-stone-200 bg-white/90 px-5 py-5 text-sm text-stone-700 shadow-sm">
+                      <p className="font-medium text-stone-900">Hi {firstName}, I&apos;m {ASSISTANT_NAME}. Here&apos;s what I can help with right now.</p>
+                    </div>
+                  ) : null}
+
+                  {messages.length === 0 ? (
+                    <div className="flex-1" />
+                  ) : null}
+
+                  {messages.map((message) => (
+                    <div
                   key={message.id}
-                  className={cn("max-w-[88%] rounded-2xl px-3 py-2 text-sm", {
-                    "bg-blue-600 text-white ml-auto rounded-br-md": message.role === "user",
-                    "bg-slate-100 text-slate-800 rounded-bl-md": message.role === "assistant",
+                  className={cn("max-w-[84%] whitespace-pre-wrap rounded-[1.2rem] px-3.5 py-2.5 text-sm leading-5 shadow-sm", {
+                    "ml-auto rounded-br-md bg-[#2f8f67] text-white": message.role === "user",
+                    "rounded-bl-md border border-stone-200 bg-white text-stone-800": message.role === "assistant",
                   })}
                 >
-                  {message.content}
+                      {message.content}
+                    </div>
+                  ))}
                 </div>
-              ))}
-              {!showQuickActions ? (
-                <div className="bg-slate-50 border border-slate-200 text-slate-700 rounded-2xl px-3 py-3 text-sm">
-                  <p className="font-medium">Need help further? Try one of these:</p>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {followUpSuggestions.map((item) => (
+              </ScrollArea>
+
+              <div className="border-t border-stone-200 bg-[#f5f2ec] px-4 py-3">
+                <div className="mx-auto w-full max-w-3xl">
+                  {error ? <p className="mb-3 text-xs text-red-600">{error}</p> : null}
+
+                  <div className="mb-2.5 flex flex-wrap gap-2">
+                    {(showQuickActions ? QUICK_ACTIONS : followUpSuggestions).map((item) => (
                       <button
                         key={item.label}
                         type="button"
-                        className="px-2.5 py-1.5 rounded-full text-xs border border-slate-300 bg-white hover:bg-slate-50 transition-colors"
+                        className="rounded-[0.9rem] border border-stone-300 bg-stone-50 px-3.5 py-2 text-xs text-stone-900 transition-colors hover:bg-white"
                         onClick={() => {
                           void sendMessage(item.prompt);
                         }}
-                        disabled={isSending}
+                        disabled={isSending || isRevealingReply}
                       >
                         {item.label}
                       </button>
                     ))}
                   </div>
-                </div>
-              ) : null}
-            </div>
-          </ScrollArea>
 
-          <div className="p-3 border-t border-slate-200 bg-white">
-            {error ? <p className="text-xs text-red-600 mb-2">{error}</p> : null}
-            <form
-              className="flex gap-2"
-              onSubmit={(event) => {
-                event.preventDefault();
-                void sendMessage();
-              }}
-            >
-              <Input
-                value={input}
-                onChange={(event) => setInput(event.target.value)}
-                placeholder="Ask about rent, overdue balances, or maintenance..."
-                disabled={isSending}
-              />
-              <Button type="submit" size="icon" disabled={isSending || input.trim().length === 0} aria-label="Send message">
-                <Send className="w-4 h-4" />
-              </Button>
-            </form>
+                  <div className="flex items-end gap-3">
+                    <div className="flex-1 rounded-[1.15rem] border border-stone-300 bg-white px-3.5 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]">
+                      <form
+                        className="flex items-center gap-3"
+                        onSubmit={(event) => {
+                          event.preventDefault();
+                          void sendMessage();
+                        }}
+                      >
+                        <Input
+                          value={input}
+                          onChange={(event) => setInput(event.target.value)}
+                          placeholder={`Message ${ASSISTANT_NAME}...`}
+                          disabled={isSending || isListening || isRevealingReply}
+                          className="h-auto border-0 bg-transparent px-0 text-lg text-stone-900 shadow-none placeholder:text-stone-400 focus-visible:ring-0"
+                        />
+                        <div className="flex items-center gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            onClick={() => {
+                              void handleMicButton();
+                            }}
+                            disabled={!supportsSpeechRecognition || isSending || isRevealingReply}
+                            aria-label={
+                              isListening
+                                ? "Stop microphone input"
+                                : micPermission === "granted"
+                                  ? "Start microphone input"
+                                  : "Allow microphone access"
+                            }
+                            className="rounded-full border-stone-200 bg-stone-50 text-stone-700 hover:bg-stone-100"
+                          >
+                            {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            onClick={toggleVoice}
+                            disabled={!supportsSpeechSynthesis}
+                            aria-label={voiceEnabled ? "Mute assistant voice" : "Enable assistant voice"}
+                            className="rounded-full border-stone-200 bg-stone-50 text-stone-700 hover:bg-stone-100"
+                          >
+                            {voiceEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+                          </Button>
+                        </div>
+                      </form>
+                    </div>
+
+                    <Button
+                      type="button"
+                      onClick={() => {
+                        void sendMessage();
+                      }}
+                      size="icon"
+                      disabled={isSending || isRevealingReply || input.trim().length === 0}
+                      aria-label="Send message"
+                      className="h-[3.4rem] w-[3.4rem] rounded-[0.95rem] border border-stone-300 bg-white text-stone-900 shadow-sm hover:bg-stone-100"
+                    >
+                      <Send className="w-5 h-5" />
+                    </Button>
+                  </div>
+
+                  <div className="mt-2 flex items-center justify-between px-2 text-xs text-stone-400">
+                    <span>
+                      {isListening
+                        ? "Listening..."
+                        : micPermission === "granted"
+                          ? "Microphone ready"
+                          : micPermission === "denied"
+                            ? "Microphone blocked"
+                            : micPermission === "unsupported"
+                              ? "Microphone unavailable"
+                              : "Microphone permission needed"}
+                    </span>
+                    <span>Press Enter to send</span>
+                  </div>
+                </div>
+              </div>
+            </section>
           </div>
         </Card>
       ) : null}
