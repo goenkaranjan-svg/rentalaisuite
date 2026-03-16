@@ -8,6 +8,9 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
 import type { AssistantAvatarExpression, AssistantAvatarMode } from "@/components/AssistantAvatarScene";
 
+type UserRole = "manager" | "tenant" | "investor";
+type TenantTopicId = "lease" | "maintenance" | "rent-payment";
+
 type ChatRole = "user" | "assistant";
 
 type ChatMessage = {
@@ -19,6 +22,7 @@ type ChatMessage = {
 type AssistantIntent =
   | "highest_rent_property"
   | "overdue_rent"
+  | "rent_payment_details"
   | "maintenance_summary"
   | "create_maintenance_request"
   | "general";
@@ -26,6 +30,17 @@ type AssistantAction = {
   type?: string;
   status?: string;
   requestId?: number;
+};
+type SuggestionItem = {
+  label: string;
+  prompt: string;
+};
+
+type TenantTopic = {
+  id: TenantTopicId;
+  label: string;
+  description: string;
+  questions: SuggestionItem[];
 };
 
 type SpeechRecognitionAlternative = {
@@ -55,22 +70,71 @@ type BrowserSpeechRecognition = EventTarget & {
 type SpeechRecognitionConstructor = new () => BrowserSpeechRecognition;
 type MicPermissionState = "unknown" | "prompt" | "granted" | "denied" | "unsupported";
 
-const QUICK_ACTIONS = [
+const QUICK_ACTIONS_BY_ROLE: Record<UserRole, { label: string; prompt: string }[]> = {
+  manager: [
+    {
+      label: "Highest rent property",
+      prompt: "Show my highest rent property",
+    },
+    {
+      label: "Overdue rent summary",
+      prompt: "Show my overdue rent summary",
+    },
+    {
+      label: "Maintenance summary",
+      prompt: "Show my maintenance summary",
+    },
+  ],
+  tenant: [],
+  investor: [
+    {
+      label: "Investor portal help",
+      prompt: "How do I use the investor portal?",
+    },
+    {
+      label: "Portfolio docs",
+      prompt: "Show investor document guidance for my portfolio.",
+    },
+    {
+      label: "Deal questions",
+      prompt: "What investor-specific questions can you answer for me?",
+    },
+  ],
+};
+
+const TENANT_TOPIC_GROUPS: TenantTopic[] = [
   {
-    label: "Highest rent property",
-    prompt: "Show my highest rent property",
+    id: "lease",
+    label: "Lease",
+    description: "Term, clauses, notice, and responsibilities.",
+    questions: [
+      { label: "Lease summary", prompt: "Summarize my current lease in 4 short bullet points." },
+      { label: "Maintenance clause", prompt: "What does my lease say about maintenance responsibilities?" },
+      { label: "Move-out notice", prompt: "What notice period should I plan for before move-out?" },
+      { label: "Key lease terms", prompt: "What are the most important lease terms I should know right now?" },
+    ],
   },
   {
-    label: "Overdue rent summary",
-    prompt: "Show my overdue rent summary",
+    id: "maintenance",
+    label: "Maintenance",
+    description: "Repairs, reporting, and who is responsible.",
+    questions: [
+      { label: "My responsibilities", prompt: "What does my lease say about maintenance responsibilities?" },
+      { label: "Report issue", prompt: "I'll help you report a maintenance issue. Let's create a maintenance request." },
+      { label: "Who handles what", prompt: "What maintenance issues are usually my responsibility versus the property's responsibility?" },
+      { label: "Urgent repair", prompt: "What should I do first if I have an urgent repair issue?" },
+    ],
   },
   {
-    label: "Maintenance summary",
-    prompt: "Show my maintenance summary",
-  },
-  {
-    label: "Create maintenance request",
-    prompt: "I want to create a maintenance request.",
+    id: "rent-payment",
+    label: "Rent Payment",
+    description: "Due dates, late fees, balance, and timing.",
+    questions: [
+      { label: "Due date and late fees", prompt: "When is my rent due, and what happens if it is late?" },
+      { label: "Current balance", prompt: "Summarize my current rent balance and payment status." },
+      { label: "Payment help", prompt: "What payment questions can you answer about my account?" },
+      { label: "Next payment", prompt: "What should I know before making my next rent payment?" },
+    ],
   },
 ];
 
@@ -83,6 +147,11 @@ const SUGGESTIONS_BY_INTENT: Record<AssistantIntent, { label: string; prompt: st
   overdue_rent: [
     { label: "Highest rent", prompt: "Show my highest rent property" },
     { label: "Overdue list", prompt: "List my overdue rent items with property names" },
+    { label: "Maintenance", prompt: "Show my maintenance summary" },
+  ],
+  rent_payment_details: [
+    { label: "Current balance", prompt: "Summarize my current rent balance and payment status." },
+    { label: "Rent due", prompt: "When is my rent due?" },
     { label: "Maintenance", prompt: "Show my maintenance summary" },
   ],
   maintenance_summary: [
@@ -101,6 +170,30 @@ const SUGGESTIONS_BY_INTENT: Record<AssistantIntent, { label: string; prompt: st
     { label: "Maintenance", prompt: "Show my maintenance summary" },
   ],
 };
+
+const ROLE_SCOPE_COPY: Record<UserRole, string> = {
+  manager: "Manager-only account help for your properties, leases, payments, maintenance, and documents.",
+  tenant: "Tenant-only account help for your lease, rent, payments, maintenance, and renter documents.",
+  investor: "Investor-only account help for your portfolio, deals, investor portal, and investor documents.",
+};
+
+function normalizeUserRole(role?: string): UserRole {
+  if (role === "manager" || role === "tenant" || role === "investor") {
+    return role;
+  }
+  return "tenant";
+}
+
+function getRoleSuggestions(role: UserRole, intent: AssistantIntent) {
+  const suggestions = SUGGESTIONS_BY_INTENT[intent] ?? SUGGESTIONS_BY_INTENT.general;
+  const allowedPrompts = new Set(QUICK_ACTIONS_BY_ROLE[role].map((item) => item.prompt));
+  const filtered = suggestions.filter((item) => allowedPrompts.has(item.prompt));
+  return filtered.length > 0 ? filtered : QUICK_ACTIONS_BY_ROLE[role];
+}
+
+function getTenantTopicById(topicId: TenantTopicId | null) {
+  return TENANT_TOPIC_GROUPS.find((topic) => topic.id === topicId) ?? null;
+}
 
 const ASSISTANT_STORAGE_KEY = "assistant-chat-history-v1";
 const ASSISTANT_NAME = "Aster";
@@ -245,7 +338,7 @@ export function AIAssistantFab() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [followUpSuggestions, setFollowUpSuggestions] = useState(QUICK_ACTIONS);
+  const [followUpSuggestions, setFollowUpSuggestions] = useState<{ label: string; prompt: string }[]>([]);
   const [avatarMode, setAvatarMode] = useState<AssistantAvatarMode>("idle");
   const [avatarExpression, setAvatarExpression] = useState<AssistantAvatarExpression>("neutral");
   const [isListening, setIsListening] = useState(false);
@@ -256,6 +349,8 @@ export function AIAssistantFab() {
   const [speechCursor, setSpeechCursor] = useState(0);
   const [selectedPersonality, setSelectedPersonality] = useState<(typeof PERSONALITIES)[number]>("Friendly");
   const [hasRestoredHistory, setHasRestoredHistory] = useState(false);
+  const [selectedTenantTopicId, setSelectedTenantTopicId] = useState<TenantTopicId | null>(null);
+  const [isBrowsingTenantTopics, setIsBrowsingTenantTopics] = useState(false);
   const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
   const lastSpokenReplyRef = useRef<string>("");
   const revealTimerRef = useRef<number | null>(null);
@@ -267,7 +362,12 @@ export function AIAssistantFab() {
     [user?.id],
   );
   const firstName = user?.firstName?.trim() || user?.email?.split("@")[0] || "there";
+  const currentRole = normalizeUserRole(user?.role);
+  const quickActions = user ? QUICK_ACTIONS_BY_ROLE[currentRole] : [];
+  const selectedTenantTopic = getTenantTopicById(selectedTenantTopicId);
   const showQuickActions = messages.length === 0;
+  const showTenantTopicChooser =
+    currentRole === "tenant" && (showQuickActions || isBrowsingTenantTopics || selectedTenantTopic !== null);
   const isSecureContextAvailable = typeof window !== "undefined" ? window.isSecureContext : false;
   const hasMediaDevices = typeof navigator !== "undefined" && Boolean(navigator.mediaDevices);
   const hasGetUserMedia = typeof navigator !== "undefined" && typeof navigator.mediaDevices?.getUserMedia === "function";
@@ -325,6 +425,11 @@ export function AIAssistantFab() {
   }, [isSecureContextAvailable, supportsSpeechRecognition]);
 
   useEffect(() => {
+    if (!user) return;
+    setFollowUpSuggestions(QUICK_ACTIONS_BY_ROLE[currentRole]);
+  }, [currentRole, user]);
+
+  useEffect(() => {
     const currentUserId = user?.id ?? null;
     const previousUserId = previousUserIdRef.current;
     const shouldClearStoredHistory =
@@ -339,6 +444,8 @@ export function AIAssistantFab() {
     setMessages([]);
     setSpeechText("");
     setSpeechCursor(0);
+    setSelectedTenantTopicId(null);
+    setIsBrowsingTenantTopics(false);
     lastSpokenReplyRef.current = "";
     setHasRestoredHistory(false);
 
@@ -471,7 +578,9 @@ export function AIAssistantFab() {
     setAvatarExpression(getExpressionFromReply(reply));
     setSpeechText(reply);
     setSpeechCursor(0);
-    setFollowUpSuggestions(SUGGESTIONS_BY_INTENT[intent] ?? SUGGESTIONS_BY_INTENT.general);
+    if (user) {
+      setFollowUpSuggestions(getRoleSuggestions(currentRole, intent));
+    }
 
     setMessages((prev) => [
       ...prev,
@@ -507,11 +616,13 @@ export function AIAssistantFab() {
         setIsRevealingReply(false);
       }
     }, REPLY_REVEAL_INTERVAL_MS);
-  }, []);
+  }, [currentRole, user]);
 
   const sendMessage = useCallback(async (overrideMessage?: string) => {
     const content = (overrideMessage ?? input).trim();
     if (!content || isSending || isRevealingReply) return;
+    setSelectedTenantTopicId(null);
+    setIsBrowsingTenantTopics(false);
 
     const userMessage: ChatMessage = {
       id: `${Date.now()}-user`,
@@ -558,6 +669,21 @@ export function AIAssistantFab() {
       setIsSending(false);
     }
   }, [history, input, isRevealingReply, isSending, revealAssistantReply]);
+
+  useEffect(() => {
+    const handleAssistantPrompt = (event: Event) => {
+      const detail = (event as CustomEvent<{ prompt?: string; open?: boolean }>).detail;
+      const prompt = detail?.prompt?.trim();
+      if (!prompt) return;
+      setIsOpen(detail?.open ?? true);
+      void sendMessage(prompt);
+    };
+
+    window.addEventListener("assistant:prompt", handleAssistantPrompt);
+    return () => {
+      window.removeEventListener("assistant:prompt", handleAssistantPrompt);
+    };
+  }, [sendMessage]);
 
   useEffect(() => {
     if (!supportsSpeechRecognition) return;
@@ -737,7 +863,7 @@ export function AIAssistantFab() {
                       onClick={() => {
                         void requestMicrophonePermission();
                       }}
-                      disabled={isSending || isRevealingReply || micPermission === "unsupported"}
+                      disabled={isSending || isRevealingReply}
                     >
                       {micPromptCopy.button}
                     </Button>
@@ -784,7 +910,15 @@ export function AIAssistantFab() {
                 <div className="mx-auto flex h-full w-full max-w-3xl flex-col justify-end space-y-4">
                   {showQuickActions ? (
                     <div className="rounded-[1.7rem] border border-stone-200 bg-white/90 px-5 py-5 text-sm text-stone-700 shadow-sm">
-                      <p className="font-medium text-stone-900">Hi {firstName}, I&apos;m {ASSISTANT_NAME}. Here&apos;s what I can help with right now.</p>
+                      <p className="font-medium text-stone-900">
+                        Hi {firstName}, I&apos;m {ASSISTANT_NAME}.
+                        {currentRole === "tenant"
+                          ? " What would you like help with?"
+                          : quickActions.length > 0
+                            ? " Here's what I can help with right now."
+                            : " Ask a question within your account scope."}
+                      </p>
+                      <p className="mt-2 text-xs leading-5 text-stone-500">{user ? ROLE_SCOPE_COPY[currentRole] : null}</p>
                     </div>
                   ) : null}
 
@@ -811,19 +945,116 @@ export function AIAssistantFab() {
                   {error ? <p className="mb-3 text-xs text-red-600">{error}</p> : null}
 
                   <div className="mb-2.5 flex flex-wrap gap-2">
-                    {(showQuickActions ? QUICK_ACTIONS : followUpSuggestions).map((item) => (
-                      <button
-                        key={item.label}
-                        type="button"
-                        className="rounded-[0.9rem] border border-stone-300 bg-stone-50 px-3.5 py-2 text-xs text-stone-900 transition-colors hover:bg-white"
-                        onClick={() => {
-                          void sendMessage(item.prompt);
-                        }}
-                        disabled={isSending || isRevealingReply}
-                      >
-                        {item.label}
-                      </button>
-                    ))}
+                    {showTenantTopicChooser ? (
+                      selectedTenantTopic ? (
+                        <div className="w-full rounded-[1rem] border border-emerald-200 bg-white px-3.5 py-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <div>
+                              <p className="mt-1 text-sm font-medium text-stone-900">
+                                Here are some {selectedTenantTopic.label.toLowerCase()} questions I can help with.
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setSelectedTenantTopicId(null)}
+                                disabled={isSending || isRevealingReply}
+                              >
+                                Back
+                              </Button>
+                              {!showQuickActions ? (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => {
+                                    setSelectedTenantTopicId(null);
+                                    setIsBrowsingTenantTopics(false);
+                                  }}
+                                  disabled={isSending || isRevealingReply}
+                                >
+                                  Close
+                                </Button>
+                              ) : null}
+                            </div>
+                          </div>
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {selectedTenantTopic.questions.map((item) => (
+                              <button
+                                key={item.label}
+                                type="button"
+                                className="rounded-[0.9rem] border border-stone-300 bg-stone-50 px-3.5 py-2 text-xs text-stone-900 transition-colors hover:bg-white"
+                                onClick={() => {
+                                  void sendMessage(item.prompt);
+                                }}
+                                disabled={isSending || isRevealingReply}
+                              >
+                                {item.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="w-full rounded-[1rem] border border-stone-300 bg-white px-3.5 py-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <p className="text-sm font-medium text-stone-900">What would you like help with?</p>
+                            {!showQuickActions ? (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setIsBrowsingTenantTopics(false)}
+                                disabled={isSending || isRevealingReply}
+                              >
+                                Close
+                              </Button>
+                            ) : null}
+                          </div>
+                          <div className="mt-3 grid gap-2 md:grid-cols-3">
+                            {TENANT_TOPIC_GROUPS.map((topic) => (
+                              <button
+                                key={topic.id}
+                                type="button"
+                                className="rounded-[1rem] border border-stone-300 bg-stone-50 px-4 py-3 text-left transition-colors hover:bg-white"
+                                onClick={() => setSelectedTenantTopicId(topic.id)}
+                                disabled={isSending || isRevealingReply}
+                              >
+                                <p className="text-sm font-medium text-stone-900">{topic.label}</p>
+                                <p className="mt-1 text-xs leading-5 text-stone-500">{topic.description}</p>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )
+                    ) : (
+                      <>
+                        {!showQuickActions && currentRole === "tenant" ? (
+                          <button
+                            type="button"
+                            className="rounded-[0.9rem] border border-stone-300 bg-stone-50 px-3.5 py-2 text-xs text-stone-900 transition-colors hover:bg-white"
+                            onClick={() => setIsBrowsingTenantTopics(true)}
+                            disabled={isSending || isRevealingReply}
+                          >
+                            Browse topics
+                          </button>
+                        ) : null}
+                        {(showQuickActions ? quickActions : followUpSuggestions).map((item) => (
+                          <button
+                            key={item.label}
+                            type="button"
+                            className="rounded-[0.9rem] border border-stone-300 bg-stone-50 px-3.5 py-2 text-xs text-stone-900 transition-colors hover:bg-white"
+                            onClick={() => {
+                              void sendMessage(item.prompt);
+                            }}
+                            disabled={isSending || isRevealingReply}
+                          >
+                            {item.label}
+                          </button>
+                        ))}
+                      </>
+                    )}
                   </div>
 
                   <div className="flex items-end gap-3">

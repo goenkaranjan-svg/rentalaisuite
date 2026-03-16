@@ -5,7 +5,7 @@ import { storage } from "./storage";
 import { api } from "@shared/routes";
 import type { Lease, Property } from "@shared/schema";
 import { z } from "zod";
-import { setupAuth, registerAuthRoutes, isAuthenticated } from "./integrations/auth";
+import { setupAuth, registerAuthRoutes, isAuthenticated, authStorage } from "./integrations/auth";
 import { sendAuthEmail } from "./integrations/auth/mailer";
 import { hashToken } from "./integrations/auth/crypto";
 import { registerChatRoutes } from "./integrations/chat";
@@ -1591,6 +1591,56 @@ export async function registerRoutes(
     
     console.log(`Lease API Response - Count: ${leaseList.length}`);
     res.json(leaseList);
+  });
+
+  app.get("/api/renter-portal/contact", isAuthenticated, async (req: any, res) => {
+    const userId = req.user?.claims?.sub;
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const dbUser = await storage.getUser(userId);
+    if (dbUser?.role !== "tenant") {
+      return res.status(403).json({ message: "Only tenants can access renter portal contact details." });
+    }
+
+    const tenantLeases = await storage.getLeasesByTenant(userId);
+    const activeLease = tenantLeases.find((lease) => lease.status === "active") ?? tenantLeases[0];
+    if (!activeLease) {
+      return res.json({
+        managerName: null,
+        managerEmail: null,
+        managerPhone: null,
+        emergencyPhone: null,
+        emergencyInstructions: "No active property manager contact is available yet.",
+      });
+    }
+
+    const property = await storage.getProperty(activeLease.propertyId);
+    if (!property) {
+      return res.json({
+        managerName: null,
+        managerEmail: null,
+        managerPhone: null,
+        emergencyPhone: null,
+        emergencyInstructions: "Property contact details are not available yet.",
+      });
+    }
+
+    const manager = await authStorage.getUser(property.managerId);
+    const managerSettings = await authStorage.getUserProfileSettings(property.managerId);
+    const managerName = [manager?.firstName, manager?.lastName].filter(Boolean).join(" ").trim() || null;
+    const managerPhone = managerSettings?.phoneNumber ?? null;
+
+    return res.json({
+      managerName: managerName || "Property Manager",
+      managerEmail: manager?.email ?? null,
+      managerPhone,
+      emergencyPhone: managerPhone,
+      emergencyInstructions: managerPhone
+        ? "For urgent issues like flooding, gas smell, or no heat, call the emergency number first and then submit a maintenance request."
+        : "For urgent issues, submit a maintenance request immediately and contact your property team by email.",
+    });
   });
 
   app.post(api.leases.create.path, isAuthenticated, async (req: any, res) => {

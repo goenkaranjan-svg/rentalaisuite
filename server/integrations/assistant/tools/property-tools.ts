@@ -66,10 +66,13 @@ function toTitleCase(value: string): string {
 function sanitizeMaintenanceText(value: string): string {
   return normalizeWhitespace(
     value
+      .replace(/\bi['’]?ll help you\b/gi, "")
+      .replace(/\blet['’]?s\b/gi, "")
       .replace(/\bi want to\b/gi, "")
       .replace(/\bi need to\b/gi, "")
       .replace(/\b(create|submit|open|report)\b/gi, "")
       .replace(/\b(a|an)?\s*(maintenance request|repair request|work order)\b/gi, "")
+      .replace(/\bmaintenance issue\b/gi, "")
       .replace(/\bfor property\s*#?\d+\b/gi, "")
       .replace(/\bproperty\s*#?\d+\b/gi, "")
       .replace(/\bwith (priority|title|description)\b/gi, "")
@@ -88,6 +91,7 @@ function isMeaningfulMaintenanceDescription(value?: string): boolean {
     "maintenance request",
     "repair request",
     "work order",
+    "maintenance issue",
     "my property",
     "a request",
     "need help",
@@ -96,6 +100,11 @@ function isMeaningfulMaintenanceDescription(value?: string): boolean {
     "want maintenance",
     "want to create",
     "want to submit",
+    "help you report a maintenance issue",
+    "help report a maintenance issue",
+    "let create a maintenance request",
+    "lets create a maintenance request",
+    "create maintenance request",
   ];
 
   if (genericPhrases.some((phrase) => normalized === phrase || normalized.includes(phrase))) {
@@ -364,6 +373,56 @@ async function getOverdueRentSummary(user: User, message?: string): Promise<Assi
   };
 }
 
+async function getRentPaymentDetails(user: User, message?: string): Promise<AssistantToolResult> {
+  const { properties, leases } = await getScopedPropertiesAndLeases(user);
+  const propertyById = new Map(properties.map((property) => [property.id, property]));
+  const activeLease = leases.find((lease) => lease.status === "active") ?? leases[0];
+
+  if (!activeLease) {
+    return {
+      toolName: "getRentPaymentDetails",
+      summary: "No active lease data is available for this user.",
+      data: { found: false },
+    };
+  }
+
+  const leasePayments = (await storage.getPayments()).filter(
+    (payment) => payment.leaseId === activeLease.id && (payment.type === "rent" || payment.type === "fee"),
+  );
+  const now = new Date();
+  const paidThisMonth = leasePayments
+    .filter((payment) => {
+      if (payment.status !== "paid") return false;
+      const paymentDate = new Date(payment.date ?? now);
+      return paymentDate.getMonth() === now.getMonth() && paymentDate.getFullYear() === now.getFullYear();
+    })
+    .reduce((sum, payment) => sum + toMoney(payment.amount), 0);
+  const rentAmount = toMoney(activeLease.rentAmount);
+  const balance = Math.max(rentAmount - paidThisMonth, 0);
+  const property = propertyById.get(activeLease.propertyId);
+  const includeIds = userExplicitlyAskedForIds(message);
+
+  return {
+    toolName: "getRentPaymentDetails",
+    summary:
+      user.role === "tenant"
+        ? `Your monthly rent is $${rentAmount.toFixed(2)}. You've paid $${paidThisMonth.toFixed(2)} this month, leaving a current balance of $${balance.toFixed(2)}. I do not see a structured due-date field in your account data.`
+        : `Current lease rent is $${rentAmount.toFixed(2)} with a balance of $${balance.toFixed(2)} for this month.`,
+    data: {
+      found: true,
+      rentAmount,
+      paidThisMonth,
+      currentBalance: balance,
+      leaseStatus: activeLease.status,
+      leaseStartDate: activeLease.startDate,
+      leaseEndDate: activeLease.endDate,
+      propertyAddress: property ? formatAddress(property) : undefined,
+      dueDateKnown: false,
+      ...(includeIds ? { leaseId: activeLease.id, propertyId: activeLease.propertyId } : {}),
+    },
+  };
+}
+
 async function getMaintenanceSummary(user: User, message?: string): Promise<AssistantToolResult> {
   const allRequests = await storage.getMaintenanceRequests();
   let scoped = allRequests;
@@ -409,6 +468,7 @@ export async function runAssistantTool(
 ): Promise<AssistantToolResult | null> {
   if (intent === "highest_rent_property") return getHighestRentProperty(user, options?.message);
   if (intent === "overdue_rent") return getOverdueRentSummary(user, options?.message);
+  if (intent === "rent_payment_details") return getRentPaymentDetails(user, options?.message);
   if (intent === "maintenance_summary") return getMaintenanceSummary(user, options?.message);
   if (intent === "create_maintenance_request") {
     return createMaintenanceRequestFromChat(user, options?.history ?? [], options?.message ?? "");

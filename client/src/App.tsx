@@ -88,7 +88,7 @@ function ProtectedLayout({ children }: { children: React.ReactNode }) {
   }
 
   if (user.role === "tenant") {
-    const allowedTenantRoutes = ["/renter", "/profile", "/login"];
+    const allowedTenantRoutes = ["/renter", "/maintenance", "/profile", "/login"];
     const tenantDetailRoutes = ["/properties/"];
     const isAllowed =
       allowedTenantRoutes.includes(location) ||

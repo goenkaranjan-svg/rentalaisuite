@@ -1,11 +1,11 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ChangeEvent } from "react";
 import { format } from "date-fns";
 
 import { useAuth } from "@/hooks/use-auth";
 import { useLeases } from "@/hooks/use-leases";
-import { useMaintenanceRequests, useCreateMaintenanceRequest } from "@/hooks/use-maintenance";
 import { usePayments, useCreatePayment } from "@/hooks/use-payments";
 import { useProperties } from "@/hooks/use-properties";
+import { useToast } from "@/hooks/use-toast";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,18 +13,67 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Textarea } from "@/components/ui/textarea";
+
+type UploadedPortalDocument = {
+  id: string;
+  name: string;
+  mimeType: string;
+  size: number;
+  uploadedAt: string;
+  dataUrl: string;
+};
+
+const MAX_PORTAL_UPLOAD_BYTES = 2 * 1024 * 1024;
+
+function formatDateLabel(value?: string | Date | null): string {
+  if (!value) return "Not set";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Not set";
+  return format(date, "MMM d, yyyy");
+}
+
+function formatCompactDateTime(value?: string | Date | null): string {
+  if (!value) return "Not set";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Not set";
+  return format(date, "MMM d, yyyy 'at' h:mm a");
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        resolve(reader.result);
+        return;
+      }
+      reject(new Error("Could not read the selected file."));
+    };
+    reader.onerror = () => reject(new Error("Could not read the selected file."));
+    reader.readAsDataURL(file);
+  });
+}
 
 export default function RenterPortal() {
   const { user } = useAuth();
+  const { toast } = useToast();
   const { data: leases } = useLeases();
   const { data: properties } = useProperties();
-  const { data: maintenance } = useMaintenanceRequests();
   const { data: payments } = usePayments();
-  const { mutate: createMaintenance, isPending: isSubmittingRequest } = useCreateMaintenanceRequest();
   const { mutate: createPayment, isPending: isPaying } = useCreatePayment();
+  const [uploadedDocuments, setUploadedDocuments] = useState<UploadedPortalDocument[]>([]);
 
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
+  const uploadStorageKey = useMemo(
+    () => `renter-uploaded-documents-v1:${user?.id ?? "anonymous"}`,
+    [user?.id],
+  );
 
   const activeLease = useMemo(
     () => (leases ?? []).find((l) => l.status === "active") ?? null,
@@ -39,7 +88,6 @@ export default function RenterPortal() {
     () => (payments ?? []).sort((a, b) => new Date(b.date ?? 0).getTime() - new Date(a.date ?? 0).getTime()),
     [payments],
   );
-
   const monthlyRent = activeLease ? Number(activeLease.rentAmount) : 0;
   const paidThisMonth = myPayments
     .filter((p) => {
@@ -50,25 +98,36 @@ export default function RenterPortal() {
     .reduce((sum, p) => sum + Number(p.amount), 0);
   const balance = Math.max(monthlyRent - paidThisMonth, 0);
 
-  const submitMaintenance = () => {
-    if (!activeLease || !user || !title || !description) return;
-    createMaintenance(
-      {
-        propertyId: activeLease.propertyId,
-        tenantId: user.id,
-        title,
-        description,
-        priority: "medium",
-        status: "open",
-      },
-      {
-        onSuccess: () => {
-          setTitle("");
-          setDescription("");
-        },
-      },
-    );
-  };
+  useEffect(() => {
+    const raw = window.sessionStorage.getItem(uploadStorageKey);
+    if (!raw) {
+      setUploadedDocuments([]);
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(raw) as UploadedPortalDocument[];
+      if (Array.isArray(parsed)) {
+        setUploadedDocuments(
+          parsed.filter(
+            (item) =>
+              typeof item?.id === "string" &&
+              typeof item?.name === "string" &&
+              typeof item?.mimeType === "string" &&
+              typeof item?.size === "number" &&
+              typeof item?.uploadedAt === "string" &&
+              typeof item?.dataUrl === "string",
+          ),
+        );
+      }
+    } catch {
+      setUploadedDocuments([]);
+    }
+  }, [uploadStorageKey]);
+
+  useEffect(() => {
+    window.sessionStorage.setItem(uploadStorageKey, JSON.stringify(uploadedDocuments));
+  }, [uploadStorageKey, uploadedDocuments]);
 
   const payRentNow = () => {
     if (!activeLease || balance <= 0) return;
@@ -78,6 +137,64 @@ export default function RenterPortal() {
       status: "paid",
       type: "rent",
     });
+  };
+
+  const downloadLeaseDraft = () => {
+    if (!activeLease?.draftText) return;
+    const blob = new Blob([activeLease.draftText], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `lease-${activeLease.id}-draft.txt`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleDocumentUpload = async (event: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files ?? []);
+    if (files.length === 0) return;
+
+    const oversized = files.find((file) => file.size > MAX_PORTAL_UPLOAD_BYTES);
+    if (oversized) {
+      toast({
+        title: "File too large",
+        description: `${oversized.name} is larger than 2 MB. Keep renter portal uploads lightweight for now.`,
+        variant: "destructive",
+      });
+      event.target.value = "";
+      return;
+    }
+
+    try {
+      const nextDocuments = await Promise.all(
+        files.map(async (file) => ({
+          id: `${Date.now()}-${file.name}-${Math.random().toString(36).slice(2, 8)}`,
+          name: file.name,
+          mimeType: file.type || "application/octet-stream",
+          size: file.size,
+          uploadedAt: new Date().toISOString(),
+          dataUrl: await readFileAsDataUrl(file),
+        })),
+      );
+
+      setUploadedDocuments((current) => [...nextDocuments, ...current].slice(0, 8));
+      toast({
+        title: "Document added",
+        description: `${files.length} file${files.length > 1 ? "s" : ""} ready in your renter portal.`,
+      });
+    } catch (error) {
+      toast({
+        title: "Upload failed",
+        description: error instanceof Error ? error.message : "Could not add the selected file.",
+        variant: "destructive",
+      });
+    } finally {
+      event.target.value = "";
+    }
+  };
+
+  const removeUploadedDocument = (documentId: string) => {
+    setUploadedDocuments((current) => current.filter((item) => item.id !== documentId));
   };
 
   return (
@@ -104,57 +221,88 @@ export default function RenterPortal() {
         </Card>
       </div>
 
-      <Card className="border-slate-200">
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>My Lease</CardTitle>
-          <Button onClick={payRentNow} disabled={!activeLease || balance <= 0 || isPaying}>
-            {isPaying ? "Processing..." : balance > 0 ? `Pay $${balance.toLocaleString()}` : "Paid"}
-          </Button>
-        </CardHeader>
-        <CardContent>
-          {!activeLease && <p className="text-slate-500">No active lease found.</p>}
-          {activeLease && (
-            <div className="grid grid-cols-1 gap-4 text-sm md:grid-cols-2 xl:grid-cols-4">
-              <div><span className="text-slate-500">Lease ID:</span> #{activeLease.id}</div>
-              <div><span className="text-slate-500">Start:</span> {format(new Date(activeLease.startDate), "MMM d, yyyy")}</div>
-              <div><span className="text-slate-500">End:</span> {format(new Date(activeLease.endDate), "MMM d, yyyy")}</div>
-              <div><span className="text-slate-500">Monthly Rent:</span> ${monthlyRent.toLocaleString()}</div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card className="border-slate-200">
-        <CardHeader>
-          <CardTitle>Property Details</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {!activeProperty && <p className="text-slate-500">Property details are not available yet.</p>}
-          {activeProperty && (
-            <div className="grid grid-cols-1 gap-4 text-sm md:grid-cols-2 xl:grid-cols-4">
-              <div className="md:col-span-2 xl:col-span-4">
-                <span className="text-slate-500">Address:</span>{" "}
-                <span className="font-medium text-slate-900">
-                  {activeProperty.address}, {activeProperty.city}, {activeProperty.state} {activeProperty.zipCode}
-                </span>
-              </div>
-              <div><span className="text-slate-500">Status:</span> <span className="capitalize">{activeProperty.status}</span></div>
-              <div><span className="text-slate-500">Bedrooms:</span> {activeProperty.bedrooms}</div>
-              <div><span className="text-slate-500">Bathrooms:</span> {activeProperty.bathrooms}</div>
-              <div><span className="text-slate-500">Square Feet:</span> {activeProperty.sqft.toLocaleString()}</div>
-              <div><span className="text-slate-500">Listed Rent:</span> ${Number(activeProperty.price).toLocaleString()}</div>
-              {activeProperty.description ? (
-                <div className="md:col-span-2 xl:col-span-4">
-                  <span className="text-slate-500">Description:</span>{" "}
-                  <span className="text-slate-700">{activeProperty.description}</span>
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.25fr_0.95fr]">
+        <Card className="border-slate-200">
+          <CardHeader className="flex flex-row items-center justify-between gap-4">
+            <CardTitle>Lease Summary</CardTitle>
+            <Button onClick={payRentNow} disabled={!activeLease || balance <= 0 || isPaying}>
+              {isPaying ? "Processing..." : balance > 0 ? `Pay $${balance.toLocaleString()}` : "Paid"}
+            </Button>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            {!activeLease && <p className="text-slate-500">No active lease found.</p>}
+            {activeLease && (
+              <>
+                <div className="grid grid-cols-1 gap-4 text-sm md:grid-cols-2 xl:grid-cols-4">
+                  <div><span className="text-slate-500">Status:</span> <span className="capitalize">{activeLease.status}</span></div>
+                  <div><span className="text-slate-500">Start:</span> {formatDateLabel(activeLease.startDate)}</div>
+                  <div><span className="text-slate-500">End:</span> {formatDateLabel(activeLease.endDate)}</div>
+                  <div><span className="text-slate-500">Monthly Rent:</span> ${monthlyRent.toLocaleString()}</div>
                 </div>
-              ) : null}
-            </div>
-          )}
-        </CardContent>
-      </Card>
 
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                <div className="rounded-xl border border-stone-200 bg-stone-50 p-4">
+                  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-stone-900">Lease Documents</p>
+                      <p className="text-sm text-stone-600">
+                        Open your signed lease when available, or download the current draft copy.
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {activeLease.documentUrl ? (
+                        <Button asChild variant="outline">
+                          <a href={activeLease.documentUrl} target="_blank" rel="noreferrer">
+                            Open Lease
+                          </a>
+                        </Button>
+                      ) : null}
+                      {activeLease.draftText ? (
+                        <Button variant="outline" onClick={downloadLeaseDraft}>
+                          Download Draft
+                        </Button>
+                      ) : null}
+                      {!activeLease.documentUrl && !activeLease.draftText ? (
+                        <Badge variant="outline">Document pending</Badge>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="border-slate-200">
+          <CardHeader>
+            <CardTitle>Property Details</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {!activeProperty && <p className="text-slate-500">Property details are not available yet.</p>}
+            {activeProperty && (
+              <div className="grid grid-cols-1 gap-4 text-sm md:grid-cols-2">
+                <div className="md:col-span-2">
+                  <span className="text-slate-500">Address:</span>{" "}
+                  <span className="font-medium text-slate-900">
+                    {activeProperty.address}, {activeProperty.city}, {activeProperty.state} {activeProperty.zipCode}
+                  </span>
+                </div>
+                <div><span className="text-slate-500">Status:</span> <span className="capitalize">{activeProperty.status}</span></div>
+                <div><span className="text-slate-500">Bedrooms:</span> {activeProperty.bedrooms}</div>
+                <div><span className="text-slate-500">Bathrooms:</span> {activeProperty.bathrooms}</div>
+                <div><span className="text-slate-500">Square Feet:</span> {activeProperty.sqft.toLocaleString()}</div>
+                {activeProperty.description ? (
+                  <div className="md:col-span-2">
+                    <span className="text-slate-500">Description:</span>{" "}
+                    <span className="text-slate-700">{activeProperty.description}</span>
+                  </div>
+                ) : null}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
         <Card className="border-slate-200">
           <CardHeader><CardTitle>Payment History</CardTitle></CardHeader>
           <CardContent>
@@ -202,36 +350,51 @@ export default function RenterPortal() {
         </Card>
 
         <Card className="border-slate-200">
-          <CardHeader><CardTitle>Submit Maintenance Request</CardTitle></CardHeader>
-          <CardContent className="space-y-3">
+          <CardHeader><CardTitle>Document Uploads</CardTitle></CardHeader>
+          <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label>Title</Label>
-              <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Leaky faucet" />
+              <Label htmlFor="renter-document-upload">Add documents</Label>
+              <Input
+                id="renter-document-upload"
+                type="file"
+                accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
+                multiple
+                onChange={handleDocumentUpload}
+              />
+              <p className="text-xs text-slate-500">
+                Use this for renter insurance, move-in photos, or lease support files. Files are kept in this browser session for now, up to 2 MB each.
+              </p>
             </div>
-            <div className="space-y-2">
-              <Label>Description</Label>
-              <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Describe the issue" />
-            </div>
-            <Button onClick={submitMaintenance} disabled={!activeLease || isSubmittingRequest}>
-              {isSubmittingRequest ? "Submitting..." : "Submit Request"}
-            </Button>
 
-            <div className="pt-4 space-y-2">
-              <h3 className="font-medium text-slate-900">Recent Requests</h3>
-              {(maintenance ?? []).slice(0, 4).map((m) => (
-                <div key={m.id} className="flex items-center justify-between text-sm border rounded-md p-2">
+            <div className="space-y-3">
+              {uploadedDocuments.map((document) => (
+                <div key={document.id} className="flex flex-col gap-3 rounded-xl border border-slate-200 p-4 md:flex-row md:items-center md:justify-between">
                   <div>
-                    <p className="font-medium">{m.title}</p>
-                    <p className="text-slate-500">{m.description}</p>
+                    <p className="font-medium text-slate-900">{document.name}</p>
+                    <p className="text-sm text-slate-500">
+                      {formatFileSize(document.size)} • Added {formatCompactDateTime(document.uploadedAt)}
+                    </p>
                   </div>
-                  <Badge variant="outline" className="capitalize">{m.status}</Badge>
+                  <div className="flex gap-2">
+                    <Button asChild variant="outline">
+                      <a href={document.dataUrl} download={document.name}>
+                        Download
+                      </a>
+                    </Button>
+                    <Button variant="ghost" onClick={() => removeUploadedDocument(document.id)}>
+                      Remove
+                    </Button>
+                  </div>
                 </div>
               ))}
-              {(maintenance ?? []).length === 0 && <p className="text-slate-500 text-sm">No maintenance requests yet.</p>}
+              {uploadedDocuments.length === 0 && (
+                <p className="text-sm text-slate-500">No uploaded documents yet.</p>
+              )}
             </div>
           </CardContent>
         </Card>
       </div>
+
     </div>
   );
 }

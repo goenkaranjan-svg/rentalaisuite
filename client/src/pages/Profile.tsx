@@ -7,12 +7,14 @@ import { Button } from "@/components/ui/button";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useToast } from "@/hooks/use-toast";
 import { useUpdateUserProfile, useUserProfile } from "@/hooks/use-profile";
+import { useRenterPortalContact } from "@/hooks/use-renter-portal";
 import { useAuth } from "@/hooks/use-auth";
 
 export default function Profile() {
   const { toast } = useToast();
   const { user } = useAuth();
   const { data: profile, isLoading } = useUserProfile();
+  const { data: renterContact } = useRenterPortalContact(user?.role === "tenant");
   const updateProfile = useUpdateUserProfile();
 
   const [email, setEmail] = useState("");
@@ -201,6 +203,32 @@ export default function Profile() {
           ) : null}
         </CardContent>
       </Card>
+
+      {user?.role === "tenant" ? (
+        <Card className="border-slate-200">
+          <CardHeader>
+            <CardTitle>Contact & Emergency</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4 text-sm">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Property Team</p>
+              <p className="mt-2 font-medium text-slate-900">{renterContact?.managerName ?? "Property Manager"}</p>
+              <p className="mt-1 text-slate-600">{renterContact?.managerEmail ?? "No email on file yet"}</p>
+              <p className="text-slate-600">{renterContact?.managerPhone ?? "No direct phone on file yet"}</p>
+            </div>
+
+            <div className="rounded-xl border border-rose-200 bg-rose-50 p-4">
+              <p className="text-xs uppercase tracking-[0.2em] text-rose-600">Emergency</p>
+              <p className="mt-2 font-medium text-rose-900">
+                {renterContact?.emergencyPhone ?? "Use the portal and email for urgent issues"}
+              </p>
+              <p className="mt-2 text-rose-700">
+                {renterContact?.emergencyInstructions ?? "For emergencies, contact your property team immediately after submitting a request."}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
     </div>
   );
 }

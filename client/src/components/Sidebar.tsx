@@ -23,6 +23,7 @@ function getNavigation(role?: string) {
   if (role === "tenant") {
     return [
       { name: "Renter Portal", href: "/renter", icon: LayoutDashboard },
+      { name: "Maintenance", href: "/maintenance", icon: Wrench },
     ];
   }
   if (role === "investor") {
