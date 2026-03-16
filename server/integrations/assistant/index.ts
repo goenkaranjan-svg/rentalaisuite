@@ -165,6 +165,35 @@ function fallbackFromTool(message: string, toolSummary?: string): string {
   return `I could not reach the LLM right now. Your message was: "${message}". Please try again.`;
 }
 
+function internalReplyFallback(route: ReturnType<typeof routeAssistantIntent>, toolSummary?: string): string {
+  if (toolSummary) return toolSummary;
+
+  if (route.intent === "overdue_rent") {
+    return "I couldn't find an overdue rent summary for your account right now. Please try again.";
+  }
+  if (route.intent === "maintenance_summary") {
+    return "I couldn't find a maintenance summary for your account right now. Please try again.";
+  }
+  if (route.intent === "rent_payment_details") {
+    return "I couldn't find your rent payment details right now. Please try again.";
+  }
+  return "I couldn't answer that cleanly right now. Please try again.";
+}
+
+function containsInternalScaffolding(reply: string): boolean {
+  return [
+    /\btool_json\b/i,
+    /\btool_context\b/i,
+    /\btool_name\b/i,
+    /\btool_summary\b/i,
+    /\brag_context\b/i,
+    /\buser_question\b/i,
+    /\bno retrieved knowledge sources\b/i,
+    /\binternal source of truth\b/i,
+    /\bcitationRule\b/i,
+  ].some((pattern) => pattern.test(reply));
+}
+
 function sanitizeAssistantReply(reply: string): string {
   return reply
     .replace(/^please note that this information is based on the tool_json provided,?\s*/i, "")
@@ -172,6 +201,10 @@ function sanitizeAssistantReply(reply: string): string {
     .replace(/^according to the tool_json,?\s*/i, "")
     .replace(/^i am uncertain about the completeness or accuracy of this data\.?\s*/i, "")
     .replace(/^please note that\s*/i, "")
+    .replace(/^the rag context.*$/gim, "")
+    .replace(/^the tool_(name|summary|json).*$\n?/gim, "")
+    .replace(/^the user_question.*$/gim, "")
+    .replace(/^no retrieved knowledge sources\.?$/gim, "")
     .replace(/\s+\*\s+/g, "\n- ")
     .replace(/:\s+- /g, ":\n- ")
     .replace(/\n{3,}/g, "\n\n")
@@ -233,11 +266,15 @@ export async function runAssistantChat(input: AssistantChatInput): Promise<Assis
       history: input.history,
       userPrompt: `${citationRule}\n\nTOOL_CONTEXT:\n${toolContext}\n\nRAG_CONTEXT:\n${sourceContext}\n\nUSER_QUESTION: ${input.message}`,
     });
+    const sanitizedReply = sanitizeAssistantReply(completion.reply);
+    const safeReply = containsInternalScaffolding(sanitizedReply)
+      ? internalReplyFallback(route, toolResult?.summary)
+      : sanitizedReply;
 
     const replyWithSources =
       sources.length > 0
-        ? `${sanitizeAssistantReply(completion.reply)}\n\nSources:\n${sources.map((source) => `${source.label}: ${source.title}`).join("\n")}`
-        : sanitizeAssistantReply(completion.reply);
+        ? `${safeReply}\n\nSources:\n${sources.map((source) => `${source.label}: ${source.title}`).join("\n")}`
+        : safeReply;
 
     return {
       reply: replyWithSources,
