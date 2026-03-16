@@ -1,6 +1,3 @@
-import * as client from "openid-client";
-import { Strategy, type VerifyFunction } from "openid-client/passport";
-
 import passport from "passport";
 import session from "express-session";
 import type { Express, RequestHandler } from "express";
@@ -16,13 +13,35 @@ const OIDC_PLACEHOLDERS = [
   "your-tenant.auth0.com",
 ];
 
+type OidcClientModule = typeof import("openid-client");
+type OidcPassportModule = typeof import("openid-client/passport");
+
+let oidcClientPromise: Promise<OidcClientModule> | null = null;
+let oidcPassportPromise: Promise<OidcPassportModule> | null = null;
+
+function getRuntimeEnv() {
+  return globalThis.process?.env ?? process.env;
+}
+
+async function loadOidcClient(): Promise<OidcClientModule> {
+  oidcClientPromise ??= import("openid-client");
+  return oidcClientPromise;
+}
+
+async function loadOidcPassport(): Promise<OidcPassportModule> {
+  oidcPassportPromise ??= import("openid-client/passport");
+  return oidcPassportPromise;
+}
+
 function isDevAuthBypassEnabled(): boolean {
-  return process.env.NODE_ENV !== "production" && process.env.DEV_AUTH_BYPASS === "true";
+  const env = getRuntimeEnv();
+  return env.NODE_ENV !== "production" && env.DEV_AUTH_BYPASS === "true";
 }
 
 function isOidcConfigured(): boolean {
-  const issuer = process.env.ISSUER_URL ?? process.env.OIDC_ISSUER_URL ?? "";
-  const clientId = process.env.CLIENT_ID ?? "";
+  const env = getRuntimeEnv();
+  const issuer = env.ISSUER_URL ?? env.OIDC_ISSUER_URL ?? "";
+  const clientId = env.CLIENT_ID ?? "";
   if (!issuer || !clientId) return false;
   const isPlaceholder = OIDC_PLACEHOLDERS.some(
     (p) => issuer.includes(p) || clientId.includes(p)
@@ -32,9 +51,11 @@ function isOidcConfigured(): boolean {
 
 const getOidcConfig = memoize(
   async () => {
+    const env = getRuntimeEnv();
+    const client = await loadOidcClient();
     return await client.discovery(
-      new URL(process.env.ISSUER_URL ?? process.env.OIDC_ISSUER_URL!),
-      process.env.CLIENT_ID!
+      new URL(env.ISSUER_URL ?? env.OIDC_ISSUER_URL!),
+      env.CLIENT_ID!
     );
   },
   { maxAge: 3600 * 1000 }
@@ -80,7 +101,7 @@ export function getSession() {
 
 function updateUserSession(
   user: any,
-  tokens: client.TokenEndpointResponse & client.TokenEndpointResponseHelpers
+  tokens: any
 ) {
   user.claims = tokens.claims();
   user.access_token = tokens.access_token;
@@ -107,7 +128,8 @@ async function upsertUser(claims: any) {
 }
 
 export async function setupAuth(app: Express) {
-  app.set("trust proxy", process.env.NODE_ENV === "production" ? 1 : 0);
+  const env = getRuntimeEnv();
+  app.set("trust proxy", env.NODE_ENV === "production" ? 1 : 0);
   app.use(getSession());
   app.use(passport.initialize());
   app.use(passport.session());
@@ -268,6 +290,11 @@ export async function setupAuth(app: Express) {
     return;
   }
 
+  const [client, { Strategy }] = await Promise.all([
+    loadOidcClient(),
+    loadOidcPassport(),
+  ]);
+
   let config: Awaited<ReturnType<typeof getOidcConfig>>;
   try {
     config = await getOidcConfig();
@@ -297,8 +324,8 @@ export async function setupAuth(app: Express) {
     return;
   }
 
-  const verify: VerifyFunction = async (
-    tokens: client.TokenEndpointResponse & client.TokenEndpointResponseHelpers,
+  const verify = async (
+    tokens: any,
     verified: passport.AuthenticateCallback
   ) => {
     const user = {};
@@ -388,7 +415,7 @@ export async function setupAuth(app: Express) {
       if (sid) removeSession(sid);
       res.redirect(
         client.buildEndSessionUrl(config, {
-          client_id: process.env.CLIENT_ID!,
+          client_id: env.CLIENT_ID!,
           post_logout_redirect_uri: `${req.protocol}://${req.hostname}`,
         }).href
       );
@@ -415,6 +442,7 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
   }
 
   try {
+    const client = await loadOidcClient();
     const config = await getOidcConfig();
     const tokenResponse = await client.refreshTokenGrant(config, refreshToken);
     updateUserSession(user, tokenResponse);

@@ -25,12 +25,15 @@ export function log(message: string, source = "express") {
 
 type AppRuntime = "server" | "serverless";
 
-function createHttpServer(app: express.Express): Server {
-  const certPath = process.env.DEV_HTTPS_CERT_PATH;
-  const keyPath = process.env.DEV_HTTPS_KEY_PATH;
-  const useHttps = process.env.NODE_ENV !== "production" && certPath && keyPath;
+function getRuntimeEnv() {
+  return globalThis.process?.env ?? process.env;
+}
 
-  if (!useHttps) {
+function createHttpServer(app: express.Express): Server {
+  const env = getRuntimeEnv();
+  const certPath = env.DEV_HTTPS_CERT_PATH;
+  const keyPath = env.DEV_HTTPS_KEY_PATH;
+  if (env.NODE_ENV === "production" || !certPath || !keyPath) {
     return createServer(app);
   }
 
