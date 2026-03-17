@@ -12,9 +12,21 @@ import { createApp, log } from "./app";
   const primaryHost = process.env.HOST || "0.0.0.0";
   const fallbackHost = "127.0.0.1";
 
+  const getBrowserHost = (host: string) => {
+    if (host === "0.0.0.0") {
+      return isHttps ? "localhost" : "127.0.0.1";
+    }
+    return host;
+  };
+
   const startServer = (host: string) => {
     httpServer.listen({ port, host }, () => {
-      log(`serving on ${isHttps ? "https" : "http"}://${host}:${port}`);
+      const protocol = isHttps ? "https" : "http";
+      const browserHost = getBrowserHost(host);
+      log(`serving on ${protocol}://${browserHost}:${port}`);
+      if (browserHost !== host) {
+        log(`bound to ${protocol}://${host}:${port}`, "server");
+      }
     });
   };
 
