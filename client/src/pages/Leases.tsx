@@ -24,7 +24,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/compon
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertLeaseSchema } from "@shared/schema";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useAuth } from "@/hooks/use-auth";
 
 export default function Leases() {
@@ -33,12 +33,14 @@ export default function Leases() {
   const { data: properties } = useProperties();
   const { data: tenants } = useTenants();
   const { mutate: createLease, isPending: isCreating } = useCreateLease();
-  const { mutate: generateDoc, isPending: isGenerating } = useGenerateLeaseDoc();
-  const { mutate: sendForSigning, isPending: isSendingForSigning } = useSendLeaseForSigning();
+  const { mutate: generateDoc } = useGenerateLeaseDoc();
+  const { mutate: sendForSigning } = useSendLeaseForSigning();
   const { data: leaseExpirySettings } = useLeaseExpiryNotificationSettings(user?.role === "manager");
   const { mutate: updateLeaseExpirySettings, isPending: isSavingLeaseExpirySettings } = useUpdateLeaseExpiryNotificationSettings();
   const { data: pipeline } = useLeaseRenewalPipeline();
   const [open, setOpen] = useState(false);
+  const [generatingLeaseId, setGeneratingLeaseId] = useState<number | null>(null);
+  const [signingLeaseId, setSigningLeaseId] = useState<number | null>(null);
   const [leaseExpiryEnabled, setLeaseExpiryEnabled] = useState(true);
   const [leaseExpiryDays, setLeaseExpiryDays] = useState("30");
   const [isEditingLeaseExpiryDays, setIsEditingLeaseExpiryDays] = useState(false);
@@ -107,8 +109,25 @@ export default function Leases() {
     return Math.min(365, Math.max(1, Math.floor(parsed)));
   })();
 
-  console.log("Leases Page - Data:", leases);
-  console.log("Leases Page - Loading:", isLoading);
+  const handleGenerateDoc = useCallback((leaseId: number) => {
+    setGeneratingLeaseId(leaseId);
+    generateDoc(leaseId, { onSettled: () => setGeneratingLeaseId(null) });
+  }, [generateDoc]);
+
+  const handleSendForSigning = useCallback((leaseId: number) => {
+    setSigningLeaseId(leaseId);
+    sendForSigning(leaseId, { onSettled: () => setSigningLeaseId(null) });
+  }, [sendForSigning]);
+
+  const handleDownloadDraft = useCallback((draftText: string, leaseId: number) => {
+    const blob = new Blob([draftText], { type: "text/plain" });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `lease-draft-${leaseId}.txt`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+  }, []);
 
   if (isLoading) {
     return (
@@ -212,8 +231,9 @@ export default function Leases() {
                 <form
                   id="create-lease-form"
                   onSubmit={form.handleSubmit(onSubmit)}
-                  className="flex-1 overflow-y-auto px-6 pt-4 pb-0 space-y-4"
+                  className="flex flex-col flex-1 min-h-0"
                 >
+                  <div className="flex-1 overflow-y-auto px-6 pt-4 pb-0 space-y-4">
                   <FormField
                     control={form.control}
                     name="propertyId"
@@ -309,7 +329,8 @@ export default function Leases() {
                       </FormItem>
                     )}
                   />
-                  <div className="sticky bottom-0 -mx-6 mt-4 border-t bg-background/95 px-6 py-4 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+                  </div>
+                  <div className="border-t bg-background px-6 py-4">
                     <Button type="submit" className="w-full" disabled={isCreating}>
                       {isCreating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                       Create Lease
@@ -357,14 +378,7 @@ export default function Leases() {
                         {lease.draftText}
                       </div>
                       <DialogFooter>
-                        <Button onClick={() => {
-                          const blob = new Blob([lease.draftText || ""], { type: "text/plain" });
-                          const url = window.URL.createObjectURL(blob);
-                          const a = document.createElement("a");
-                          a.href = url;
-                          a.download = `lease-draft-${lease.id}.txt`;
-                          a.click();
-                        }}>
+                        <Button onClick={() => handleDownloadDraft(lease.draftText!, lease.id)}>
                           <Download className="w-4 h-4 mr-2" />
                           Download TXT
                         </Button>
@@ -376,10 +390,10 @@ export default function Leases() {
                   variant="outline"
                   size="sm"
                   className="h-8 gap-2 text-xs border-purple-200 text-purple-700 hover:bg-purple-50"
-                  onClick={() => generateDoc(lease.id)}
-                  disabled={isGenerating}
+                  onClick={() => handleGenerateDoc(lease.id)}
+                  disabled={generatingLeaseId === lease.id}
                 >
-                  {isGenerating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Wand2 className="w-3 h-3" />}
+                  {generatingLeaseId === lease.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Wand2 className="w-3 h-3" />}
                   {lease.draftText ? "Regenerate AI" : "AI Generate"}
                 </Button>
                 {user?.role === "manager" && (
@@ -387,10 +401,10 @@ export default function Leases() {
                     variant="outline"
                     size="sm"
                     className="h-8 gap-2 text-xs border-emerald-200 text-emerald-700 hover:bg-emerald-50"
-                    onClick={() => sendForSigning(lease.id)}
-                    disabled={isSendingForSigning}
+                    onClick={() => handleSendForSigning(lease.id)}
+                    disabled={signingLeaseId === lease.id}
                   >
-                    {isSendingForSigning ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
+                    {signingLeaseId === lease.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
                     Send for Sign
                   </Button>
                 )}
@@ -444,14 +458,7 @@ export default function Leases() {
                               {lease.draftText}
                             </div>
                             <DialogFooter>
-                              <Button onClick={() => {
-                                const blob = new Blob([lease.draftText || ""], { type: "text/plain" });
-                                const url = window.URL.createObjectURL(blob);
-                                const a = document.createElement("a");
-                                a.href = url;
-                                a.download = `lease-draft-${lease.id}.txt`;
-                                a.click();
-                              }}>
+                              <Button onClick={() => handleDownloadDraft(lease.draftText!, lease.id)}>
                                 <Download className="w-4 h-4 mr-2" />
                                 Download TXT
                               </Button>
@@ -463,10 +470,10 @@ export default function Leases() {
                         variant="outline"
                         size="sm"
                         className="h-8 gap-2 text-xs border-purple-200 text-purple-700 hover:bg-purple-50"
-                        onClick={() => generateDoc(lease.id)}
-                        disabled={isGenerating}
+                        onClick={() => handleGenerateDoc(lease.id)}
+                        disabled={generatingLeaseId === lease.id}
                       >
-                        {isGenerating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Wand2 className="w-3 h-3" />}
+                        {generatingLeaseId === lease.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Wand2 className="w-3 h-3" />}
                         {lease.draftText ? "Regenerate AI" : "AI Generate"}
                       </Button>
                       {user?.role === "manager" && (
@@ -474,10 +481,10 @@ export default function Leases() {
                           variant="outline"
                           size="sm"
                           className="h-8 gap-2 text-xs border-emerald-200 text-emerald-700 hover:bg-emerald-50"
-                          onClick={() => sendForSigning(lease.id)}
-                          disabled={isSendingForSigning}
+                          onClick={() => handleSendForSigning(lease.id)}
+                          disabled={signingLeaseId === lease.id}
                         >
-                          {isSendingForSigning ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
+                          {signingLeaseId === lease.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
                           Send for Sign
                         </Button>
                       )}

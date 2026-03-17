@@ -99,7 +99,7 @@ export default function RenterPortal() {
   const balance = Math.max(monthlyRent - paidThisMonth, 0);
 
   useEffect(() => {
-    const raw = window.sessionStorage.getItem(uploadStorageKey);
+    const raw = window.localStorage.getItem(uploadStorageKey);
     if (!raw) {
       setUploadedDocuments([]);
       return;
@@ -126,17 +126,34 @@ export default function RenterPortal() {
   }, [uploadStorageKey]);
 
   useEffect(() => {
-    window.sessionStorage.setItem(uploadStorageKey, JSON.stringify(uploadedDocuments));
+    window.localStorage.setItem(uploadStorageKey, JSON.stringify(uploadedDocuments));
   }, [uploadStorageKey, uploadedDocuments]);
 
   const payRentNow = () => {
     if (!activeLease || balance <= 0) return;
-    createPayment({
-      leaseId: activeLease.id,
-      amount: balance.toFixed(2),
-      status: "paid",
-      type: "rent",
-    });
+    createPayment(
+      {
+        leaseId: activeLease.id,
+        amount: balance.toFixed(2),
+        status: "paid",
+        type: "rent",
+      },
+      {
+        onSuccess: () => {
+          toast({
+            title: "Payment successful",
+            description: `$${balance.toLocaleString()} rent payment recorded.`,
+          });
+        },
+        onError: (err) => {
+          toast({
+            title: "Payment failed",
+            description: err instanceof Error ? err.message : "Could not process payment.",
+            variant: "destructive",
+          });
+        },
+      },
+    );
   };
 
   const downloadLeaseDraft = () => {
@@ -362,7 +379,7 @@ export default function RenterPortal() {
                 onChange={handleDocumentUpload}
               />
               <p className="text-xs text-slate-500">
-                Use this for renter insurance, move-in photos, or lease support files. Files are kept in this browser session for now, up to 2 MB each.
+                Use this for renter insurance, move-in photos, or lease support files. Files are saved in your browser, up to 2 MB each.
               </p>
             </div>
 

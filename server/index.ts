@@ -9,7 +9,7 @@ import { createApp, log } from "./app";
   // Some environments do not support binding with all socket options on 0.0.0.0,
   // so fallback to loopback when an unsupported bind occurs.
   const port = parseInt(process.env.PORT || "5001", 10);
-  const primaryHost = process.env.HOST || "0.0.0.0";
+  const primaryHost = process.env.HOST || (isHttps ? "127.0.0.1" : "0.0.0.0");
   const fallbackHost = "127.0.0.1";
 
   const getBrowserHost = (host: string) => {

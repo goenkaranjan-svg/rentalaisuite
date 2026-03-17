@@ -49,6 +49,7 @@ const modeConfig: Record<AuthMode, { label: string; title: string; description: 
 };
 
 const TEMP_PASSWORD_REVEAL_MS = 5000;
+const HERO_WORDS = ["Manage", "Rent", "Invest"] as const;
 
 export default function Login() {
   const [, setLocation] = useLocation();
@@ -95,7 +96,7 @@ export default function Login() {
 
   useEffect(() => {
     const timer = setInterval(() => {
-      setHeroWordIndex((prev) => (prev + 1) % 3);
+      setHeroWordIndex((prev) => (prev + 1) % HERO_WORDS.length);
     }, 2200);
     return () => clearInterval(timer);
   }, []);
@@ -237,7 +238,7 @@ export default function Login() {
                     : "bg-gradient-to-r from-amber-300 to-orange-400"
                 }`}
               >
-                {["Manage", "Rent", "Invest"][heroWordIndex]}
+                {HERO_WORDS[heroWordIndex]}
               </motion.span>
             </AnimatePresence>
           </h1>

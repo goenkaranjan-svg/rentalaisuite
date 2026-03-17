@@ -108,12 +108,13 @@ export default function Maintenance() {
   const { data: automationSettings } = useMaintenanceAutomationSettings(isManager);
   const { mutate: updateAutomationSettings, isPending: isSavingAutomationSettings } = useUpdateMaintenanceAutomationSettings();
   const { mutate: updateStatus } = useUpdateMaintenanceRequest();
-  const { mutate: analyze, isPending: isAnalyzing } = useAnalyzeMaintenance();
+  const { mutate: analyze } = useAnalyzeMaintenance();
   const { mutate: createMaintenance, isPending: isSubmittingRequest } = useCreateMaintenanceRequest();
   const [autoTriageEnabled, setAutoTriageEnabled] = useState(true);
   const [autoEscalationEnabled, setAutoEscalationEnabled] = useState(true);
   const [autoVendorAssignmentEnabled, setAutoVendorAssignmentEnabled] = useState(true);
   const [automationSettingsReady, setAutomationSettingsReady] = useState(false);
+  const [analyzingRequestId, setAnalyzingRequestId] = useState<number | null>(null);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const lastSavedAutomationSettingsRef = useRef<string | null>(null);
@@ -393,7 +394,7 @@ export default function Maintenance() {
                   <div className="flex flex-col gap-3 md:min-w-[200px]">
                     <div className="flex flex-col items-start gap-2 text-sm font-medium text-slate-700 sm:flex-row sm:items-center">
                       Status:
-                      <Select defaultValue={req.status} onValueChange={(val) => updateStatus({ id: req.id, status: val })}>
+                      <Select value={req.status} onValueChange={(val) => updateStatus({ id: req.id, status: val })}>
                         <SelectTrigger className="h-8 w-full sm:w-[140px]">
                           <SelectValue />
                         </SelectTrigger>
@@ -410,11 +411,14 @@ export default function Maintenance() {
                         variant="outline"
                         size="sm"
                         className="w-full gap-2 border-blue-200 text-blue-600 hover:bg-blue-50"
-                        onClick={() => analyze(req.id)}
-                        disabled={isAnalyzing}
+                        onClick={() => {
+                          setAnalyzingRequestId(req.id);
+                          analyze(req.id, { onSettled: () => setAnalyzingRequestId(null) });
+                        }}
+                        disabled={analyzingRequestId === req.id}
                       >
                         <Bot className="w-4 h-4" />
-                        {isAnalyzing ? "Analyzing..." : "Analyze with AI"}
+                        {analyzingRequestId === req.id ? "Analyzing..." : "Analyze with AI"}
                       </Button>
                     )}
                   </div>

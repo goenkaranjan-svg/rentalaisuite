@@ -66,6 +66,10 @@ export default function Profile() {
             ? twoFactorMethod
             : null,
       });
+      toast({
+        title: "Profile saved",
+        description: "Your contact details have been updated.",
+      });
     } catch (error) {
       toast({
         title: "Failed to save profile",

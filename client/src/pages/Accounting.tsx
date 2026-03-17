@@ -73,14 +73,21 @@ export default function Accounting() {
     [leases],
   );
 
-  const now = new Date();
-  const expectedMonthlyRent = activeLeases.reduce((sum, lease) => sum + Number(lease.rentAmount), 0);
-  const collectedThisMonth = (payments ?? [])
-    .filter((p) => {
-      const d = new Date(p.date ?? new Date());
-      return p.status === "paid" && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-    })
-    .reduce((sum, p) => sum + Number(p.amount), 0);
+  const now = useMemo(() => new Date(), []);
+  const expectedMonthlyRent = useMemo(
+    () => activeLeases.reduce((sum, lease) => sum + Number(lease.rentAmount), 0),
+    [activeLeases],
+  );
+  const collectedThisMonth = useMemo(
+    () =>
+      (payments ?? [])
+        .filter((p) => {
+          const d = new Date(p.date ?? new Date());
+          return p.status === "paid" && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+        })
+        .reduce((sum, p) => sum + Number(p.amount), 0),
+    [payments, now],
+  );
   const collectionRate = expectedMonthlyRent > 0 ? (collectedThisMonth / expectedMonthlyRent) * 100 : 0;
 
   const leaseLookup = useMemo(() => {
@@ -115,6 +122,7 @@ export default function Accounting() {
   const rentRoll = useMemo(
     () =>
       activeLeases.map((lease) => {
+        const today = new Date();
         const monthPaid = (payments ?? [])
           .filter((p) => {
             const d = new Date(p.date ?? new Date());
@@ -122,8 +130,8 @@ export default function Accounting() {
               p.leaseId === lease.id &&
               p.status === "paid" &&
               p.type === "rent" &&
-              d.getMonth() === now.getMonth() &&
-              d.getFullYear() === now.getFullYear()
+              d.getMonth() === today.getMonth() &&
+              d.getFullYear() === today.getFullYear()
             );
           })
           .reduce((sum, p) => sum + Number(p.amount), 0);
@@ -135,7 +143,7 @@ export default function Accounting() {
           balance: Math.max(expected - monthPaid, 0),
         };
       }),
-    [activeLeases, payments, now],
+    [activeLeases, payments],
   );
 
   const displayedRentNotifDays = (() => {

@@ -37,8 +37,9 @@ export default function Vendors() {
   );
   const { data: vendors, isLoading } = useVendors(search);
   const { mutate: discover, data: discoveryResult, isPending: isDiscovering } = useDiscoverVendors();
-  const { mutate: importCandidate, isPending: isImporting } = useImportVendorCandidate();
+  const { mutate: importCandidate } = useImportVendorCandidate();
   const { mutate: createVendor, isPending: isCreatingVendor } = useCreateVendor();
+  const [importingCandidateId, setImportingCandidateId] = useState<string | null>(null);
 
   useEffect(() => {
     if (locationSeeded || !profile) return;
@@ -259,10 +260,14 @@ export default function Vendors() {
                       </div>
                       <Button
                         size="sm"
-                        disabled={isImporting}
-                        onClick={() => importCandidate(candidate)}
+                        disabled={importingCandidateId === `${candidate.source}-${candidate.sourceExternalId || candidate.name}`}
+                        onClick={() => {
+                          const candidateId = `${candidate.source}-${candidate.sourceExternalId || candidate.name}`;
+                          setImportingCandidateId(candidateId);
+                          importCandidate(candidate, { onSettled: () => setImportingCandidateId(null) });
+                        }}
                       >
-                        Import
+                        {importingCandidateId === `${candidate.source}-${candidate.sourceExternalId || candidate.name}` ? "Importing..." : "Import"}
                       </Button>
                     </div>
                   </div>

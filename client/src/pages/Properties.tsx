@@ -11,9 +11,8 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm } from "react-hook-form";
 import { insertPropertySchema, type InsertProperty } from "@shared/schema";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useAuth } from "@/hooks/use-auth";
@@ -21,7 +20,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 
 export default function Properties() {
   const [search, setSearch] = useState("");
-  const { data: properties, isLoading } = useProperties(undefined, search);
+  const [filterStatus, setFilterStatus] = useState<string>("all");
+  const { data: properties, isLoading, error } = useProperties(undefined, search);
   const { mutate: createProperty, isPending } = useCreateProperty();
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
@@ -29,6 +29,11 @@ export default function Properties() {
     user?.role === "manager"
       ? (properties ?? []).filter((property) => property.managerId === user.id)
       : (properties ?? []);
+
+  const filteredProperties =
+    filterStatus === "all"
+      ? scopedProperties
+      : scopedProperties.filter((p) => p.status === filterStatus);
 
   const form = useForm<InsertProperty>({
     resolver: zodResolver(insertPropertySchema),
@@ -149,7 +154,7 @@ export default function Properties() {
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Square Feet</FormLabel>
-                          <FormControl><Input type="number" {...field} onChange={e => field.onChange(parseInt(e.target.value))} /></FormControl>
+                          <FormControl><Input type="number" {...field} onChange={e => field.onChange(parseInt(e.target.value, 10))} /></FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
@@ -162,7 +167,7 @@ export default function Properties() {
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Bedrooms</FormLabel>
-                          <FormControl><Input type="number" {...field} onChange={e => field.onChange(parseInt(e.target.value))} /></FormControl>
+                          <FormControl><Input type="number" {...field} onChange={e => field.onChange(parseInt(e.target.value, 10))} /></FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
@@ -212,13 +217,25 @@ export default function Properties() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <Button variant="outline" className="border-slate-200 text-slate-600">
-          <Filter className="w-4 h-4 mr-2" />
-          Filter
-        </Button>
+        <Select value={filterStatus} onValueChange={setFilterStatus}>
+          <SelectTrigger className="w-36 border-slate-200 text-slate-600">
+            <Filter className="w-4 h-4 mr-2 shrink-0" />
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All</SelectItem>
+            <SelectItem value="available">Available</SelectItem>
+            <SelectItem value="occupied">Occupied</SelectItem>
+            <SelectItem value="maintenance">Maintenance</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
-      {isLoading ? (
+      {error ? (
+        <div className="col-span-full text-center py-20 text-red-500">
+          Failed to load properties. Please try again.
+        </div>
+      ) : isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {[1, 2, 3].map((i) => (
             <div key={i} className="h-[340px] rounded-xl bg-slate-100 animate-pulse" />
@@ -226,10 +243,10 @@ export default function Properties() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {scopedProperties.map((property) => (
+          {filteredProperties.map((property) => (
             <PropertyCard key={property.id} property={property} />
           ))}
-          {scopedProperties.length === 0 && (
+          {filteredProperties.length === 0 && (
             <div className="col-span-full text-center py-20 text-slate-500">
               No properties found. Try creating one!
             </div>

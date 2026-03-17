@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useLocation } from "wouter";
+import { useRoute } from "wouter";
 import { Loader2, CheckCircle2, FileSignature } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,11 +9,11 @@ import { Button } from "@/components/ui/button";
 import { useCompleteLeaseSigning, useValidateSigningToken } from "@/hooks/use-leases";
 
 export default function LeaseSign() {
-  const [location] = useLocation();
+  const [match, params] = useRoute("/sign/:token");
   const token = useMemo(() => {
-    const raw = location.split("/").pop() || "";
-    return decodeURIComponent(raw).trim();
-  }, [location]);
+    if (!match || !params?.token) return "";
+    return decodeURIComponent(params.token).trim();
+  }, [match, params?.token]);
 
   const { data, isLoading, error } = useValidateSigningToken(token);
   const { mutateAsync: completeSigning, isPending } = useCompleteLeaseSigning();
