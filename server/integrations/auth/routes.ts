@@ -147,6 +147,10 @@ function getClientIp(req: any): string {
   return req.ip || req.socket?.remoteAddress || "unknown";
 }
 
+function isDevAuthBypassEnabled(): boolean {
+  return process.env.NODE_ENV !== "production" && process.env.DEV_AUTH_BYPASS === "true";
+}
+
 async function establishSession(req: any, res: any, user: { id: string; email: string | null; role: string }) {
   await new Promise<void>((resolve, reject) => {
     req.session.regenerate((err: unknown) => {
@@ -157,6 +161,9 @@ async function establishSession(req: any, res: any, user: { id: string; email: s
 
   return req.login(buildLocalSessionUser(user), (err: unknown) => {
     if (err) return res.status(500).json({ message: "Failed to create session." });
+    if (isDevAuthBypassEnabled()) {
+      req.session.devAuthActive = true;
+    }
     req.session.createdAt = Date.now();
     req.session.lastActivityAt = Date.now();
     req.session.securityBinding = deviceFingerprint(getClientIp(req), String(req.headers["user-agent"] || "unknown"));
@@ -271,6 +278,24 @@ export function registerAuthRoutes(app: Express): void {
 
   app.post("/api/auth/login", loginLimiter, async (req: any, res) => {
     try {
+      if (isDevAuthBypassEnabled()) {
+        const input = loginSchema.parse(req.body);
+        input.email = input.email.trim().toLowerCase();
+        let user = await authStorage.getUserByEmail(input.email);
+        if (!user) {
+          user = await authStorage.createLocalUser({
+            email: input.email,
+            passwordHash: hashPassword(`dev-bypass-${input.role}`),
+            role: input.role,
+            firstName: "Dev",
+            lastName: input.role === "manager" ? "Manager" : input.role === "tenant" ? "Tenant" : "Investor",
+          });
+        } else if (user.role !== input.role) {
+          user = (await authStorage.updateUserRole(user.id, input.role)) ?? user;
+        }
+        return establishSession(req, res, { id: user.id, email: user.email, role: user.role });
+      }
+
       if (!isCaptchaSatisfied(req)) {
         return res.status(400).json({ message: "Captcha validation required." });
       }

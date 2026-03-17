@@ -227,27 +227,47 @@ export async function setupAuth(app: Express) {
     });
 
     app.use((req: any, _res, next) => {
+      if (!req.session?.devAuthActive) {
+        req.isAuthenticated = () => false;
+        return next();
+      }
+
+      const existingUser = req.user;
+      const existingClaims = existingUser?.claims;
       req.user = {
         claims: {
-          sub: devUserId,
-          email: devUserEmail,
+          sub: existingClaims?.sub ?? devUserId,
+          email: existingClaims?.email ?? devUserEmail,
         },
-        expires_at: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 7,
+        expires_at: existingUser?.expires_at ?? Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 7,
+        provider: existingUser?.provider ?? "local",
       };
       req.isAuthenticated = () => true;
       next();
     });
 
-    app.get("/api/login", (_req, res) => {
+    app.get("/api/login", (req: any, res) => {
+      if (req.session) {
+        req.session.devAuthActive = true;
+      }
       res.redirect("/");
     });
-    app.get("/api/login/google", (_req, res) => {
+    app.get("/api/login/google", (req: any, res) => {
+      if (req.session) {
+        req.session.devAuthActive = true;
+      }
       res.redirect("/");
     });
-    app.get("/api/login/facebook", (_req, res) => {
+    app.get("/api/login/facebook", (req: any, res) => {
+      if (req.session) {
+        req.session.devAuthActive = true;
+      }
       res.redirect("/");
     });
-    app.get("/api/callback", (_req, res) => {
+    app.get("/api/callback", (req: any, res) => {
+      if (req.session) {
+        req.session.devAuthActive = true;
+      }
       res.redirect("/");
     });
     app.get("/api/logout", (req: any, res) => {
