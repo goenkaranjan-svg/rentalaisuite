@@ -611,6 +611,20 @@ export async function registerRoutes(
     return Math.min(365, Math.max(1, Math.floor(parsed)));
   };
 
+  const getActiveOrganizationId = async (req: any, userId: string, role?: string | null) => {
+    if (req.session?.activeOrganizationId) return req.session.activeOrganizationId as string;
+    const user = await authStorage.getUser(userId);
+    const organization =
+      (role ?? user?.role) === "manager" && user
+        ? await authStorage.ensureOrganizationForManager(user)
+        : await authStorage.getDefaultOrganizationForUser(userId);
+    if (organization?.id) {
+      req.session.activeOrganizationId = organization.id;
+      return organization.id;
+    }
+    return null;
+  };
+
   const getManagerNotificationSettings = async (managerId: string) => {
     const existing = await storage.getManagerRentNotificationSettings(managerId);
     if (existing) {
@@ -1131,8 +1145,10 @@ export async function registerRoutes(
         return res.status(403).json({ message: "Only managers can create properties." });
       }
       const input = api.properties.create.input.parse(req.body);
+      const organizationId = await getActiveOrganizationId(req, userId, dbUser.role);
       const property = await storage.createProperty({
         ...input,
+        organizationId,
         managerId: userId,
       });
       res.status(201).json(property);
@@ -1203,7 +1219,9 @@ export async function registerRoutes(
     }
 
     const input = api.listingExports.templatesCreate.input.parse(req.body);
+    const organizationId = await getActiveOrganizationId(req, userId, dbUser.role);
     const template = await storage.createListingMappingTemplate({
+      organizationId,
       managerId: userId,
       name: input.name.trim(),
       mapping: input.mapping,
@@ -1663,7 +1681,10 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Selected tenant is invalid." });
       }
 
-      const lease = await storage.createLease(input);
+      const lease = await storage.createLease({
+        ...input,
+        organizationId: property.organizationId,
+      });
       res.status(201).json(lease);
     } catch (err) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.message });
@@ -2105,6 +2126,7 @@ export async function registerRoutes(
 
       const request = await storage.createMaintenanceRequest({
         ...input,
+        organizationId: property.organizationId,
         category: resolvedCategory,
         priority: resolvedPriority,
         slaDueAt,
@@ -2172,7 +2194,8 @@ export async function registerRoutes(
       if (!userId) return res.status(401).json({ message: "Unauthorized" });
       const dbUser = await storage.getUser(userId);
       if (dbUser?.role !== "manager") return res.status(403).json({ message: "Forbidden" });
-      const input = api.vendors.create.input.parse({ ...req.body, managerId: userId });
+      const organizationId = await getActiveOrganizationId(req, userId, dbUser.role);
+      const input = api.vendors.create.input.parse({ ...req.body, managerId: userId, organizationId });
       const vendor = await storage.createVendor(input);
       return res.status(201).json(vendor);
     } catch (error) {
@@ -2227,8 +2250,10 @@ export async function registerRoutes(
       });
       if (existing) return res.status(200).json(existing);
 
+      const organizationId = await getActiveOrganizationId(req, userId, dbUser.role);
       const vendor = await storage.createVendor({
         ...input.candidate,
+        organizationId,
         source,
         managerId: userId,
       });

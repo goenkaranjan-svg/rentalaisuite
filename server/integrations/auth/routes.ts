@@ -45,6 +45,7 @@ const signupSchema = z.object({
   role: z.enum(["manager", "tenant", "investor"]),
   firstName: z.string().optional(),
   lastName: z.string().optional(),
+  organizationName: z.string().trim().min(2).max(120).optional(),
 });
 
 const loginSchema = z.object({
@@ -151,6 +152,10 @@ function isDevAuthBypassEnabled(): boolean {
   return process.env.NODE_ENV !== "production" && process.env.DEV_AUTH_BYPASS === "true";
 }
 
+function slugifyOrganizationName(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "organization";
+}
+
 async function establishSession(req: any, res: any, user: { id: string; email: string | null; role: string }) {
   await new Promise<void>((resolve, reject) => {
     req.session.regenerate((err: unknown) => {
@@ -159,15 +164,27 @@ async function establishSession(req: any, res: any, user: { id: string; email: s
     });
   });
 
-  return req.login(buildLocalSessionUser(user), (err: unknown) => {
+  return req.login(buildLocalSessionUser(user), async (err: unknown) => {
     if (err) return res.status(500).json({ message: "Failed to create session." });
+    const dbUser = await authStorage.getUser(user.id);
+    const organization =
+      user.role === "manager" && dbUser
+        ? await authStorage.ensureOrganizationForManager(dbUser)
+        : await authStorage.getDefaultOrganizationForUser(user.id);
     if (isDevAuthBypassEnabled()) {
-      req.session.devAuthActive = true;
-    }
+    req.session.devAuthActive = true;
+  }
+  req.session.activeOrganizationId = organization?.id ?? null;
     req.session.createdAt = Date.now();
     req.session.lastActivityAt = Date.now();
     req.session.securityBinding = deviceFingerprint(getClientIp(req), String(req.headers["user-agent"] || "unknown"));
-    return res.json({ id: user.id, email: user.email, role: user.role });
+    return res.json({
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      activeOrganizationId: organization?.id ?? null,
+      activeOrganizationName: organization?.name ?? null,
+    });
   });
 }
 
@@ -217,6 +234,11 @@ export function registerAuthRoutes(app: Express): void {
       }
       const input = signupSchema.parse(req.body);
       input.email = input.email.trim().toLowerCase();
+      const normalizedOrganizationName =
+        input.role === "manager" ? input.organizationName?.trim() : undefined;
+      if (input.role === "manager" && !normalizedOrganizationName) {
+        return res.status(400).json({ message: "Organization name is required for manager accounts." });
+      }
       // Temporarily disabled: password complexity enforcement.
       // const passwordPolicy = passwordPolicyResult(input.password);
       // if (!passwordPolicy.ok) {
@@ -235,6 +257,25 @@ export function registerAuthRoutes(app: Express): void {
           if (!linked) {
             return res.status(500).json({ message: "Failed to update account." });
           }
+          if (linked.role === "manager") {
+            const existingOrganization = await authStorage.getDefaultOrganizationForUser(linked.id);
+            if (!existingOrganization) {
+              await authStorage.createOrganization({
+                name: normalizedOrganizationName!,
+                slug: `${slugifyOrganizationName(normalizedOrganizationName!)}-${linked.id.slice(0, 8)}`,
+                status: "active",
+                plan: "starter",
+              }).then((organization) =>
+                authStorage.addOrganizationMember({
+                  organizationId: organization.id,
+                  userId: linked.id,
+                  role: "org_owner",
+                  isDefault: true,
+                  status: "active",
+                }),
+              );
+            }
+          }
           await authStorage.markEmailVerified(linked.id);
           return establishSession(req, res.status(200), { id: linked.id, email: linked.email, role: linked.role });
         }
@@ -248,6 +289,22 @@ export function registerAuthRoutes(app: Express): void {
         firstName: input.firstName,
         lastName: input.lastName,
       });
+
+      if (user.role === "manager") {
+        const organization = await authStorage.createOrganization({
+          name: normalizedOrganizationName!,
+          slug: `${slugifyOrganizationName(normalizedOrganizationName!)}-${user.id.slice(0, 8)}`,
+          status: "active",
+          plan: "starter",
+        });
+        await authStorage.addOrganizationMember({
+          organizationId: organization.id,
+          userId: user.id,
+          role: "org_owner",
+          isDefault: true,
+          status: "active",
+        });
+      }
 
       const verificationToken = createVerificationToken(user.id);
       writeAuthAudit({
@@ -902,7 +959,22 @@ export function registerAuthRoutes(app: Express): void {
     try {
       const userId = req.user.claims.sub;
       const user = await authStorage.getUser(userId);
-      res.json(user);
+      const memberships = await authStorage.getOrganizationMemberships(userId);
+      const activeOrganizationId =
+        req.session?.activeOrganizationId ??
+        memberships.find((membership) => membership.isDefault)?.organizationId ??
+        memberships[0]?.organizationId ??
+        null;
+      const activeOrganization = activeOrganizationId
+        ? await authStorage.getOrganization(activeOrganizationId)
+        : undefined;
+
+      res.json({
+        ...user,
+        activeOrganizationId,
+        activeOrganizationName: activeOrganization?.name ?? null,
+        organizationMemberships: memberships,
+      });
     } catch (error) {
       console.error("Error fetching user:", error);
       res.status(500).json({ message: "Failed to fetch user" });

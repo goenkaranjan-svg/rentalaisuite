@@ -139,6 +139,7 @@ const maintenanceSeeds = [
 ] as const;
 
 async function seedVendors(managerId: string, property: { city: string; state: string; zipCode: string }) {
+  const organization = await authStorage.getDefaultOrganizationForUser(managerId);
   const vendorNamesByCategory = new Map<string, string>();
 
   for (const seed of vendorSeeds) {
@@ -148,6 +149,7 @@ async function seedVendors(managerId: string, property: { city: string; state: s
 
     if (!existing) {
       await storage.createVendor({
+        organizationId: organization?.id ?? null,
         managerId,
         name: seed.name,
         tradeCategories: [...seed.tradeCategories],
@@ -179,7 +181,12 @@ async function seedVendors(managerId: string, property: { city: string; state: s
   return vendorNamesByCategory;
 }
 
-async function seedMaintenance(propertyId: number, tenantId: string, vendorNamesByCategory: Map<string, string>) {
+async function seedMaintenance(
+  propertyId: number,
+  tenantId: string,
+  organizationId: string | null,
+  vendorNamesByCategory: Map<string, string>,
+) {
   for (const seed of maintenanceSeeds) {
     const existing = await db.query.maintenanceRequests.findFirst({
       where: and(eq(maintenanceRequests.propertyId, propertyId), eq(maintenanceRequests.title, seed.title)),
@@ -191,6 +198,7 @@ async function seedMaintenance(propertyId: number, tenantId: string, vendorNames
     }
 
     await storage.createMaintenanceRequest({
+      organizationId,
       propertyId,
       tenantId,
       title: seed.title,
@@ -231,7 +239,7 @@ async function main() {
   }
 
   const vendorNamesByCategory = await seedVendors(manager.id, property);
-  await seedMaintenance(property.id, lease.tenantId, vendorNamesByCategory);
+  await seedMaintenance(property.id, lease.tenantId, property.organizationId ?? null, vendorNamesByCategory);
 
   console.log(`[seed] completed for ${MANAGER_EMAIL} on property ${property.id}`);
 }

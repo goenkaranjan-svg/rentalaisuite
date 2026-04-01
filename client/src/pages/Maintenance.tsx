@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Bot, Clock3, Settings2, Wrench } from "lucide-react";
+import { Bot, Clock3, Search, Settings2, Wrench, X } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { format, formatDistanceToNowStrict } from "date-fns";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -53,6 +53,26 @@ function formatTimelineDate(value?: string | Date | null) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "Not set";
   return format(date, "MMM d, yyyy 'at' h:mm a");
+}
+
+function formatPropertyLabel(property?: { address: string; city: string; state: string; zipCode: string } | null) {
+  if (!property) return null;
+  return `${property.address}, ${property.city}, ${property.state} ${property.zipCode}`;
+}
+
+function getPriorityRank(priority?: string | null) {
+  switch (priority) {
+    case "emergency":
+      return 0;
+    case "high":
+      return 1;
+    case "medium":
+      return 2;
+    case "low":
+      return 3;
+    default:
+      return 4;
+  }
 }
 
 function buildTenantTimeline(request: {
@@ -117,6 +137,10 @@ export default function Maintenance() {
   const [analyzingRequestId, setAnalyzingRequestId] = useState<number | null>(null);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedPropertyId, setSelectedPropertyId] = useState<string>("all");
+  const [selectedCategory, setSelectedCategory] = useState<string>("all");
+  const [selectedPriority, setSelectedPriority] = useState<string>("all");
   const lastSavedAutomationSettingsRef = useRef<string | null>(null);
 
   const activeLease = useMemo(
@@ -131,6 +155,68 @@ export default function Maintenance() {
     });
     return map;
   }, [properties]);
+
+  const propertyOptions = useMemo(() => {
+    return (properties ?? []).map((property) => ({
+      value: String(property.id),
+      label: formatPropertyLabel(property) ?? `Property ${property.id}`,
+    }));
+  }, [properties]);
+
+  const categoryOptions = useMemo(() => {
+    return Array.from(
+      new Set((requests ?? []).map((request) => request.category || "general")),
+    ).sort();
+  }, [requests]);
+
+  const priorityOptions = useMemo(() => {
+    return Array.from(
+      new Set((requests ?? []).map((request) => request.priority || "medium")),
+    ).sort((a, b) => getPriorityRank(a) - getPriorityRank(b));
+  }, [requests]);
+
+  const filteredRequests = useMemo(() => {
+    const normalizedQuery = searchQuery.trim().toLowerCase();
+    return [...(requests ?? [])]
+      .filter((request) => {
+        if (!normalizedQuery) return true;
+        const propertyLabel = formatPropertyLabel(propertyById.get(request.propertyId))?.toLowerCase() ?? "";
+        const haystack = [
+          request.title,
+          request.description,
+          request.assignedVendor,
+          request.assignmentNote,
+          request.category,
+          request.priority,
+          propertyLabel,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        return haystack.includes(normalizedQuery);
+      })
+      .filter((request) => selectedPropertyId === "all" || String(request.propertyId) === selectedPropertyId)
+      .filter((request) => selectedCategory === "all" || (request.category || "general") === selectedCategory)
+      .filter((request) => selectedPriority === "all" || (request.priority || "medium") === selectedPriority)
+      .sort((a, b) => {
+        const priorityDiff = getPriorityRank(a.priority) - getPriorityRank(b.priority);
+        if (priorityDiff !== 0) return priorityDiff;
+        return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
+      });
+  }, [propertyById, requests, searchQuery, selectedCategory, selectedPriority, selectedPropertyId]);
+
+  const activeFilterCount =
+    (searchQuery.trim() ? 1 : 0) +
+    (selectedPropertyId !== "all" ? 1 : 0) +
+    (selectedCategory !== "all" ? 1 : 0) +
+    (selectedPriority !== "all" ? 1 : 0);
+
+  const resetFilters = () => {
+    setSearchQuery("");
+    setSelectedPropertyId("all");
+    setSelectedCategory("all");
+    setSelectedPriority("all");
+  };
 
   useEffect(() => {
     if (!automationSettings) return;
@@ -251,13 +337,18 @@ export default function Maintenance() {
             <CardContent className="space-y-4">
               {isLoading ? (
                 <div className="text-center py-10 text-slate-500">Loading requests...</div>
-              ) : requests?.length === 0 ? (
+              ) : filteredRequests.length === 0 ? (
                 <div className="text-center py-16 bg-slate-50 rounded-xl border border-dashed border-slate-300">
                   <p className="text-slate-500">No maintenance requests yet.</p>
                 </div>
               ) : (
-                requests?.map((req) => (
+                filteredRequests.map((req) => (
                   <div key={req.id} className="rounded-xl border border-slate-200 p-4">
+                    {formatPropertyLabel(propertyById.get(req.propertyId)) ? (
+                      <p className="mb-3 text-xs font-medium uppercase tracking-[0.18em] text-slate-500">
+                        {formatPropertyLabel(propertyById.get(req.propertyId))}
+                      </p>
+                    ) : null}
                     <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                       <div>
                         <p className="font-medium text-slate-900">{req.title}</p>
@@ -331,19 +422,128 @@ export default function Maintenance() {
         )}
       </div>
 
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+          <div className="relative flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <Input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search maintenance by title, property, vendor, description..."
+              className="h-11 rounded-xl border-slate-200 pl-10"
+            />
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-3 lg:min-w-[520px]">
+            <Select value={selectedPropertyId} onValueChange={setSelectedPropertyId}>
+              <SelectTrigger className="h-11 rounded-xl bg-slate-50">
+                <SelectValue placeholder="Property" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All properties</SelectItem>
+                {propertyOptions.map((property) => (
+                  <SelectItem key={property.value} value={property.value}>
+                    {property.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+              <SelectTrigger className="h-11 rounded-xl bg-slate-50">
+                <SelectValue placeholder="Category" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All categories</SelectItem>
+                {categoryOptions.map((category) => (
+                  <SelectItem key={category} value={category}>
+                    {category.replaceAll("_", " ")}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select value={selectedPriority} onValueChange={setSelectedPriority}>
+              <SelectTrigger className="h-11 rounded-xl bg-slate-50">
+                <SelectValue placeholder="Severity" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All severity levels</SelectItem>
+                {priorityOptions.map((priority) => (
+                  <SelectItem key={priority} value={priority}>
+                    {priority}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        <div className="mt-3 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div className="flex flex-wrap items-center gap-2">
+            {searchQuery.trim() ? (
+              <Badge variant="secondary" className="gap-1 rounded-full px-3 py-1">
+                Search: {searchQuery.trim()}
+                <button type="button" onClick={() => setSearchQuery("")} className="ml-1">
+                  <X className="h-3 w-3" />
+                </button>
+              </Badge>
+            ) : null}
+            {selectedPropertyId !== "all" ? (
+              <Badge variant="secondary" className="gap-1 rounded-full px-3 py-1">
+                Property: {propertyOptions.find((item) => item.value === selectedPropertyId)?.label ?? selectedPropertyId}
+                <button type="button" onClick={() => setSelectedPropertyId("all")} className="ml-1">
+                  <X className="h-3 w-3" />
+                </button>
+              </Badge>
+            ) : null}
+            {selectedCategory !== "all" ? (
+              <Badge variant="secondary" className="gap-1 rounded-full px-3 py-1">
+                Category: {selectedCategory.replaceAll("_", " ")}
+                <button type="button" onClick={() => setSelectedCategory("all")} className="ml-1">
+                  <X className="h-3 w-3" />
+                </button>
+              </Badge>
+            ) : null}
+            {selectedPriority !== "all" ? (
+              <Badge variant="secondary" className="gap-1 rounded-full px-3 py-1">
+                Severity: {selectedPriority}
+                <button type="button" onClick={() => setSelectedPriority("all")} className="ml-1">
+                  <X className="h-3 w-3" />
+                </button>
+              </Badge>
+            ) : null}
+          </div>
+
+          <div className="flex items-center justify-between gap-3 text-sm text-slate-500">
+            <span>{filteredRequests.length} request{filteredRequests.length === 1 ? "" : "s"} shown</span>
+            {activeFilterCount > 0 ? (
+              <Button variant="ghost" size="sm" onClick={resetFilters} className="h-8 px-2 text-slate-600">
+                Clear filters
+              </Button>
+            ) : null}
+          </div>
+        </div>
+      </div>
+
       <div className="grid gap-4">
         {isLoading ? (
           <div className="text-center py-10">Loading requests...</div>
-        ) : requests?.length === 0 ? (
+        ) : filteredRequests.length === 0 ? (
           <div className="text-center py-20 bg-slate-50 rounded-xl border border-dashed border-slate-300">
-            <p className="text-slate-500">No active maintenance requests.</p>
+            <p className="text-slate-500">No maintenance requests match the current filters.</p>
           </div>
         ) : (
-          requests?.map((req) => (
+          filteredRequests.map((req) => (
             <Card key={req.id} className="border-slate-200 shadow-sm hover:shadow-md transition-all">
               <CardContent className="p-6">
                 <div className="flex flex-col md:flex-row gap-6">
                   <div className="flex-1">
+                    {formatPropertyLabel(propertyById.get(req.propertyId)) ? (
+                      <p className="mb-3 text-xs font-medium uppercase tracking-[0.18em] text-slate-500">
+                        {formatPropertyLabel(propertyById.get(req.propertyId))}
+                      </p>
+                    ) : null}
                     <div className="flex items-center gap-3 mb-2">
                       <Badge variant="outline" className={getPriorityColor(req.priority)}>
                         {req.priority}

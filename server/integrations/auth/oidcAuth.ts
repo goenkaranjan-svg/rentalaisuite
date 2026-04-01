@@ -140,6 +140,17 @@ export async function setupAuth(app: Express) {
       if (!sid) return next();
 
       if (req.user?.claims?.sub) {
+        if (!req.session.activeOrganizationId) {
+          const sessionUser = await authStorage.getUser(req.user.claims.sub);
+          const organization =
+            sessionUser?.role === "manager" && sessionUser
+              ? await authStorage.ensureOrganizationForManager(sessionUser)
+              : await authStorage.getDefaultOrganizationForUser(req.user.claims.sub);
+          if (organization) {
+            req.session.activeOrganizationId = organization.id;
+          }
+        }
+
         const ip = getClientIp(req);
         const ua = String(req.headers["user-agent"] || "unknown");
         const fp = deviceFingerprint(ip, ua);

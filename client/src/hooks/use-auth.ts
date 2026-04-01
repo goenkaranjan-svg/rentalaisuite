@@ -40,6 +40,7 @@ type SignupInput = {
   role: UserRole;
   firstName?: string;
   lastName?: string;
+  organizationName?: string;
 };
 
 export function useTenants() {

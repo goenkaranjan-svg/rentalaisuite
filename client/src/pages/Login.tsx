@@ -77,6 +77,7 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
+  const [organizationName, setOrganizationName] = useState("");
 
   const [forgotEmail, setForgotEmail] = useState("");
   const [resetToken, setResetToken] = useState("");
@@ -157,9 +158,13 @@ export default function Login() {
 
   const handleSignUp = async () => {
     try {
-      const signedUpUser = await signup({ email, password, role, firstName, lastName });
-      toast({ title: "Account created", description: "You are now signed in." });
-      redirectByRole((signedUpUser as any)?.role ?? role);
+      await signup({ email, password, role, firstName, lastName, organizationName });
+      toast({
+        title: "Account created",
+        description: "Check your email for the verification link before signing in.",
+      });
+      setMode("signin");
+      setShowResendVerification(false);
     } catch (error: any) {
       toast({ title: "Sign up failed", description: error.message, variant: "destructive" });
     }
@@ -432,6 +437,17 @@ export default function Login() {
                     className="h-11 bg-slate-900/80 border-slate-600 text-slate-100 placeholder:text-slate-400 focus-visible:ring-2 focus-visible:ring-emerald-500/20 focus-visible:border-emerald-500"
                   />
                 </div>
+                {role === "manager" && (
+                  <div className="space-y-2">
+                    <Label>Organization Name</Label>
+                    <Input
+                      placeholder="Avon Management"
+                      value={organizationName}
+                      onChange={(e) => setOrganizationName(e.target.value)}
+                      className="h-11 bg-slate-900/80 border-slate-600 text-slate-100 placeholder:text-slate-400 focus-visible:ring-2 focus-visible:ring-emerald-500/20 focus-visible:border-emerald-500"
+                    />
+                  </div>
+                )}
                 <div className="space-y-2">
                   <Label>Password</Label>
                   <div className="relative">
@@ -469,6 +485,11 @@ export default function Login() {
                         role === "manager" ? "Manager" : role === "investor" ? "Investor" : "Renter"
                       } Account`}
                 </Button>
+                {role === "manager" && (
+                  <p className="text-xs text-slate-400">
+                    Your organization workspace will be created during signup.
+                  </p>
+                )}
                 <button
                   type="button"
                   onClick={() => setMode("signin")}

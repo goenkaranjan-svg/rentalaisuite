@@ -1,6 +1,6 @@
 
-import { pgTable, text, serial, integer, boolean, timestamp, jsonb, decimal, varchar, uniqueIndex, primaryKey } from "drizzle-orm/pg-core";
-import { relations } from "drizzle-orm";
+import { sql, relations } from "drizzle-orm";
+import { pgTable, text, serial, integer, boolean, timestamp, jsonb, decimal, varchar, uniqueIndex, primaryKey, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -12,8 +12,32 @@ import { users } from "./models/auth";
 
 // === PROPMAN SPECIFIC TABLES ===
 
+export const organizations = pgTable("organizations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  slug: varchar("slug", { length: 120 }).notNull().unique(),
+  status: text("status").notNull().default("active"),
+  plan: text("plan").notNull().default("starter"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const organizationMembers = pgTable("organization_members", {
+  organizationId: varchar("organization_id").notNull().references(() => organizations.id),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  role: text("role").notNull().default("member"),
+  status: text("status").notNull().default("active"),
+  isDefault: boolean("is_default").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  primaryKey({ columns: [table.organizationId, table.userId] }),
+  index("organization_members_user_idx").on(table.userId),
+]);
+
 export const properties = pgTable("properties", {
   id: serial("id").primaryKey(),
+  organizationId: varchar("organization_id").references(() => organizations.id),
   managerId: varchar("manager_id").notNull().references(() => users.id), // Links to users.id
   address: text("address").notNull(),
   city: text("city").notNull(),
@@ -31,6 +55,7 @@ export const properties = pgTable("properties", {
 
 export const leases = pgTable("leases", {
   id: serial("id").primaryKey(),
+  organizationId: varchar("organization_id").references(() => organizations.id),
   propertyId: integer("property_id").notNull().references(() => properties.id),
   tenantId: varchar("tenant_id").notNull().references(() => users.id), // Links to users.id
   startDate: timestamp("start_date").notNull(),
@@ -44,6 +69,7 @@ export const leases = pgTable("leases", {
 
 export const leaseSigningRequests = pgTable("lease_signing_requests", {
   id: serial("id").primaryKey(),
+  organizationId: varchar("organization_id").references(() => organizations.id),
   leaseId: integer("lease_id").notNull().references(() => leases.id),
   managerId: varchar("manager_id").notNull().references(() => users.id),
   tenantId: varchar("tenant_id").notNull().references(() => users.id),
@@ -61,6 +87,7 @@ export const leaseSigningRequests = pgTable("lease_signing_requests", {
 
 export const maintenanceRequests = pgTable("maintenance_requests", {
   id: serial("id").primaryKey(),
+  organizationId: varchar("organization_id").references(() => organizations.id),
   propertyId: integer("property_id").notNull().references(() => properties.id),
   tenantId: varchar("tenant_id").notNull().references(() => users.id), // Links to users.id
   title: text("title").notNull(),
@@ -78,6 +105,7 @@ export const maintenanceRequests = pgTable("maintenance_requests", {
 
 export const vendors = pgTable("vendors", {
   id: serial("id").primaryKey(),
+  organizationId: varchar("organization_id").references(() => organizations.id),
   managerId: varchar("manager_id").notNull().references(() => users.id),
   name: text("name").notNull(),
   tradeCategories: jsonb("trade_categories").$type<string[]>().notNull().default([]),
@@ -104,6 +132,7 @@ export const vendors = pgTable("vendors", {
 
 export const payments = pgTable("payments", {
   id: serial("id").primaryKey(),
+  organizationId: varchar("organization_id").references(() => organizations.id),
   leaseId: integer("lease_id").notNull().references(() => leases.id),
   amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
   date: timestamp("date").defaultNow(),
@@ -113,6 +142,7 @@ export const payments = pgTable("payments", {
 });
 
 export const managerRentNotificationSettings = pgTable("manager_rent_notification_settings", {
+  organizationId: varchar("organization_id").references(() => organizations.id),
   managerId: varchar("manager_id").notNull().references(() => users.id),
   enabled: boolean("enabled").notNull().default(true),
   overdueDays: integer("overdue_days").notNull().default(5),
@@ -125,6 +155,7 @@ export const rentOverdueNotificationHistory = pgTable(
   "rent_overdue_notification_history",
   {
     id: serial("id").primaryKey(),
+    organizationId: varchar("organization_id").references(() => organizations.id),
     managerId: varchar("manager_id").notNull().references(() => users.id),
     leaseId: integer("lease_id").notNull().references(() => leases.id),
     monthKey: text("month_key").notNull(), // YYYY-MM
@@ -142,6 +173,7 @@ export const rentOverdueNotificationHistory = pgTable(
 );
 
 export const managerLeaseExpiryNotificationSettings = pgTable("manager_lease_expiry_notification_settings", {
+  organizationId: varchar("organization_id").references(() => organizations.id),
   managerId: varchar("manager_id").notNull().references(() => users.id),
   enabled: boolean("enabled").notNull().default(true),
   daysBeforeExpiry: integer("days_before_expiry").notNull().default(30),
@@ -151,6 +183,7 @@ export const managerLeaseExpiryNotificationSettings = pgTable("manager_lease_exp
 ]);
 
 export const managerMaintenanceAutomationSettings = pgTable("manager_maintenance_automation_settings", {
+  organizationId: varchar("organization_id").references(() => organizations.id),
   managerId: varchar("manager_id").notNull().references(() => users.id),
   autoTriageEnabled: boolean("auto_triage_enabled").notNull().default(true),
   autoEscalationEnabled: boolean("auto_escalation_enabled").notNull().default(true),
@@ -176,6 +209,7 @@ export const leaseExpiryNotificationHistory = pgTable(
   "lease_expiry_notification_history",
   {
     id: serial("id").primaryKey(),
+    organizationId: varchar("organization_id").references(() => organizations.id),
     managerId: varchar("manager_id").notNull().references(() => users.id),
     leaseId: integer("lease_id").notNull().references(() => leases.id),
     leaseEndDateKey: text("lease_end_date_key").notNull(), // YYYY-MM-DD
@@ -195,6 +229,7 @@ export const leaseExpiryNotificationHistory = pgTable(
 // Tenant Screening (Mock for now)
 export const screenings = pgTable("screenings", {
   id: serial("id").primaryKey(),
+  organizationId: varchar("organization_id").references(() => organizations.id),
   tenantId: varchar("tenant_id").notNull().references(() => users.id), // Links to users.id
   status: text("status").notNull().default("pending"), // pending, approved, rejected
   creditScore: integer("credit_score"),
@@ -207,6 +242,7 @@ export const zillowLeads = pgTable(
   "zillow_leads",
   {
     id: serial("id").primaryKey(),
+    organizationId: varchar("organization_id").references(() => organizations.id),
     externalLeadId: text("external_lead_id").notNull(),
     listingExternalId: text("listing_external_id"),
     propertyExternalId: text("property_external_id"),
@@ -227,6 +263,7 @@ export const zillowLeads = pgTable(
 
 export const listingMappingTemplates = pgTable("listing_mapping_templates", {
   id: serial("id").primaryKey(),
+  organizationId: varchar("organization_id").references(() => organizations.id),
   managerId: varchar("manager_id").notNull().references(() => users.id),
   name: text("name").notNull(),
   mapping: jsonb("mapping").notNull(),
@@ -329,12 +366,37 @@ export const multifamilySaleListings = pgTable(
 );
 
 // === RELATIONS ===
+export const organizationsRelations = relations(organizations, ({ many }) => ({
+  members: many(organizationMembers),
+  properties: many(properties),
+  vendors: many(vendors),
+}));
+
+export const organizationMembersRelations = relations(organizationMembers, ({ one }) => ({
+  organization: one(organizations, {
+    fields: [organizationMembers.organizationId],
+    references: [organizations.id],
+  }),
+  user: one(users, {
+    fields: [organizationMembers.userId],
+    references: [users.id],
+  }),
+}));
+
 export const propertiesRelations = relations(properties, ({ one, many }) => ({
+  organization: one(organizations, {
+    fields: [properties.organizationId],
+    references: [organizations.id],
+  }),
   leases: many(leases),
   maintenanceRequests: many(maintenanceRequests),
 }));
 
 export const vendorsRelations = relations(vendors, ({ one }) => ({
+  organization: one(organizations, {
+    fields: [vendors.organizationId],
+    references: [organizations.id],
+  }),
   manager: one(users, {
     fields: [vendors.managerId],
     references: [users.id],
@@ -342,6 +404,10 @@ export const vendorsRelations = relations(vendors, ({ one }) => ({
 }));
 
 export const leasesRelations = relations(leases, ({ one, many }) => ({
+  organization: one(organizations, {
+    fields: [leases.organizationId],
+    references: [organizations.id],
+  }),
   property: one(properties, {
     fields: [leases.propertyId],
     references: [properties.id],
@@ -350,6 +416,10 @@ export const leasesRelations = relations(leases, ({ one, many }) => ({
 }));
 
 export const maintenanceRequestsRelations = relations(maintenanceRequests, ({ one }) => ({
+  organization: one(organizations, {
+    fields: [maintenanceRequests.organizationId],
+    references: [organizations.id],
+  }),
   property: one(properties, {
     fields: [maintenanceRequests.propertyId],
     references: [properties.id],
@@ -425,6 +495,12 @@ export const insertLeaseSigningRequestSchema = createInsertSchema(leaseSigningRe
 });
 
 // === TYPES ===
+export type Organization = typeof organizations.$inferSelect;
+export type InsertOrganization = typeof organizations.$inferInsert;
+
+export type OrganizationMember = typeof organizationMembers.$inferSelect;
+export type InsertOrganizationMember = typeof organizationMembers.$inferInsert;
+
 export type Property = typeof properties.$inferSelect;
 export type InsertProperty = z.infer<typeof insertPropertySchema>;
 

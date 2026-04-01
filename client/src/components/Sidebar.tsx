@@ -49,17 +49,28 @@ export function Sidebar() {
   const { logout, user } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const navigation = getNavigation(user?.role);
+  const activeOrganizationName = (user as typeof user & { activeOrganizationName?: string | null })?.activeOrganizationName;
+  const roleLabel =
+    user?.role === "tenant" ? "Renter" : user?.role === "investor" ? "Investor" : "Property Manager";
 
   const NavContent = () => (
     <div className="flex flex-col h-full bg-slate-900 text-white">
       <div className="p-6">
-        <div className="flex items-center gap-2 mb-8">
-          <div className="w-8 h-8 rounded-lg bg-blue-500 flex items-center justify-center">
-            <Building2 className="w-5 h-5 text-white" />
+        <div className="mb-8">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-blue-500 flex items-center justify-center">
+              <Building2 className="w-5 h-5 text-white" />
+            </div>
+            <span className="text-xl font-bold font-display tracking-tight">RentalMgmt.AI</span>
           </div>
-          <span className="text-xl font-bold font-display tracking-tight">RentalMgmt.AI</span>
+          {activeOrganizationName ? (
+            <div className="mt-4 rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-3">
+              <p className="truncate text-sm font-semibold text-slate-100">{activeOrganizationName}</p>
+              <p className="mt-1 text-xs text-slate-400">{roleLabel}</p>
+            </div>
+          ) : null}
         </div>
-        
+
         <div className="space-y-1">
           {navigation.map((item) => {
             const isActive = location === item.href;
@@ -100,9 +111,7 @@ export function Sidebar() {
             </div>
             <div className="flex-1 overflow-hidden">
               <p className="text-sm font-medium truncate">{user?.firstName || user?.email}</p>
-              <p className="text-xs text-slate-500 truncate">
-                {user?.role === "tenant" ? "Renter" : user?.role === "investor" ? "Investor" : "Property Manager"}
-              </p>
+              <p className="text-xs text-slate-500 truncate">{activeOrganizationName || roleLabel}</p>
             </div>
           </div>
         </Link>

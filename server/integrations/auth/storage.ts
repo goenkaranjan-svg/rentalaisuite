@@ -1,5 +1,13 @@
 import { users, type User, type UpsertUser } from "@shared/models/auth";
-import { userProfileSettings, type UserProfileSettings } from "@shared/schema";
+import {
+  organizationMembers,
+  organizations,
+  userProfileSettings,
+  type InsertOrganization,
+  type Organization,
+  type OrganizationMember,
+  type UserProfileSettings,
+} from "@shared/schema";
 import { db } from "../../db";
 import { and, eq, gt } from "drizzle-orm";
 import { randomUUID } from "crypto";
@@ -9,6 +17,18 @@ import { randomUUID } from "crypto";
 export interface IAuthStorage {
   getUser(id: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
+  getOrganization(id: string): Promise<Organization | undefined>;
+  getOrganizationMemberships(userId: string): Promise<OrganizationMember[]>;
+  getDefaultOrganizationForUser(userId: string): Promise<Organization | undefined>;
+  createOrganization(input: InsertOrganization): Promise<Organization>;
+  addOrganizationMember(input: {
+    organizationId: string;
+    userId: string;
+    role: string;
+    status?: string;
+    isDefault?: boolean;
+  }): Promise<OrganizationMember>;
+  ensureOrganizationForManager(user: { id: string; email?: string | null; firstName?: string | null; lastName?: string | null }): Promise<Organization>;
   upsertUser(user: UpsertUser): Promise<User>;
   createLocalUser(input: {
     email: string;
@@ -62,6 +82,102 @@ class AuthStorage implements IAuthStorage {
   async getUserByEmail(email: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.email, email));
     return user;
+  }
+
+  async getOrganization(id: string): Promise<Organization | undefined> {
+    const [organization] = await db.select().from(organizations).where(eq(organizations.id, id));
+    return organization;
+  }
+
+  async getOrganizationMemberships(userId: string): Promise<OrganizationMember[]> {
+    return db.select().from(organizationMembers).where(eq(organizationMembers.userId, userId));
+  }
+
+  async getDefaultOrganizationForUser(userId: string): Promise<Organization | undefined> {
+    const [membership] = await db
+      .select()
+      .from(organizationMembers)
+      .where(and(eq(organizationMembers.userId, userId), eq(organizationMembers.isDefault, true)));
+
+    if (membership) {
+      return this.getOrganization(membership.organizationId);
+    }
+
+    const [fallbackMembership] = await db
+      .select()
+      .from(organizationMembers)
+      .where(eq(organizationMembers.userId, userId));
+
+    if (!fallbackMembership) return undefined;
+    return this.getOrganization(fallbackMembership.organizationId);
+  }
+
+  async createOrganization(input: InsertOrganization): Promise<Organization> {
+    const [organization] = await db.insert(organizations).values(input).returning();
+    return organization;
+  }
+
+  async addOrganizationMember(input: {
+    organizationId: string;
+    userId: string;
+    role: string;
+    status?: string;
+    isDefault?: boolean;
+  }): Promise<OrganizationMember> {
+    const [member] = await db
+      .insert(organizationMembers)
+      .values({
+        organizationId: input.organizationId,
+        userId: input.userId,
+        role: input.role,
+        status: input.status ?? "active",
+        isDefault: input.isDefault ?? false,
+      })
+      .onConflictDoUpdate({
+        target: [organizationMembers.organizationId, organizationMembers.userId],
+        set: {
+          role: input.role,
+          status: input.status ?? "active",
+          isDefault: input.isDefault ?? false,
+          updatedAt: new Date(),
+        },
+      })
+      .returning();
+    return member;
+  }
+
+  async ensureOrganizationForManager(user: {
+    id: string;
+    email?: string | null;
+    firstName?: string | null;
+    lastName?: string | null;
+  }): Promise<Organization> {
+    const existing = await this.getDefaultOrganizationForUser(user.id);
+    if (existing) return existing;
+
+    const baseName =
+      [user.firstName, user.lastName].filter(Boolean).join(" ").trim() ||
+      user.email?.split("@")[0]?.replace(/[._-]+/g, " ") ||
+      "Property Manager";
+    const normalized = baseName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    const slug = `${normalized || "property-manager"}-${user.id.slice(0, 8)}`;
+
+    const organization = await this.createOrganization({
+      name: `${baseName} Properties`,
+      slug,
+      status: "active",
+      plan: "starter",
+    });
+
+    await this.addOrganizationMember({
+      organizationId: organization.id,
+      userId: user.id,
+      role: "org_owner",
+      isDefault: true,
+      status: "active",
+    });
+
+    return organization;
   }
 
   async getTenants(): Promise<User[]> {
