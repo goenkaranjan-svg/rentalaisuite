@@ -1,5 +1,6 @@
 import type { Express } from "express";
 import { z } from "zod";
+import { createClerkClient, verifyToken } from "@clerk/backend";
 import { authStorage } from "./storage";
 import { isAuthenticated } from "./oidcAuth";
 import { generateResetToken, hashPassword, hashToken, verifyPassword } from "./crypto";
@@ -188,6 +189,37 @@ async function establishSession(req: any, res: any, user: { id: string; email: s
   });
 }
 
+async function establishSessionAndRedirect(
+  req: any,
+  res: any,
+  user: { id: string; email: string | null; role: string },
+  redirectTo: string
+) {
+  await new Promise<void>((resolve, reject) => {
+    req.session.regenerate((err: unknown) => {
+      if (err) return reject(err);
+      return resolve();
+    });
+  });
+
+  return req.login(buildLocalSessionUser(user), async (err: unknown) => {
+    if (err) return res.status(500).json({ message: "Failed to create session." });
+    const dbUser = await authStorage.getUser(user.id);
+    const organization =
+      user.role === "manager" && dbUser
+        ? await authStorage.ensureOrganizationForManager(dbUser)
+        : await authStorage.getDefaultOrganizationForUser(user.id);
+    if (isDevAuthBypassEnabled()) {
+      req.session.devAuthActive = true;
+    }
+    req.session.activeOrganizationId = organization?.id ?? null;
+    req.session.createdAt = Date.now();
+    req.session.lastActivityAt = Date.now();
+    req.session.securityBinding = deviceFingerprint(getClientIp(req), String(req.headers["user-agent"] || "unknown"));
+    return res.redirect(redirectTo);
+  });
+}
+
 function mapAuthDbError(error: unknown): string {
   const message = (error as any)?.message ?? "";
   if (typeof message === "string") {
@@ -225,6 +257,64 @@ export function registerAuthRoutes(app: Express): void {
       return `${ip}:${email}`;
     },
     message: "Too many login attempts. Please wait and try again.",
+  });
+
+  app.get("/api/auth/clerk/callback", strictAuthLimiter, async (req: any, res) => {
+    try {
+      const secretKey = process.env.CLERK_SECRET_KEY;
+      if (!secretKey) {
+        return res.status(503).json({ message: "Clerk is not configured on the server (missing CLERK_SECRET_KEY)." });
+      }
+
+      const token = typeof req.query?.token === "string" ? req.query.token : "";
+      if (!token) return res.status(400).json({ message: "Missing token." });
+
+      const redirectToRaw = typeof req.query?.redirect === "string" ? req.query.redirect : "/";
+      const redirectTo = redirectToRaw.startsWith("/") ? redirectToRaw : "/";
+
+      const desiredRole = typeof req.query?.role === "string" ? req.query.role : undefined;
+      const role =
+        desiredRole === "manager" || desiredRole === "tenant" || desiredRole === "investor" ? desiredRole : "tenant";
+
+      const verified: any = await verifyToken(token, { secretKey });
+      const clerkUserId = String(verified?.sub || "");
+      if (!clerkUserId) return res.status(401).json({ message: "Invalid token." });
+
+      const clerk = createClerkClient({ secretKey });
+      const clerkUser: any = await clerk.users.getUser(clerkUserId);
+
+      const primaryEmailId = clerkUser?.primaryEmailAddressId as string | undefined;
+      const email =
+        (clerkUser?.emailAddresses as any[] | undefined)
+          ?.find((e) => e?.id === primaryEmailId)?.emailAddress ??
+        (clerkUser?.emailAddresses as any[] | undefined)?.[0]?.emailAddress ??
+        null;
+
+      const firstName = (clerkUser?.firstName as string | null | undefined) ?? undefined;
+      const lastName = (clerkUser?.lastName as string | null | undefined) ?? undefined;
+      const profileImageUrl = (clerkUser?.imageUrl as string | null | undefined) ?? undefined;
+
+      let userId = `clerk_${clerkUserId}`;
+      if (email) {
+        const existing = await authStorage.getUserByEmail(String(email).toLowerCase());
+        if (existing?.id) userId = existing.id;
+      }
+
+      const upserted = await authStorage.upsertUser({
+        id: userId,
+        email: email ? String(email).toLowerCase() : null,
+        firstName,
+        lastName,
+        profileImageUrl,
+        authProvider: "clerk",
+        role,
+        emailVerifiedAt: new Date(),
+      });
+
+      return establishSessionAndRedirect(req, res, { id: upserted.id, email: upserted.email, role: upserted.role }, redirectTo);
+    } catch (error: any) {
+      return res.status(401).json({ message: error?.message || "Unable to verify Clerk session." });
+    }
   });
 
   app.post("/api/auth/signup", strictAuthLimiter, async (req: any, res) => {

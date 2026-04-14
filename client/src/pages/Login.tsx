@@ -70,6 +70,9 @@ export default function Login() {
     isLoggingInWithPasskey,
   } = useAuth();
 
+  const clerkLoginUrl = (import.meta.env.VITE_CLERK_LOGIN_URL as string | undefined) || "";
+  const shouldUseClerk = (import.meta.env.VITE_USE_CLERK_LOGIN as string | undefined) === "true";
+
   const [role, setRole] = useState<UserRole>("manager");
   const [mode, setMode] = useState<AuthMode>("signin");
 
@@ -87,6 +90,18 @@ export default function Login() {
   const [heroWordIndex, setHeroWordIndex] = useState(0);
   const [showPasswordTemporarily, setShowPasswordTemporarily] = useState(false);
   const [showNewPasswordTemporarily, setShowNewPasswordTemporarily] = useState(false);
+
+  useEffect(() => {
+    if (!shouldUseClerk || !clerkLoginUrl) return;
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("legacy") === "true") return;
+
+    const returnUrl = window.location.origin + "/";
+    const target = new URL(clerkLoginUrl);
+    target.searchParams.set("return_url", returnUrl);
+    window.location.href = target.toString();
+  }, [shouldUseClerk, clerkLoginUrl]);
 
   useEffect(() => {
     if (!user) return;
@@ -316,6 +331,25 @@ export default function Login() {
             </p>
           </CardHeader>
           <CardContent className="px-6 pb-6 sm:px-9 sm:pb-8">
+            {clerkLoginUrl ? (
+              <div className="mb-5 space-y-3">
+                <Button
+                  type="button"
+                  className="w-full h-12 text-base font-semibold bg-white text-slate-950 hover:bg-slate-100"
+                  onClick={() => {
+                    const returnUrl = window.location.origin + "/";
+                    const target = new URL(clerkLoginUrl);
+                    target.searchParams.set("return_url", returnUrl);
+                    window.location.href = target.toString();
+                  }}
+                >
+                  Continue with Clerk
+                </Button>
+                <p className="text-xs text-slate-400">
+                  Prefer the legacy login? Add <code>?legacy=true</code> to the URL.
+                </p>
+              </div>
+            ) : null}
             <AnimatePresence mode="wait" initial={false}>
               <motion.div
                 key={mode}
