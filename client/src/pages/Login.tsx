@@ -468,11 +468,11 @@ export default function Login() {
                     </button>
                   </div>
                 </div>
-                <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-                  <p className="text-[11px] sm:text-xs font-medium text-slate-700 mb-2">Password complexity requirements</p>
+                <div className="rounded-lg border border-slate-600 bg-slate-800 p-3">
+                  <p className="text-[11px] sm:text-xs font-semibold text-white mb-2">Password complexity requirements</p>
                   <div className="space-y-1">
                     {passwordRuleState.map((rule) => (
-                      <p key={rule.id} className={`text-[11px] sm:text-xs ${rule.met ? "text-emerald-700" : "text-slate-500"}`}>
+                      <p key={rule.id} className={`text-[11px] sm:text-xs ${rule.met ? "text-emerald-400" : "text-slate-300"}`}>
                         {rule.met ? "✓" : "•"} {rule.label}
                       </p>
                     ))}
