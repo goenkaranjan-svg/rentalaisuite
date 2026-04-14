@@ -347,9 +347,6 @@ export default function Login() {
                 >
                   Continue with Clerk
                 </Button>
-                <p className="text-xs text-slate-400">
-                  Prefer the legacy login? Add <code>?legacy=true</code> to the URL.
-                </p>
               </div>
             ) : null}
             <AnimatePresence mode="wait" initial={false}>
