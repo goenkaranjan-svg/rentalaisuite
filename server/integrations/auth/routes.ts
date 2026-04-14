@@ -391,7 +391,7 @@ export function registerAuthRoutes(app: Express): void {
             firstName: input.firstName ?? undefined,
             lastName: input.lastName ?? undefined,
             publicMetadata: { role: input.role },
-            skipPasswordChecks: false,
+            skipPasswordChecks: true,
           });
         } catch (clerkErr: any) {
           // Don't fail signup if Clerk sync fails (e.g. duplicate email, Clerk down)
@@ -429,7 +429,11 @@ export function registerAuthRoutes(app: Express): void {
         message: "Account created. Verify your email before first login.",
       };
       if (user.email) {
-        await sendVerificationEmail({ to: user.email, token: verificationToken });
+        try {
+          await sendVerificationEmail({ to: user.email, token: verificationToken });
+        } catch (emailErr: any) {
+          console.warn("Verification email failed to send:", emailErr?.message ?? emailErr);
+        }
       }
       if (process.env.NODE_ENV !== "production") payload.verificationToken = verificationToken;
       return res.status(201).json(payload);
