@@ -100,8 +100,9 @@ export default function Login() {
     const returnUrl = window.location.origin + "/";
     const target = new URL(clerkLoginUrl);
     target.searchParams.set("return_url", returnUrl);
+    target.searchParams.set("role", role);
     window.location.href = target.toString();
-  }, [shouldUseClerk, clerkLoginUrl]);
+  }, [shouldUseClerk, clerkLoginUrl, role]);
 
   useEffect(() => {
     if (!user) return;
@@ -340,6 +341,7 @@ export default function Login() {
                     const returnUrl = window.location.origin + "/";
                     const target = new URL(clerkLoginUrl);
                     target.searchParams.set("return_url", returnUrl);
+                    target.searchParams.set("role", role);
                     window.location.href = target.toString();
                   }}
                 >
