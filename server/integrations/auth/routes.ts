@@ -380,6 +380,25 @@ export function registerAuthRoutes(app: Express): void {
         lastName: input.lastName,
       });
 
+      // Sync new user to Clerk (non-blocking — signup succeeds even if Clerk is unavailable)
+      const clerkSecretKey = process.env.CLERK_SECRET_KEY;
+      if (clerkSecretKey) {
+        try {
+          const clerkAdmin = createClerkClient({ secretKey: clerkSecretKey });
+          await clerkAdmin.users.createUser({
+            emailAddress: [input.email],
+            password: input.password,
+            firstName: input.firstName ?? undefined,
+            lastName: input.lastName ?? undefined,
+            publicMetadata: { role: input.role },
+            skipPasswordChecks: false,
+          });
+        } catch (clerkErr: any) {
+          // Don't fail signup if Clerk sync fails (e.g. duplicate email, Clerk down)
+          console.warn("Clerk sync skipped:", clerkErr?.errors?.[0]?.message ?? clerkErr?.message ?? clerkErr);
+        }
+      }
+
       if (user.role === "manager") {
         const organization = await authStorage.createOrganization({
           name: normalizedOrganizationName!,

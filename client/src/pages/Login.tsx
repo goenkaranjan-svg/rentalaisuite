@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { Building2, ShieldCheck, Users, TrendingUp, LogIn, UserPlus, KeyRound, Menu, Eye, EyeOff, type LucideIcon } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
-import { useSignIn, useSignUp, useClerk } from "@clerk/react";
 
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
@@ -13,7 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 type UserRole = "manager" | "tenant" | "investor";
-type AuthMode = "signin" | "signup" | "forgot" | "verify";
+type AuthMode = "signin" | "signup" | "forgot";
 const PASSWORD_RULES = [
   { id: "length", label: "At least 12 characters", check: (value: string) => value.length >= 12 },
   { id: "upper", label: "One uppercase letter", check: (value: string) => /[A-Z]/.test(value) },
@@ -47,12 +46,6 @@ const modeConfig: Record<AuthMode, { label: string; title: string; description: 
     description: "Request a reset token and set a new password.",
     icon: KeyRound,
   },
-  verify: {
-    label: "Verify Email",
-    title: "Check your inbox",
-    description: "Enter the 6-digit code we sent to your email.",
-    icon: KeyRound,
-  },
 };
 
 const TEMP_PASSWORD_REVEAL_MS = 5000;
@@ -63,24 +56,22 @@ export default function Login() {
   const { toast } = useToast();
   const {
     user,
+    login,
+    signup,
     forgotPassword,
     resetPassword,
     resendVerificationEmail,
+    loginWithPasskey,
+    isLoggingIn,
+    isSigningUp,
     isProcessingForgotPassword,
     isResettingPassword,
     isResendingVerificationEmail,
+    isLoggingInWithPasskey,
   } = useAuth();
-
-  const { signIn, setActive: setSignInActive, isLoaded: signInLoaded } = useSignIn();
-  const { signUp, setActive: setSignUpActive, isLoaded: signUpLoaded } = useSignUp();
-  const clerk = useClerk();
 
   const [role, setRole] = useState<UserRole>("manager");
   const [mode, setMode] = useState<AuthMode>("signin");
-  const [isClerkLoggingIn, setIsClerkLoggingIn] = useState(false);
-  const [isClerkSigningUp, setIsClerkSigningUp] = useState(false);
-  const [isClerkVerifying, setIsClerkVerifying] = useState(false);
-  const [verifyCode, setVerifyCode] = useState("");
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -136,20 +127,23 @@ export default function Login() {
   };
 
   const handleSignIn = async () => {
-    if (!signInLoaded || !signIn) return;
-    setIsClerkLoggingIn(true);
     try {
-      const result = await signIn.create({ identifier: email, password });
-      if (result.status === "complete") {
-        await setSignInActive({ session: result.createdSessionId });
-        const token = await clerk.session?.getToken();
-        if (!token) throw new Error("Could not retrieve session token.");
-        window.location.href = `/api/auth/clerk/callback?token=${encodeURIComponent(token)}&role=${role}&redirect=/`;
+      const signedInUser = await login({ email, password, role });
+      if ((signedInUser as any)?.mfaRequired) {
+        toast({ title: "MFA required", description: "Complete multi-factor verification to finish signing in." });
+        return;
       }
+      if (!(signedInUser as any)?.id) {
+        toast({ title: "Sign in pending", description: "Additional verification is required before sign-in can complete." });
+        return;
+      }
+      setShowResendVerification(false);
+      toast({ title: "Signed in", description: "Welcome back." });
+      redirectByRole((signedInUser as any)?.role ?? role);
     } catch (error: any) {
-      const msg = error.errors?.[0]?.longMessage || error.errors?.[0]?.message || error.message || "Sign in failed.";
-      toast({ title: "Sign in failed", description: msg, variant: "destructive" });
-      setIsClerkLoggingIn(false);
+      const message = String(error?.message || "");
+      setShowResendVerification(message.toLowerCase().includes("verify your email"));
+      toast({ title: "Sign in failed", description: error.message, variant: "destructive" });
     }
   };
 
@@ -163,37 +157,16 @@ export default function Login() {
   };
 
   const handleSignUp = async () => {
-    if (!signUpLoaded || !signUp) return;
-    setIsClerkSigningUp(true);
     try {
-      await signUp.create({ emailAddress: email, password, firstName, lastName });
-      await signUp.prepareEmailAddressVerification({ strategy: "email_code" });
-      setMode("verify");
-      toast({ title: "Check your inbox", description: "We sent a 6-digit verification code to your email." });
+      await signup({ email, password, role, firstName, lastName, organizationName });
+      toast({
+        title: "Account created",
+        description: "Check your email for the verification link before signing in.",
+      });
+      setMode("signin");
+      setShowResendVerification(false);
     } catch (error: any) {
-      const msg = error.errors?.[0]?.longMessage || error.errors?.[0]?.message || error.message || "Sign up failed.";
-      toast({ title: "Sign up failed", description: msg, variant: "destructive" });
-    } finally {
-      setIsClerkSigningUp(false);
-    }
-  };
-
-  const handleVerify = async () => {
-    if (!signUpLoaded || !signUp) return;
-    setIsClerkVerifying(true);
-    try {
-      const result = await signUp.attemptEmailAddressVerification({ code: verifyCode });
-      if (result.status === "complete") {
-        await setSignUpActive({ session: result.createdSessionId });
-        const token = await clerk.session?.getToken();
-        if (!token) throw new Error("Could not retrieve session token.");
-        window.location.href = `/api/auth/clerk/callback?token=${encodeURIComponent(token)}&role=${role}&redirect=/`;
-      }
-    } catch (error: any) {
-      const msg = error.errors?.[0]?.longMessage || error.errors?.[0]?.message || error.message || "Verification failed.";
-      toast({ title: "Verification failed", description: msg, variant: "destructive" });
-    } finally {
-      setIsClerkVerifying(false);
+      toast({ title: "Sign up failed", description: error.message, variant: "destructive" });
     }
   };
 
@@ -390,8 +363,8 @@ export default function Login() {
                     </button>
                   </div>
                 </div>
-                <Button type="submit" className="w-full h-12 text-base font-semibold bg-emerald-500 hover:bg-emerald-600 text-white transition-all duration-200 px-4" disabled={isClerkLoggingIn}>
-                  {isClerkLoggingIn ? "Signing in..." : "Sign in"}
+                <Button type="submit" className="w-full h-12 text-base font-semibold bg-emerald-500 hover:bg-emerald-600 text-white transition-all duration-200 px-4" disabled={isLoggingIn}>
+                  {isLoggingIn ? "Signing in..." : "Sign in"}
                 </Button>
                 {showResendVerification && (
                   <Button
@@ -505,8 +478,8 @@ export default function Login() {
                     ))}
                   </div>
                 </div>
-                <Button className="w-full h-11 bg-emerald-500 hover:bg-emerald-600 text-white transition-all duration-200 text-sm sm:text-base px-3 leading-tight" onClick={handleSignUp} disabled={isClerkSigningUp}>
-                  {isClerkSigningUp
+                <Button className="w-full h-11 bg-emerald-500 hover:bg-emerald-600 text-white transition-all duration-200 text-sm sm:text-base px-3 leading-tight" onClick={handleSignUp} disabled={isSigningUp}>
+                  {isSigningUp
                     ? "Creating account..."
                     : `Create ${
                         role === "manager" ? "Manager" : role === "investor" ? "Investor" : "Renter"
@@ -523,38 +496,6 @@ export default function Login() {
                   className="w-full text-sm text-slate-300 hover:text-slate-100 underline underline-offset-2"
                 >
                   Already have an account? Sign in
-                </button>
-              </>
-            )}
-
-            {mode === "verify" && (
-              <>
-                <p className="text-sm text-slate-300">
-                  We sent a code to <span className="font-medium text-slate-100">{email}</span>
-                </p>
-                <div className="space-y-2">
-                  <Label>Verification Code</Label>
-                  <Input
-                    placeholder="123456"
-                    value={verifyCode}
-                    onChange={(e) => setVerifyCode(e.target.value)}
-                    maxLength={6}
-                    className="h-12 text-base tracking-widest bg-slate-900/80 border-slate-600 text-slate-100 placeholder:text-slate-400 focus-visible:ring-2 focus-visible:ring-emerald-500/20 focus-visible:border-emerald-500"
-                  />
-                </div>
-                <Button
-                  className="w-full h-12 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold"
-                  onClick={handleVerify}
-                  disabled={isClerkVerifying || verifyCode.length < 6}
-                >
-                  {isClerkVerifying ? "Verifying..." : "Verify Email"}
-                </Button>
-                <button
-                  type="button"
-                  onClick={() => setMode("signup")}
-                  className="w-full text-sm text-slate-300 hover:text-slate-100 underline underline-offset-2"
-                >
-                  Back to sign up
                 </button>
               </>
             )}
