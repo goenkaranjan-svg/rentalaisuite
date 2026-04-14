@@ -61,7 +61,7 @@ export function Sidebar() {
             <div className="w-8 h-8 rounded-lg bg-blue-500 flex items-center justify-center">
               <Building2 className="w-5 h-5 text-white" />
             </div>
-            <span className="text-xl font-bold font-display tracking-tight">RentalMgmt.AI</span>
+            <span className="text-xl font-bold font-display tracking-tight">Amrika Housing</span>
           </div>
           {activeOrganizationName ? (
             <div className="mt-4 rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-3">

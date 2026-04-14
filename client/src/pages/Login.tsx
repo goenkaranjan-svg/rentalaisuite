@@ -224,7 +224,7 @@ export default function Login() {
             <div className="w-10 h-10 rounded-xl bg-slate-900 flex items-center justify-center shadow-lg shadow-slate-500/20">
               <Building2 className="w-6 h-6 text-white" />
             </div>
-            <span className="text-2xl font-bold font-display">RentalMgmt.AI</span>
+            <span className="text-2xl font-bold font-display">Amrika Housing</span>
           </div>
           <h1 className="text-[44px] font-bold font-display leading-[1.05] mb-5 tracking-tight">
             <span className="text-slate-200/90">A Smarter Way to </span>
@@ -274,7 +274,7 @@ export default function Login() {
                 <div className="w-8 h-8 rounded-lg bg-slate-900 flex items-center justify-center">
                   <Building2 className="w-4 h-4 text-white" />
                 </div>
-                <span className="font-semibold text-slate-100">RentalMgmt.AI</span>
+                <span className="font-semibold text-slate-100">Amrika Housing</span>
               </div>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -468,11 +468,11 @@ export default function Login() {
                     </button>
                   </div>
                 </div>
-                <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-                  <p className="text-[11px] sm:text-xs font-medium text-slate-700 mb-2">Password complexity requirements</p>
+                <div className="rounded-lg border border-slate-600 bg-slate-800 p-3">
+                  <p className="text-[11px] sm:text-xs font-semibold text-white mb-2">Password complexity requirements</p>
                   <div className="space-y-1">
                     {passwordRuleState.map((rule) => (
-                      <p key={rule.id} className={`text-[11px] sm:text-xs ${rule.met ? "text-emerald-700" : "text-slate-500"}`}>
+                      <p key={rule.id} className={`text-[11px] sm:text-xs ${rule.met ? "text-emerald-400" : "text-slate-300"}`}>
                         {rule.met ? "✓" : "•"} {rule.label}
                       </p>
                     ))}
