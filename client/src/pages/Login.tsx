@@ -240,7 +240,7 @@ export default function Login() {
             <div className="w-10 h-10 rounded-xl bg-slate-900 flex items-center justify-center shadow-lg shadow-slate-500/20">
               <Building2 className="w-6 h-6 text-white" />
             </div>
-            <span className="text-2xl font-bold font-display">RentalMgmt.AI</span>
+            <span className="text-2xl font-bold font-display">Amrika Housing</span>
           </div>
           <h1 className="text-[44px] font-bold font-display leading-[1.05] mb-5 tracking-tight">
             <span className="text-slate-200/90">A Smarter Way to </span>
@@ -290,7 +290,7 @@ export default function Login() {
                 <div className="w-8 h-8 rounded-lg bg-slate-900 flex items-center justify-center">
                   <Building2 className="w-4 h-4 text-white" />
                 </div>
-                <span className="font-semibold text-slate-100">RentalMgmt.AI</span>
+                <span className="font-semibold text-slate-100">Amrika Housing</span>
               </div>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -336,7 +336,7 @@ export default function Login() {
               <div className="mb-5 space-y-3">
                 <Button
                   type="button"
-                  className="w-full h-12 text-base font-semibold bg-white text-slate-950 hover:bg-slate-100"
+                  className="w-full h-12 text-base font-semibold bg-slate-800 text-white hover:bg-slate-700 border border-slate-600"
                   onClick={() => {
                     const returnUrl = window.location.origin + "/";
                     const target = new URL(clerkLoginUrl);
